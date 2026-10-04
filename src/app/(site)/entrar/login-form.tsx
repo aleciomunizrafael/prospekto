@@ -17,15 +17,31 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    setPending(true);
-    const { error: signInError } = await authClient.signIn.email({ email, password });
-    setPending(false);
-    if (signInError) {
-      setError("E-mail ou senha incorretos. Confira os dados e tente de novo.");
+    if (!email.trim() || !password) {
+      setError("Informe o e-mail e a senha.");
       return;
     }
-    router.push(nextPath);
-    router.refresh();
+    setPending(true);
+    try {
+      const { error: signInError } = await authClient.signIn.email({
+        email: email.trim(),
+        password,
+      });
+      if (signInError) {
+        setError(
+          signInError.status === 401 || signInError.status === 400 || signInError.status === 403
+            ? "E-mail ou senha incorretos. Confira os dados e tente de novo."
+            : "Não foi possível entrar agora. Tente de novo em instantes.",
+        );
+        return;
+      }
+      router.push(nextPath);
+      router.refresh();
+    } catch {
+      setError("Sem conexão com o servidor. Verifique a internet e tente de novo.");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -40,6 +56,7 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          aria-invalid={error ? true : undefined}
         />
       </div>
       <div className="flex flex-col gap-2">

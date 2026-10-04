@@ -11,7 +11,13 @@ export const auth = betterAuth({
     enabled: true,
     disableSignUp: true,
     minPasswordLength: 12,
-    // sendResetPassword: ({ user, url }) => sendEmail({...}) entra junto com src/lib/email
+    resetPasswordTokenExpiresIn: 60 * 60,
+    // Importação dinâmica: o módulo de e-mail é "server-only" e o CLI `auth generate` recusa
+    // configurações que o importem estaticamente.
+    sendResetPassword: async ({ user, url }) => {
+      const { sendPasswordResetEmail } = await import("@/lib/crm/password-reset-email");
+      await sendPasswordResetEmail({ to: user.email, name: user.name, url });
+    },
   },
   user: {
     additionalFields: {

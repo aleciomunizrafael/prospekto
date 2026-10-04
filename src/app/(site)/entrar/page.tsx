@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { CRM_PREFIX, isCrmPath } from "@/lib/routes";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Entrar", robots: { index: false } };
 
 export default async function LoginPage({ searchParams }: PageProps<"/entrar">) {
-  const { next } = await searchParams;
+  const { next, reset } = await searchParams;
   // Só caminhos internos do CRM (/app, /app/...); nunca redirecionar para fora.
   const nextPath = typeof next === "string" && isCrmPath(next) ? next : CRM_PREFIX;
 
@@ -18,7 +19,20 @@ export default async function LoginPage({ searchParams }: PageProps<"/entrar">) 
           administrador.
         </p>
       </div>
+      {reset === "1" ? (
+        <p
+          role="status"
+          className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+        >
+          Senha redefinida. Entre com a nova senha.
+        </p>
+      ) : null}
       <LoginForm nextPath={nextPath} />
+      <p className="text-sm">
+        <Link href="/redefinir-senha" className="underline underline-offset-4">
+          Esqueci a senha
+        </Link>
+      </p>
     </section>
   );
 }

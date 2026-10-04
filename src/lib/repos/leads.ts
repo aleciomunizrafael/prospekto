@@ -1,9 +1,35 @@
 import "server-only";
-import { and, desc, eq, lt, type SQL } from "drizzle-orm";
+import {
+  aliasedTable,
+  and,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  gte,
+  ilike,
+  isNull,
+  lt,
+  lte,
+  notInArray,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { db, type Db } from "@/lib/db";
-import { activities, contributions, leads, organizations } from "@/lib/db/schema";
+import {
+  activities,
+  contributions,
+  culturalProjects,
+  leads,
+  organizations,
+  users,
+} from "@/lib/db/schema";
 import {
   INITIAL_STAGES,
+  PIPELINES,
+  TERMINAL_STAGES,
+  isPipeline,
   isStageOf,
   pipelineForSegment,
   requirementsForMove,
@@ -12,6 +38,7 @@ import {
 } from "@/lib/domain/pipelines";
 import { scoreLead } from "@/lib/domain/scoring";
 import { MissingFieldsError, NotFoundError, ValidationError } from "@/lib/errors";
+import { createActivitySchema, type CreateActivityInput } from "@/lib/validation/activities";
 import { parseAttributes } from "@/lib/validation/lead-attributes";
 import {
   createLeadSchema,
@@ -23,7 +50,7 @@ import {
   type MoveLeadStageInput,
   type UpdateLeadInput,
 } from "@/lib/validation/leads";
-import { insertSystemActivity } from "./activities";
+import { insertSystemActivity, type Activity } from "./activities";
 import { insertConsent } from "./consents";
 import { getOpenContributionForLead, recalcRaisedAmount } from "./contributions";
 import type { Ctx } from "./ctx";
@@ -434,5 +461,225 @@ export async function moveLeadStage(ctx: Ctx, input: MoveLeadStageInput): Promis
       });
     }
     return row;
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Consultas das telas do CRM (tela "Hoje", lista e detalhe; proposta-c-simplicidade.md, seção 9).
+// ---------------------------------------------------------------------------------------------
+
+const NON_TERMINAL_STAGES_EXCLUDED = [...new Set(Object.values(TERMINAL_STAGES))];
+
+export type LeadListRow = Lead & { orgName: string | null; ownerName: string | null };
+
+const leadListColumns = {
+  ...getTableColumns(leads),
+  orgName: organizations.name,
+  ownerName: users.name,
+};
+
+export type SearchLeadsInput = {
+  pipeline?: Pipeline;
+  stage?: string;
+  segment?: Lead["segment"];
+  temperature?: Lead["temperature"];
+  source?: Lead["source"];
+  ownerUserId?: string;
+  search?: string;
+  includeLost?: boolean;
+  sort?: "next_action" | "created";
+  page?: number;
+  pageSize?: number;
+};
+
+// Lista paginada com filtros e busca por nome, e-mail, empresa (attributes) ou organização.
+export async function searchLeads(
+  ctx: Ctx,
+  input: SearchLeadsInput = {},
+): Promise<{ rows: LeadListRow[]; total: number }> {
+  const pageSize = Math.min(Math.max(input.pageSize ?? 25, 1), 100);
+  const page = Math.max(input.page ?? 1, 1);
+  const where: SQL[] = [eq(leads.tenantId, ctx.tenantId)];
+  if (input.pipeline) where.push(eq(leads.pipeline, input.pipeline));
+  if (input.stage) where.push(eq(leads.stage, input.stage));
+  if (input.segment) where.push(eq(leads.segment, input.segment));
+  if (input.temperature) where.push(eq(leads.temperature, input.temperature));
+  if (input.source) where.push(eq(leads.source, input.source));
+  if (input.ownerUserId) where.push(eq(leads.ownerUserId, input.ownerUserId));
+  if (!input.includeLost && !input.stage) {
+    where.push(notInArray(leads.stage, NON_TERMINAL_STAGES_EXCLUDED));
+  }
+  if (input.search) {
+    const term = `%${input.search.replace(/[%_]/g, "")}%`;
+    where.push(
+      or(
+        ilike(leads.name, term),
+        ilike(leads.email, term),
+        ilike(organizations.name, term),
+        sql`coalesce(${leads.attributes}->>'empresa', ${leads.attributes}->>'escritorio', ${leads.attributes}->>'municipio', ${leads.attributes}->>'proponente', '') ilike ${term}`,
+      )!,
+    );
+  }
+  const orderBy =
+    input.sort === "created"
+      ? [desc(leads.createdAt)]
+      : [sql`${leads.nextActionAt} asc nulls last`, desc(leads.createdAt)];
+  const [rows, [{ total }]] = await Promise.all([
+    db
+      .select(leadListColumns)
+      .from(leads)
+      .leftJoin(organizations, eq(organizations.id, leads.orgId))
+      .leftJoin(users, eq(users.id, leads.ownerUserId))
+      .where(and(...where))
+      .orderBy(...orderBy)
+      .limit(pageSize)
+      .offset((page - 1) * pageSize),
+    db
+      .select({ total: count() })
+      .from(leads)
+      .leftJoin(organizations, eq(organizations.id, leads.orgId))
+      .where(and(...where)),
+  ]);
+  return { rows, total: Number(total) };
+}
+
+// Contagem de leads não terminais por pipeline (abas de /app/leads).
+export async function countLeadsByPipeline(ctx: Ctx): Promise<Record<Pipeline, number>> {
+  const rows = await db
+    .select({ pipeline: leads.pipeline, total: count() })
+    .from(leads)
+    .where(
+      and(eq(leads.tenantId, ctx.tenantId), notInArray(leads.stage, NON_TERMINAL_STAGES_EXCLUDED)),
+    )
+    .groupBy(leads.pipeline);
+  const out = Object.fromEntries(PIPELINES.map((p) => [p, 0])) as Record<Pipeline, number>;
+  for (const r of rows) if (isPipeline(r.pipeline)) out[r.pipeline] = Number(r.total);
+  return out;
+}
+
+function initialStageCondition(): SQL {
+  return or(
+    ...PIPELINES.map((p) => and(eq(leads.pipeline, p), eq(leads.stage, INITIAL_STAGES[p]))!),
+  )!;
+}
+
+// Leads no estágio inicial ainda sem contato registrado (tela "Hoje", bloco 1; regra R-13).
+export async function listNewLeadsWithoutContact(ctx: Ctx, limit = 20): Promise<LeadListRow[]> {
+  return db
+    .select(leadListColumns)
+    .from(leads)
+    .leftJoin(organizations, eq(organizations.id, leads.orgId))
+    .leftJoin(users, eq(users.id, leads.ownerUserId))
+    .where(
+      and(eq(leads.tenantId, ctx.tenantId), initialStageCondition(), isNull(leads.lastContactAt)),
+    )
+    .orderBy(leads.stageEnteredAt)
+    .limit(limit);
+}
+
+// Próximas ações vencidas em estágios não terminais, da mais atrasada à menos (regra R-13).
+export async function listOverdueLeads(ctx: Ctx, now: Date, limit = 20): Promise<LeadListRow[]> {
+  return db
+    .select(leadListColumns)
+    .from(leads)
+    .leftJoin(organizations, eq(organizations.id, leads.orgId))
+    .leftJoin(users, eq(users.id, leads.ownerUserId))
+    .where(
+      and(
+        eq(leads.tenantId, ctx.tenantId),
+        lt(leads.nextActionAt, now),
+        notInArray(leads.stage, NON_TERMINAL_STAGES_EXCLUDED),
+      ),
+    )
+    .orderBy(leads.nextActionAt)
+    .limit(limit);
+}
+
+// Próximas ações num intervalo (próximos 7 dias; leads em `aporte` nos próximos 15 dias).
+export async function listLeadsWithNextActionBetween(
+  ctx: Ctx,
+  from: Date,
+  to: Date,
+  filter: { stage?: string; limit?: number } = {},
+): Promise<LeadListRow[]> {
+  const where: SQL[] = [
+    eq(leads.tenantId, ctx.tenantId),
+    gte(leads.nextActionAt, from),
+    lte(leads.nextActionAt, to),
+    notInArray(leads.stage, NON_TERMINAL_STAGES_EXCLUDED),
+  ];
+  if (filter.stage) where.push(eq(leads.stage, filter.stage));
+  return db
+    .select(leadListColumns)
+    .from(leads)
+    .leftJoin(organizations, eq(organizations.id, leads.orgId))
+    .leftJoin(users, eq(users.id, leads.ownerUserId))
+    .where(and(...where))
+    .orderBy(leads.nextActionAt)
+    .limit(filter.limit ?? 20);
+}
+
+export type LeadDetail = LeadListRow & {
+  orgCnpj: string | null;
+  referredByOrgName: string | null;
+  projectInterestName: string | null;
+};
+
+export async function getLeadDetail(ctx: Ctx, leadId: string): Promise<LeadDetail | null> {
+  const referredBy = aliasedTable(organizations, "referred_by");
+  const [row] = await db
+    .select({
+      ...leadListColumns,
+      orgCnpj: organizations.cnpj,
+      referredByOrgName: referredBy.name,
+      projectInterestName: culturalProjects.name,
+    })
+    .from(leads)
+    .leftJoin(organizations, eq(organizations.id, leads.orgId))
+    .leftJoin(users, eq(users.id, leads.ownerUserId))
+    .leftJoin(referredBy, eq(referredBy.id, leads.referredByOrgId))
+    .leftJoin(culturalProjects, eq(culturalProjects.id, leads.projectInterestId))
+    .where(leadScope(ctx, leadId));
+  return row ?? null;
+}
+
+// "Registrar atividade": grava a atividade e, na mesma transação, last_contact_at (contatos) e
+// next_action_at do lead (proposta-c, seção 9.1).
+export async function recordLeadActivity(
+  ctx: Ctx,
+  input: {
+    leadId: string;
+    activity: Omit<CreateActivityInput, "leadId">;
+    nextActionAt?: Date | null;
+    touchLastContact?: boolean;
+  },
+): Promise<{ activity: Activity; lead: Lead }> {
+  const activityInput = createActivitySchema.parse({ ...input.activity, leadId: input.leadId });
+  return db.transaction(async (tx) => {
+    const current = await requireLead(tx, ctx, input.leadId);
+    const [activity] = await tx
+      .insert(activities)
+      .values({
+        tenantId: ctx.tenantId,
+        type: activityInput.type,
+        subject: activityInput.subject,
+        body: activityInput.body ?? null,
+        data: activityInput.data ?? null,
+        occurredAt: activityInput.occurredAt ?? new Date(),
+        dueAt: activityInput.dueAt ?? null,
+        doneAt: activityInput.doneAt ?? null,
+        leadId: current.id,
+        ownerUserId: activityInput.ownerUserId ?? ctx.userId ?? null,
+        createdByUserId: ctx.userId ?? null,
+      })
+      .returning();
+    const patch: Partial<typeof leads.$inferInsert> = {};
+    if (input.touchLastContact) patch.lastContactAt = activityInput.occurredAt ?? new Date();
+    if (input.nextActionAt !== undefined) patch.nextActionAt = input.nextActionAt;
+    let lead = current;
+    if (Object.keys(patch).length) {
+      [lead] = await tx.update(leads).set(patch).where(leadScope(ctx, current.id)).returning();
+    }
+    return { activity, lead };
   });
 }

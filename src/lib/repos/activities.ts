@@ -1,7 +1,7 @@
 import "server-only";
-import { and, desc, eq, isNull, lte, type SQL } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, gte, isNull, lte, type SQL } from "drizzle-orm";
 import { db, type Db } from "@/lib/db";
-import { activities } from "@/lib/db/schema";
+import { activities, leads } from "@/lib/db/schema";
 import type { ActivityType } from "@/lib/domain/enums";
 import { NotFoundError } from "@/lib/errors";
 import { createActivitySchema, type CreateActivityInput } from "@/lib/validation/activities";
@@ -123,4 +123,36 @@ export async function completeTask(
     .returning();
   if (!row) throw new NotFoundError("Atividade", activityId);
   return row;
+}
+
+// Tarefas abertas com o nome do lead, por período de vencimento (tela "Hoje": vencidas, de hoje
+// e dos próximos 7 dias; regra R-13).
+export type TaskRow = Activity & { leadName: string | null };
+
+export async function listOpenTasksWithLead(
+  ctx: Ctx,
+  filter: { dueFrom?: Date; dueTo?: Date; limit?: number } = {},
+): Promise<TaskRow[]> {
+  const where: SQL[] = [
+    eq(activities.tenantId, ctx.tenantId),
+    eq(activities.type, "tarefa"),
+    isNull(activities.doneAt),
+  ];
+  if (filter.dueFrom) where.push(gte(activities.dueAt, filter.dueFrom));
+  if (filter.dueTo) where.push(lte(activities.dueAt, filter.dueTo));
+  return db
+    .select({ ...getTableColumns(activities), leadName: leads.name })
+    .from(activities)
+    .leftJoin(leads, eq(leads.id, activities.leadId))
+    .where(and(...where))
+    .orderBy(activities.dueAt)
+    .limit(filter.limit ?? 50);
+}
+
+export async function getActivity(ctx: Ctx, activityId: string): Promise<Activity | null> {
+  const [row] = await db
+    .select()
+    .from(activities)
+    .where(and(eq(activities.tenantId, ctx.tenantId), eq(activities.id, activityId)));
+  return row ?? null;
 }
