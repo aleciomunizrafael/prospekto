@@ -1,0 +1,34 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # valores fictícios só para o build e os testes; nenhum segredo real
+      BETTER_AUTH_SECRET: ci-only-secret-with-at-least-32-characters-0000
+      BETTER_AUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      FORM_SECRET: ci-only-form-secret-with-at-least-32-chars-0000
+      PGLITE_DIR: .pglite
+    steps:
+      # atualizar major quando confirmar (https://github.com/actions/checkout/releases/latest)
+      - uses: actions/checkout@v5
+      # atualizar major quando confirmar (https://github.com/actions/setup-node/releases/latest)
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run format:check
+      - run: npm run db:migrate
+      - run: npm test
+      - run: npm run build

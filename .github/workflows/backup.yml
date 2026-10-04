@@ -1,0 +1,21 @@
+name: backup
+on:
+  schedule:
+    - cron: "0 6 * * 0" # domingo 6h UTC, 3h em Brasília
+  workflow_dispatch:
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          pg_dump -Fc -d "$DATABASE_URL_UNPOOLED" -f prospekto.dump
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+      # atualizar major quando confirmar (https://github.com/actions/upload-artifact/releases/latest)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: db-dump-${{ github.run_id }}
+          path: prospekto.dump
+          retention-days: 90

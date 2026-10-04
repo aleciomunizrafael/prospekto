@@ -1,0 +1,8 @@
+.next
+node_modules
+drizzle
+.pglite
+docs
+package-lock.json
+src/components/ui
+README.md
