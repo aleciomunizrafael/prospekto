@@ -27,6 +27,10 @@ Entregas, todas em `docs/` (índice em `README.md` desta pasta):
 
 O que a Fase 0 não resolveu está nas perguntas em aberto de `../README.md`. As que bloqueiam sprints específicos aparecem na seção 6.
 
+## 2.1 Progresso da Fase 1 em 04/10/2026
+
+Construído e revisado em 04/10/2026 (antes do início formal do sprint 1): scaffold (US-01), site e captura (US-10, US-11 em modo "em breve", US-12, US-13, US-14, US-15 com carteira vazia, US-18), simulador (US-20, US-21, US-22, US-23), CRM (US-30 a US-34, US-35 parcial, US-36, US-37 exportação, US-38, US-39, US-40, US-42). Ficam para os sprints: US-02 e US-03 (deploy e domínio), US-04 (CI só roda após o primeiro push para `main`), US-16 (conteúdo), US-17 (campanhas), importação CSV (US-37), US-41 (relatório semanal) e tudo de E4 e E5, que são operação e produto, não código.
+
 ## 3. Fase 1: calendário de sprints
 
 Sprints de duas semanas, de segunda a domingo. Cada sprint tem um foco de desenvolvimento (Rafael) e um foco de operação (Daniela e sócio), porque a campanha de fechamento do ano não espera o software.

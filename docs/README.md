@@ -15,7 +15,7 @@ Convenções de toda a pasta: português do Brasil; toda afirmação legal, trib
 | 5 | `site/estrutura-e-copy.md` e `site/simulador-spec.md` | O que o site diz e faz, formulários, LGPD, SEO, design, integrações; regras de cálculo e telas do simulador |
 | 6 | `playbooks/README.md`, depois os quatro playbooks | Como a prospecção opera a partir de 05/10/2026: rotina semanal, LinkedIn, networking, campanhas, parceria com contadores |
 | 7 | `produto/mentoria-e-curso.md` | O produto digital: formato, currículo, preço, plano de validação com critérios de seguir ou parar |
-| 8 | `arquitetura/ADR-001-stack.md`, `arquitetura/modelo-de-dados.md`, `arquitetura/scaffold.md`, `arquitetura/next16-convencoes.md` | A decisão de stack, o esquema de banco, o plano executável do scaffold e as convenções do Next.js 16; as três propostas em `arquitetura/propostas/` são leitura opcional para entender o que o ADR julgou |
+| 8 | `arquitetura/ADR-001-stack.md`, `arquitetura/ADR-002-defaults-simulador.md`, `arquitetura/modelo-de-dados.md`, `arquitetura/scaffold.md`, `arquitetura/next16-convencoes.md` | A decisão de stack, o esquema de banco, o plano executável do scaffold e as convenções do Next.js 16; as três propostas em `arquitetura/propostas/` são leitura opcional para entender o que o ADR julgou |
 | 9 | `roadmap.md` | Fases, sprints de duas semanas, épicos, histórias com critérios de aceite, métricas, marcos de decisão e as primeiras duas semanas |
 
 Trilhas por papel:
@@ -86,6 +86,7 @@ Trilhas por papel:
 
 | Arquivo | O que é |
 |---|---|
+| `ADR-002-defaults-simulador.md` | Padrões do simulador: LC 224/2025 aplicada por padrão na pessoa jurídica (D1) e módulo LIC-RS publicado com aviso (D2), com o que faria cada decisão ser revista |
 | `ADR-001-stack.md` | Decisão de stack e forma do sistema da Fase 1: critérios e pesos, pontuação das três propostas, decisão item a item, stack em uma página, alternativas rejeitadas, consequências e riscos, o que fica para a Fase 2, fontes |
 | `modelo-de-dados.md` | Esquema Drizzle sobre PostgreSQL: convenções, diagrama, as onze entidades (tenants, auth, organizations, contacts, leads, consents, simulations, cultural_projects, contributions, activities, form_attempts), enums, índices e restrições, regras de negócio, como os formulários chegam ao modelo, o que não está modelado |
 | `scaffold.md` | Plano executável do scaffold: pré-requisitos, comandos na ordem, `package.json`, estrutura de pastas, conteúdo dos arquivos de base, convenções, critério de pronto, ordem das tarefas seguintes, variáveis por ambiente e deploy |

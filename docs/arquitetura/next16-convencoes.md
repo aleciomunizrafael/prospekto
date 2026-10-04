@@ -22,3 +22,9 @@ Resumo extraído da documentação embutida em `node_modules/next/dist/docs/` (v
 - Route groups: `src/app/(site)` para o site público e `src/app/(app)` para o CRM autenticado, cada um com seu `layout.tsx`. A raiz `src/app/layout.tsx` só define `<html lang="pt-BR">`, fontes e CSS global.
 - Dados: camada de acesso em `src/lib/` (nunca consultas diretas em componentes de página); DTOs para o que vai ao cliente; nada de expor campos sensíveis de leads.
 - Idioma: UI, textos, mensagens de erro e commits em português do Brasil; identificadores de código em inglês.
+
+## Notas de operação registradas na revisão de 04/10/2026
+
+- O prerender de `/`, `/empresas`, `/projetos` e `/projetos/[slug]` lê o banco em tempo de build (PGlite local ou `DATABASE_URL` no Vercel); `scripts/check-db.ts` roda como `prebuild` e falha com mensagem clara quando o PGlite local não foi migrado. A carteira pública é cacheada com a tag `projects` e revalidação de 1 hora; uma falha de banco em ISR mantém a última versão válida.
+- `cacheComponents` continua desligado; `src/lib/site/public-projects.ts` usa `unstable_cache` e deve migrar para `use cache` quando a flag for ligada.
+- Páginas `/entrar` e `/redefinir-senha` são dinâmicas por lerem `searchParams`; decisão aceita.

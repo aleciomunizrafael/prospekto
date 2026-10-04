@@ -611,6 +611,8 @@ jobs:
 
 Ativar só depois do deploy (o segredo `DATABASE_URL_UNPOOLED` vem do Neon). A versão major do `pg_dump` deve coincidir com a do Postgres do projeto Neon (17) [verificar] (a versão instalada pelo `ubuntu-latest`; se for inferior, adicionar o repositório PGDG). `actions/upload-artifact@v7` [verificar] (mesma situação das actions da seção 5.13: confirmar a major em https://github.com/actions/upload-artifact/releases/latest antes de ativar o workflow).
 
+Atualização de 04/10/2026 (revisão de segurança): o workflow commitado cifra o dump com `gpg --symmetric` (AES-256) usando o secret `BACKUP_PASSPHRASE`, destrói o dump em claro e retém o artefato por 14 dias; sem os dois secrets (`DATABASE_URL_UNPOOLED`, `BACKUP_PASSPHRASE`) o job é pulado. Custódia da senha: guardar no gerenciador de senhas da Prospekto com acesso de Rafael e do sócio; para restaurar, `gpg --decrypt prospekto.dump.gpg > prospekto.dump` e `pg_restore -d <url> prospekto.dump`.
+
 ### 5.15 `eslint.config.mjs`
 
 Manter o gerado e acrescentar a regra que restringe quem importa o banco:

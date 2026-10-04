@@ -16,12 +16,12 @@ Estrutura digital e comercial de captação para a **Prospekto Consultoria & Pro
 
 ## Estado atual
 
-**Kickoff concluído em 03/10/2026; scaffold do app em andamento.**
+**Kickoff concluído em 03/10/2026; app da Fase 1 construída e revisada em 04/10/2026 (branch `claude/charming-wozniak-187o4c`).**
 
-- O repositório contém apenas `docs/`. O código nasce com `docs/arquitetura/scaffold.md`, que executa a decisão de `docs/arquitetura/ADR-001-stack.md`.
-- O kickoff produziu: visão e modelo de negócio, transcrição do briefing e materiais-fonte, referência legal dos mecanismos de incentivo (com verificação de fontes), análise de mercado e posicionamento, personas, funis e KPIs, especificação do site e do simulador, quatro playbooks de prospecção, estratégia do produto digital, três propostas de arquitetura, o ADR que as julga, o modelo de dados e o plano de scaffold. O índice está em `docs/README.md`.
-- Os playbooks começam a valer na semana de 05/10/2026, dentro da campanha de fechamento do ano; enquanto o CRM não existe, a operação roda em planilha com as mesmas colunas (`docs/playbooks/README.md`).
-- A nota de revisão de `docs/visao.md` corrigiu quatro números do guia "Contabilizando Cultura" (8% para PF, "545 mil empresas", "5% usam", e a ressalva sobre os 4%). O guia e a apresentação só voltam a circular depois da edição revisada (`docs/site/estrutura-e-copy.md`, seção 10.3).
+- `docs/`: visão, briefing e materiais-fonte, referência legal verificada, mercado, personas e funis, especificação do site e do simulador, playbooks, produto digital, ADR-001 (stack), ADR-002 (padrões do simulador), modelo de dados, scaffold e roadmap. Índice em `docs/README.md`.
+- `src/`: site público (home, empresas, contadores, pessoa física, municípios, proponentes, mentoria, diagnóstico, projetos, guia, contato, privacidade, obrigado), simulador de incentivo fiscal (biblioteca pura com todos os casos da especificação, telas, gate de captura, resultado por link assinado e e-mail), captura de leads (Server Action com antispam, consentimento LGPD, deduplicação, e-mails, descadastro de um clique) e CRM em `/app` (login e redefinição de senha, "Hoje", leads com filtros e "Mover para" com campos obrigatórios por estágio, atividades, organizações e contatos, projetos com publicação na carteira, aportes com termo, depósito, recibo e comissão, exportação CSV, e-mail diário por cron, webhook do Resend).
+- Qualidade: `npm run check` verde (lint, typecheck, format, 376 testes contra PGlite em memória, build com 37 rotas); revisão adversarial em quatro lentes (segurança e LGPD, regras de negócio, UX e acessibilidade, convenções do Next 16) com 36 correções aplicadas.
+- O que ainda não existe: deploy (Vercel, Neon, Resend, domínio), a edição revisada do guia em PDF (até lá `/guia` fica em modo "em breve"), páginas de campanha e `/conteudo`, importação de CSV, relatório semanal dentro do CRM, filtros da carteira pública. Pendências que dependem de decisão estão na seção "Perguntas em aberto" e nos marcadores "[verificar]" do código (teste `LAUNCH_GATE=1 npm test` lista os que faltam antes do lançamento).
 
 ## Como navegar nos docs
 
@@ -62,20 +62,19 @@ Custo da Fase 1: R$ 0 durante a construção; cerca de R$ 105 por mês em opera�
 
 ## Como rodar
 
-Ainda não há app para rodar. Até o scaffold ser aplicado, o manual é `docs/arquitetura/scaffold.md`: ele lista os pré-requisitos (seção 1), os comandos na ordem (seção 2), o `package.json` (seção 3), a estrutura de pastas (seção 4), o conteúdo dos arquivos de base (seção 5), as convenções (seção 6) e o critério de pronto (seção 7). Quem executa trabalha com a árvore limpa, não commita durante o scaffold e não edita `docs/`.
-
-Quando o scaffold existir, o fluxo local será o do próprio documento, sem conta em serviço nenhum:
+Sem conta em serviço nenhum: o banco local é PGlite (Postgres em WASM) em `.pglite/`.
 
 ```bash
-cp .env.example .env.local      # preencher BETTER_AUTH_SECRET, FORM_SECRET (openssl rand -base64 32) e SEED_USERS
+cp .env.example .env.local      # preencher BETTER_AUTH_SECRET e FORM_SECRET (openssl rand -base64 32)
 npm install
-npm run db:migrate              # aplica as migrações no PGlite local (.pglite/)
-npm run db:seed                 # tenant prospekto e os usuários de SEED_USERS
-npm run dev                     # http://localhost:3000
+npm run db:migrate              # aplica as migrações de drizzle/ no PGlite local
+SEED_USERS="Daniela <email>" npm run db:seed   # tenant prospekto e usuários; a senha temporária vai para um arquivo em diretório temporário indicado no terminal
+SEED_EXAMPLE=1 npm run db:seed  # opcional: proponente e projeto de exemplo (não publicado)
+npm run dev                     # http://localhost:3000 (site) e http://localhost:3000/app (CRM)
 npm run check                   # lint + typecheck + format:check + test + build (mesma sequência da CI)
 ```
 
-Deploy (Vercel, Neon, Resend, domínio) está na seção 10 do mesmo documento e depende das perguntas F1 e F2 abaixo.
+Variáveis por ambiente e o passo a passo do deploy (Vercel, Neon em São Paulo, Resend, domínio, upgrade para o plano Pro, backup cifrado) estão em `docs/arquitetura/scaffold.md`, seções 9 e 10. Convenções obrigatórias do código em `AGENTS.md`.
 
 ## Próximos passos
 
