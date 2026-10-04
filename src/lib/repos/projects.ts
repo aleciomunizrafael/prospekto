@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, getTableColumns, isNotNull, sql, type SQL } from "drizzle-orm";
 import { db, type Db } from "@/lib/db";
-import { culturalProjects, leads, organizations } from "@/lib/db/schema";
+import { contributions, culturalProjects, leads, organizations, users } from "@/lib/db/schema";
 import { isStageOf, isTerminalStage, requirementsForMove } from "@/lib/domain/pipelines";
 import { MissingFieldsError, NotFoundError, ValidationError } from "@/lib/errors";
 import {
@@ -392,4 +392,201 @@ export async function getPublishedProjectByRef(
     .innerJoin(organizations, eq(organizations.id, culturalProjects.proponentOrgId))
     .where(and(publishedScope(ctx), eq(culturalProjects.id, value.toLowerCase())));
   return row ? toPublicProject(row) : null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Telas do CRM (/app/projetos; proposta-c-simplicidade.md, seção 9.1) e alertas da regra R-13.
+// Saldo, percentual captado e alertas calculados no banco; dias restantes derivados do prazo.
+
+export type ProjectSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  proponentName: string;
+  mechanism: CulturalProject["mechanism"];
+  stage: string;
+  approvedAmount: number | null;
+  raisedAmount: number;
+  balance: number | null;
+  raisedPercent: number | null;
+  fundraisingDeadline: string | null;
+  daysRemaining: number | null;
+  publishedOnSite: boolean;
+  alerts: ("prazo" | "captacao")[];
+  ownerUserId: string | null;
+};
+
+export type ListProjectSummariesInput = {
+  stage?: string;
+  mechanism?: string;
+  search?: string;
+  includeArchived?: boolean;
+  alertsOnly?: boolean;
+  limit?: number;
+};
+
+// Alerta R-13: captando com prazo a menos de 6 meses de `today` ou com menos de 10% captado.
+function alertExprs(today: string) {
+  const deadlineSoon = sql<boolean>`(${culturalProjects.fundraisingDeadline} is not null and ${culturalProjects.fundraisingDeadline} < (${today}::date + interval '6 months'))`;
+  const lowRaised = sql<boolean>`(${culturalProjects.approvedAmount} is not null and ${culturalProjects.approvedAmount} > 0 and ${culturalProjects.raisedAmount} < ${culturalProjects.approvedAmount} * 0.10)`;
+  return { deadlineSoon, lowRaised };
+}
+
+const raisedPercentExpr = sql<
+  number | null
+>`case when ${culturalProjects.approvedAmount} is null or ${culturalProjects.approvedAmount} = 0 then null else round(${culturalProjects.raisedAmount} / ${culturalProjects.approvedAmount} * 100, 1)::float8 end`;
+
+function todayIso(now: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
+
+function daysBetween(from: string, to: string): number {
+  const [y1, m1, d1] = from.split("-").map(Number);
+  const [y2, m2, d2] = to.split("-").map(Number);
+  return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86_400_000);
+}
+
+export async function listProjectSummaries(
+  ctx: Ctx,
+  input: ListProjectSummariesInput = {},
+  now: Date = new Date(),
+): Promise<ProjectSummary[]> {
+  const today = todayIso(now);
+  const { deadlineSoon, lowRaised } = alertExprs(today);
+  const where: SQL[] = [eq(culturalProjects.tenantId, ctx.tenantId)];
+  if (input.stage && isStageOf("projetos", input.stage))
+    where.push(eq(culturalProjects.stage, input.stage));
+  else if (!input.includeArchived) where.push(sql`${culturalProjects.stage} <> 'arquivado'`);
+  if (input.mechanism) where.push(sql`${culturalProjects.mechanism} = ${input.mechanism}`);
+  if (input.search) {
+    const term = `%${input.search.trim()}%`;
+    where.push(
+      sql`(${culturalProjects.name} ilike ${term} or ${organizations.name} ilike ${term})`,
+    );
+  }
+  if (input.alertsOnly) {
+    where.push(eq(culturalProjects.stage, "captando"), sql`(${deadlineSoon} or ${lowRaised})`);
+  }
+  const rows = await db
+    .select({
+      id: culturalProjects.id,
+      name: culturalProjects.name,
+      slug: culturalProjects.slug,
+      proponentName: organizations.name,
+      mechanism: culturalProjects.mechanism,
+      stage: culturalProjects.stage,
+      approvedAmount: culturalProjects.approvedAmount,
+      raisedAmount: culturalProjects.raisedAmount,
+      balance: balanceExpr,
+      raisedPercent: raisedPercentExpr,
+      fundraisingDeadline: culturalProjects.fundraisingDeadline,
+      publishedOnSite: culturalProjects.publishedOnSite,
+      deadlineSoon,
+      lowRaised,
+      ownerUserId: culturalProjects.ownerUserId,
+    })
+    .from(culturalProjects)
+    .innerJoin(organizations, eq(organizations.id, culturalProjects.proponentOrgId))
+    .where(and(...where))
+    .orderBy(
+      sql`${culturalProjects.fundraisingDeadline} asc nulls last`,
+      asc(culturalProjects.name),
+    )
+    .limit(input.limit ?? 200);
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    slug: r.slug,
+    proponentName: r.proponentName,
+    mechanism: r.mechanism,
+    stage: r.stage,
+    approvedAmount: r.approvedAmount,
+    raisedAmount: Number(r.raisedAmount),
+    balance: r.balance == null ? null : Number(r.balance),
+    raisedPercent: r.raisedPercent == null ? null : Number(r.raisedPercent),
+    fundraisingDeadline: r.fundraisingDeadline,
+    daysRemaining: r.fundraisingDeadline ? daysBetween(today, r.fundraisingDeadline) : null,
+    publishedOnSite: r.publishedOnSite,
+    alerts:
+      r.stage === "captando"
+        ? ([r.deadlineSoon ? "prazo" : null, r.lowRaised ? "captacao" : null].filter(Boolean) as (
+            "prazo" | "captacao"
+          )[])
+        : [],
+    ownerUserId: r.ownerUserId,
+  }));
+}
+
+// Projetos em alerta (R-13) para a tela "Hoje" e o e-mail diário.
+export async function listProjectAlerts(
+  ctx: Ctx,
+  now: Date = new Date(),
+): Promise<ProjectSummary[]> {
+  return listProjectSummaries(ctx, { alertsOnly: true, limit: 200 }, now);
+}
+
+export type ProjectDetail = CulturalProjectWithBalance & {
+  proponentName: string;
+  ownerName: string | null;
+  // Soma de commission_due dos aportes não cancelados (bloco "Comissão", seção 9.1).
+  commissionTotal: number;
+  raisedPercent: number | null;
+  daysRemaining: number | null;
+  alerts: ("prazo" | "captacao")[];
+};
+
+export async function getProjectDetail(
+  ctx: Ctx,
+  projectId: string,
+  now: Date = new Date(),
+): Promise<ProjectDetail | null> {
+  const today = todayIso(now);
+  const { deadlineSoon, lowRaised } = alertExprs(today);
+  const [row] = await db
+    .select({
+      ...projectWithBalanceColumns,
+      proponentName: organizations.name,
+      ownerName: sql<
+        string | null
+      >`(select ${users.name} from ${users} where ${users.id} = ${culturalProjects.ownerUserId})`,
+      commissionTotal: sql<number>`(select coalesce(sum(${contributions.commissionDue}), 0)::float8 from ${contributions} where ${contributions.tenantId} = ${ctx.tenantId} and ${contributions.projectId} = ${culturalProjects.id} and ${contributions.status} <> 'cancelado')`,
+      raisedPercent: raisedPercentExpr,
+      deadlineSoon,
+      lowRaised,
+    })
+    .from(culturalProjects)
+    .innerJoin(organizations, eq(organizations.id, culturalProjects.proponentOrgId))
+    .where(and(eq(culturalProjects.tenantId, ctx.tenantId), eq(culturalProjects.id, projectId)));
+  if (!row) return null;
+  const { deadlineSoon: ds, lowRaised: lr, ...rest } = row;
+  return {
+    ...withBalance(rest),
+    proponentName: rest.proponentName,
+    ownerName: rest.ownerName,
+    commissionTotal: Number(rest.commissionTotal ?? 0),
+    raisedPercent: rest.raisedPercent == null ? null : Number(rest.raisedPercent),
+    daysRemaining: rest.fundraisingDeadline ? daysBetween(today, rest.fundraisingDeadline) : null,
+    alerts:
+      rest.stage === "captando"
+        ? ([ds ? "prazo" : null, lr ? "captacao" : null].filter(Boolean) as (
+            "prazo" | "captacao"
+          )[])
+        : [],
+  };
+}
+
+// Campos que faltam para cada destino possível a partir do estágio atual (diálogo "Mover para").
+export function missingForProjectMove(project: CulturalProjectWithBalance, to: string): string[] {
+  const fields = new Set(
+    requirementsForMove("projetos", project.stage, to).flatMap((r) => r.fields),
+  );
+  const missing = collectProjectMissing(project, fields);
+  if (fields.has("owner_user_id") && !project.ownerUserId) missing.push("responsável pelo projeto");
+  if (fields.has("lost_reason")) missing.push("motivo do arquivamento");
+  return missing;
 }

@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, inArray, ne, sql, type SQL } from "drizzle-orm";
 import { db, type Db } from "@/lib/db";
 import { contributions, culturalProjects, leads, organizations } from "@/lib/db/schema";
 import { assertCommissionWithinLimits, type CommissionWarning } from "@/lib/domain/commission";
@@ -434,4 +434,226 @@ export async function listContributions(
     .where(and(...where))
     .orderBy(desc(contributions.createdAt))
     .limit(filter.limit ?? 200);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Telas do CRM (/app/aportes e bloco "Aportes do projeto"; proposta-c-simplicidade.md, 9.1).
+
+export type ContributionSummary = Contribution & {
+  leadName: string;
+  leadSegment: string;
+  projectName: string;
+  projectMechanism: Contribution["mechanism"];
+  orgName: string | null;
+};
+
+const summaryColumns = {
+  ...getTableColumns(contributions),
+  leadName: leads.name,
+  leadSegment: leads.segment,
+  projectName: culturalProjects.name,
+  projectMechanism: culturalProjects.mechanism,
+  orgName: organizations.name,
+};
+
+export async function listContributionSummaries(
+  ctx: Ctx,
+  filter: {
+    projectId?: string;
+    leadId?: string;
+    status?: ContributionStatus[];
+    // Previsão de fechamento entre as duas datas (YYYY-MM-DD), só proposta e termo_assinado.
+    expectedBetween?: { from: string; to: string };
+    limit?: number;
+  } = {},
+): Promise<ContributionSummary[]> {
+  const where: SQL[] = [eq(contributions.tenantId, ctx.tenantId)];
+  if (filter.projectId) where.push(eq(contributions.projectId, filter.projectId));
+  if (filter.leadId) where.push(eq(contributions.leadId, filter.leadId));
+  if (filter.status?.length) where.push(inArray(contributions.status, filter.status));
+  if (filter.expectedBetween) {
+    where.push(
+      inArray(contributions.status, ["proposta", "termo_assinado"]),
+      sql`${contributions.expectedCloseAt} between ${filter.expectedBetween.from} and ${filter.expectedBetween.to}`,
+    );
+  }
+  const rows = await db
+    .select(summaryColumns)
+    .from(contributions)
+    .innerJoin(leads, eq(leads.id, contributions.leadId))
+    .innerJoin(culturalProjects, eq(culturalProjects.id, contributions.projectId))
+    .leftJoin(organizations, eq(organizations.id, contributions.orgId))
+    .where(and(...where))
+    .orderBy(
+      filter.expectedBetween
+        ? sql`${contributions.expectedCloseAt} asc nulls last`
+        : desc(contributions.createdAt),
+    )
+    .limit(filter.limit ?? 200);
+  return rows.map((r) => ({ ...r, orgName: r.orgName ?? null }));
+}
+
+export async function getContributionSummary(
+  ctx: Ctx,
+  contributionId: string,
+): Promise<ContributionSummary | null> {
+  const [row] = await db
+    .select(summaryColumns)
+    .from(contributions)
+    .innerJoin(leads, eq(leads.id, contributions.leadId))
+    .innerJoin(culturalProjects, eq(culturalProjects.id, contributions.projectId))
+    .leftJoin(organizations, eq(organizations.id, contributions.orgId))
+    .where(and(eq(contributions.tenantId, ctx.tenantId), eq(contributions.id, contributionId)));
+  return row ? { ...row, orgName: row.orgName ?? null } : null;
+}
+
+export type ContributionProjectTotals = {
+  projectId: string;
+  projectName: string;
+  open: number; // proposta + termo_assinado (valor proposto)
+  deposited: number; // depositado + recibo_emitido (valor depositado)
+  commissionDue: number;
+  count: number;
+};
+
+// Totais por projeto, somados no banco (R-5/R-6: nunca em JavaScript).
+export async function contributionTotalsByProject(ctx: Ctx): Promise<ContributionProjectTotals[]> {
+  const rows = await db
+    .select({
+      projectId: contributions.projectId,
+      projectName: culturalProjects.name,
+      open: sql<number>`coalesce(sum(case when ${contributions.status} in ('proposta', 'termo_assinado') then ${contributions.proposedAmount} else 0 end), 0)::float8`,
+      deposited: sql<number>`coalesce(sum(case when ${contributions.status} in ('depositado', 'recibo_emitido') then ${contributions.depositedAmount} else 0 end), 0)::float8`,
+      commissionDue: sql<number>`coalesce(sum(case when ${contributions.status} <> 'cancelado' then ${contributions.commissionDue} else 0 end), 0)::float8`,
+      count: sql<number>`count(*) filter (where ${contributions.status} <> 'cancelado')::int`,
+    })
+    .from(contributions)
+    .innerJoin(culturalProjects, eq(culturalProjects.id, contributions.projectId))
+    .where(eq(contributions.tenantId, ctx.tenantId))
+    .groupBy(contributions.projectId, culturalProjects.name)
+    .orderBy(culturalProjects.name);
+  return rows.map((r) => ({
+    ...r,
+    open: Number(r.open),
+    deposited: Number(r.deposited),
+    commissionDue: Number(r.commissionDue),
+  }));
+}
+
+export type SponsorLeadOption = {
+  id: string;
+  name: string;
+  email: string;
+  segment: string;
+  orgId: string | null;
+  orgName: string | null;
+  stage: string;
+};
+
+// Busca por nome ou e-mail entre leads PJ e PF do tenant (criação de aporte).
+export async function searchSponsorLeads(
+  ctx: Ctx,
+  query: string,
+  limit = 10,
+): Promise<SponsorLeadOption[]> {
+  const term = `%${query.trim()}%`;
+  const rows = await db
+    .select({
+      id: leads.id,
+      name: leads.name,
+      email: leads.email,
+      segment: leads.segment,
+      orgId: leads.orgId,
+      orgName: organizations.name,
+      stage: leads.stage,
+    })
+    .from(leads)
+    .leftJoin(organizations, eq(organizations.id, leads.orgId))
+    .where(
+      and(
+        eq(leads.tenantId, ctx.tenantId),
+        inArray(leads.segment, ["PJ", "PF"]),
+        sql`(${leads.name} ilike ${term} or ${leads.email} ilike ${term})`,
+      ),
+    )
+    .orderBy(leads.name)
+    .limit(limit);
+  return rows.map((r) => ({ ...r, orgName: r.orgName ?? null }));
+}
+
+// Empresa patrocinadora do aporte (modelo-de-dados.md, 3.9); obrigatória para PJ antes do termo.
+export async function setContributionSponsorOrg(
+  ctx: Ctx,
+  contributionId: string,
+  orgId: string,
+): Promise<Contribution> {
+  const current = await requireContribution(db, ctx, contributionId);
+  if (current.status === "cancelado") {
+    throw new ValidationError("Não é possível alterar um aporte cancelado.");
+  }
+  await requireOrganization(ctx, orgId);
+  const [row] = await db
+    .update(contributions)
+    .set({ orgId })
+    .where(and(eq(contributions.tenantId, ctx.tenantId), eq(contributions.id, current.id)))
+    .returning();
+  return row;
+}
+
+// Pré-requisitos de cada passo do fluxo, em português, para o botão explicar o que falta.
+export type ContributionStep =
+  | "assinar_termo"
+  | "confirmar_deposito"
+  | "emitir_recibo"
+  | "enviar_contador"
+  | "registrar_comissao"
+  | "cancelar";
+
+export async function contributionStepBlockers(
+  ctx: Ctx,
+  contribution: ContributionSummary,
+): Promise<Record<ContributionStep, string[]>> {
+  const blockers: Record<ContributionStep, string[]> = {
+    assinar_termo: [],
+    confirmar_deposito: [],
+    emitir_recibo: [],
+    enviar_contador: [],
+    registrar_comissao: [],
+    cancelar: [],
+  };
+  const s = contribution.status;
+  if (s === "cancelado") {
+    for (const key of Object.keys(blockers) as ContributionStep[])
+      blockers[key].push("aporte cancelado");
+    return blockers;
+  }
+  if (s !== "proposta") blockers.assinar_termo.push("o termo já foi registrado");
+  if (contribution.leadSegment === "PJ") {
+    const orgId = contribution.orgId;
+    let cnpj: string | null = null;
+    if (orgId) {
+      const [org] = await db
+        .select({ cnpj: organizations.cnpj })
+        .from(organizations)
+        .where(and(eq(organizations.tenantId, ctx.tenantId), eq(organizations.id, orgId)));
+      cnpj = org?.cnpj ?? null;
+    }
+    if (!orgId) blockers.assinar_termo.push("empresa patrocinadora (organização) no aporte");
+    else if (!cnpj) blockers.assinar_termo.push("CNPJ da empresa patrocinadora");
+  }
+  if (s === "proposta") blockers.confirmar_deposito.push("termo assinado (data da assinatura)");
+  if (s === "depositado" || s === "recibo_emitido")
+    blockers.confirmar_deposito.push("depósito já confirmado");
+  if (s !== "depositado") {
+    blockers.emitir_recibo.push(
+      s === "recibo_emitido" ? "recibo já emitido" : "depósito confirmado (data e valor)",
+    );
+  }
+  if (s !== "recibo_emitido") blockers.enviar_contador.push("recibo emitido (número e data)");
+  else if (contribution.receiptSentToAccountantAt)
+    blockers.enviar_contador.push("envio já registrado");
+  if (!contribution.depositedAt || !contribution.depositedAmount) {
+    blockers.registrar_comissao.push("depósito confirmado (regra R-8)");
+  }
+  return blockers;
 }

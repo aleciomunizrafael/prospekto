@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ORGANIZATION_TYPES, REGIME_CONFIRMATIONS, TAX_REGIMES } from "@/lib/domain/enums";
-import { cnpjSchema, moneySchema, ufSchema, uuidSchema } from "./common";
+import { cnpjSchema, moneySchema, nullableOptionals, ufSchema, uuidSchema } from "./common";
 
 export const createOrganizationSchema = z.object({
   type: z.enum(ORGANIZATION_TYPES),
@@ -20,9 +20,10 @@ export const createOrganizationSchema = z.object({
 });
 export type CreateOrganizationInput = z.input<typeof createOrganizationSchema>;
 
-export const updateOrganizationSchema = createOrganizationSchema.partial().extend({
-  orgId: uuidSchema,
-});
+export const updateOrganizationSchema = z
+  .object(nullableOptionals(createOrganizationSchema.shape))
+  .partial()
+  .extend({ orgId: uuidSchema });
 export type UpdateOrganizationInput = z.input<typeof updateOrganizationSchema>;
 
 export const listOrganizationsSchema = z.object({

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { emailSchema, phoneSchema, uuidSchema } from "./common";
+import { emailSchema, nullableOptionals, phoneSchema, uuidSchema } from "./common";
 
 export const createContactSchema = z.object({
   orgId: uuidSchema,
@@ -14,5 +14,8 @@ export const createContactSchema = z.object({
 });
 export type CreateContactInput = z.input<typeof createContactSchema>;
 
-export const updateContactSchema = createContactSchema.partial().extend({ contactId: uuidSchema });
+export const updateContactSchema = z
+  .object(nullableOptionals(createContactSchema.shape))
+  .partial()
+  .extend({ contactId: uuidSchema });
 export type UpdateContactInput = z.input<typeof updateContactSchema>;

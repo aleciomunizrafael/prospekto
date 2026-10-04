@@ -1,7 +1,14 @@
 import { z } from "zod";
 import { INCENTIVE_MECHANISMS, LOST_REASONS } from "@/lib/domain/enums";
 import { STAGES } from "@/lib/domain/pipelines";
-import { calendarDateSchema, moneySchema, slugSchema, ufSchema, uuidSchema } from "./common";
+import {
+  calendarDateSchema,
+  moneySchema,
+  nullableOptionals,
+  slugSchema,
+  ufSchema,
+  uuidSchema,
+} from "./common";
 
 export const createProjectSchema = z.object({
   proponentOrgId: uuidSchema,
@@ -27,8 +34,8 @@ export const createProjectSchema = z.object({
 });
 export type CreateProjectInput = z.input<typeof createProjectSchema>;
 
-export const updateProjectSchema = createProjectSchema
-  .omit({ stage: true })
+export const updateProjectSchema = z
+  .object(nullableOptionals(createProjectSchema.omit({ stage: true }).shape))
   .partial()
   .extend({ projectId: uuidSchema });
 export type UpdateProjectInput = z.input<typeof updateProjectSchema>;
