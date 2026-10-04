@@ -2,6 +2,7 @@
 // a estrutura com Zod (simulador-spec.md, seções 9.8 e 12). Puro: sem Next, sem banco.
 import { z } from "zod";
 import rawParams from "../../../docs/dominio/parametros-simulador.json";
+import { round2 } from "./format";
 
 const status = z.enum(["verificado", "verificar"]);
 const sharedGroup = z
@@ -27,6 +28,7 @@ const mechanism = z
     status,
   })
   .loose();
+export type MechanismParam = z.infer<typeof mechanism>;
 
 const licRsBand = z.object({
   de: z.number().optional(),
@@ -34,6 +36,24 @@ const licRsBand = z.object({
   percentual: z.number(),
   acrescimo: z.number(),
 });
+
+// Faixas de imposto devido (contrato com irpj_faixa e ir_devido_faixa do CRM; spec, 4.2 e 4.6).
+const taxBandTable = z
+  .object({
+    faixas: z
+      .array(
+        z.object({
+          codigo: z.string().min(1),
+          min: z.number().nonnegative(),
+          max: z.number().positive().nullable(),
+        }),
+      )
+      .min(1),
+    fonte: z.string(),
+    status,
+  })
+  .loose();
+export type TaxBandTable = z.infer<typeof taxBandTable>;
 
 export const simulatorParamsSchema = z
   .object({
@@ -43,9 +63,28 @@ export const simulatorParamsSchema = z
     fontes: z.record(z.string(), z.string()),
     regras_gerais: z
       .object({
+        pj_base_de_calculo: z.string(),
+        pf_base_de_calculo: z.string(),
         pj_regimes_elegiveis: z.array(z.string()),
         pj_regimes_nao_elegiveis: z.array(z.string()),
         pf_modelo_elegivel: z.string(),
+        // Alíquotas para abrir a conta do IRPJ e a faixa de economia operacional (spec, 4.2 e 4.5).
+        pj_apuracao: z
+          .object({
+            aliquota_irpj: z.number().min(0).max(100),
+            aliquota_adicional: z.number().min(0).max(100),
+            parcela_isenta_adicional_mensal: z.number().nonnegative(),
+            fonte: z.string(),
+            status,
+            aliquota_csll: z.number().min(0).max(100),
+            aliquota_csll_fonte: z.string(),
+            aliquota_csll_status: status,
+          })
+          .loose(),
+        faixas_irpj: taxBandTable,
+        limites_entrada: z
+          .object({ pj_max: z.number().positive(), pf_max: z.number().positive() })
+          .loose(),
         lc_224_2025: z
           .object({
             fator_pj: z.number().gt(0).lte(1),
@@ -109,6 +148,8 @@ export const simulatorParamsSchema = z
         prazo_aporte: z.string(),
         onde_declarar: z.string(),
         lc_224_aplica: z.boolean(),
+        faixas_ir_devido: taxBandTable,
+        fonte: z.string(),
         status,
       })
       .loose(),
@@ -166,10 +207,13 @@ export function paramsAgeInDays(now: Date = new Date(), p: SimulatorParams = par
 }
 
 // Limite anual da LIC-RS para o ICMS próprio do ano anterior (Lei 13.490/2010, art. 6).
+// Faixas contínuas nos limites: 600.000 dá 120.000 pelas duas fórmulas (spec, 4.7).
+// Arredondado a duas casas, meio para cima (spec, 9.1).
 export function licRsAnnualLimit(icmsPriorYear: number, p: SimulatorParams = params): number {
+  if (!(icmsPriorYear > 0)) return 0;
   for (const band of p.mecanismos.lic_rs.limite_por_faixa_icms_ano_anterior) {
     if (band.ate === null || icmsPriorYear <= band.ate) {
-      return Math.round((icmsPriorYear * band.percentual) / 100 + band.acrescimo);
+      return round2((icmsPriorYear * band.percentual) / 100 + band.acrescimo);
     }
   }
   return 0;

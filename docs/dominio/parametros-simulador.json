@@ -45,6 +45,34 @@
     "pj_base_de_calculo": "IRPJ a aliquota de 15% sobre o lucro real do periodo (trimestral ou anual), antes do adicional. O adicional de 10% (parcela do lucro acima de R$ 20.000 por mes do periodo) nao entra na base e nao pode ser reduzido (Lei 9.249/1995, art. 3, caput, par. 1 e par. 4; Lei 9.532/1997, arts. 5 e 6; RIR/2018, arts. 556 e 625).",
     "pj_regimes_elegiveis": ["lucro_real"],
     "pj_regimes_nao_elegiveis": ["lucro_presumido", "lucro_arbitrado", "simples_nacional"],
+    "pj_apuracao": {
+      "descricao": "Aliquotas lidas pelo simulador para abrir a conta do IRPJ a partir do lucro real (simulador-spec.md, secao 4.2) e para a faixa de economia como despesa operacional no art. 26 e no art. 1 (secao 4.5). Percentuais em pontos percentuais; parcela isenta em reais por mes do periodo.",
+      "aliquota_irpj": 15,
+      "aliquota_adicional": 10,
+      "parcela_isenta_adicional_mensal": 20000,
+      "fonte": "Lei 9.249/1995, art. 3, caput e par. 1",
+      "status": "verificado",
+      "aliquota_csll": 9,
+      "aliquota_csll_fonte": "Lei 7.689/1988, art. 3",
+      "aliquota_csll_status": "verificar",
+      "aliquota_csll_nota": "Aliquota geral de 9% (Lei 7.689/1988, art. 3, II); validar na fonte primaria e com o contador parceiro antes de publicar (simulador-spec.md, secoes 4.5 e 13.2). Instituicoes financeiras tem aliquota maior e nao sao modeladas."
+    },
+    "faixas_irpj": {
+      "descricao": "Faixas do IRPJ devido usadas pelo campo tax_band do simulador e por irpj_faixa do CRM (simulador-spec.md, secao 4.2; personas-e-funis.md, secao 9.3). Valores em reais; max null = sem teto; nao_sei nao e faixa.",
+      "faixas": [
+        {"codigo": "ate_100k", "min": 0.01, "max": 100000},
+        {"codigo": "100k_500k", "min": 100000, "max": 500000},
+        {"codigo": "500k_2500k", "min": 500000, "max": 2500000},
+        {"codigo": "acima_2500k", "min": 2500000, "max": null}
+      ],
+      "fonte": "docs/estrategia/personas-e-funis.md, secao 9.3 (contrato com o CRM)",
+      "status": "verificado"
+    },
+    "limites_entrada": {
+      "descricao": "Acima destes valores o formulario pede confirmacao ('confirme o valor; parece alto') e segue se confirmado (simulador-spec.md, secao 8, estado too_large). Decisao de produto, sem base legal.",
+      "pj_max": 1000000000,
+      "pf_max": 100000000
+    },
     "pf_base_de_calculo": "Imposto devido apurado na Declaracao de Ajuste Anual, modelo completo (deducoes legais), antes das deducoes de incentivo.",
     "pf_modelo_elegivel": "completo",
     "lc_224_2025": {
@@ -293,6 +321,16 @@
     "prazo_aporte": "ate o ultimo dia util bancario de dezembro do ano-calendario",
     "onde_declarar": "ficha Doacoes Efetuadas da DIRPF, com o recibo de mecenato",
     "lc_224_aplica": false,
+    "faixas_ir_devido": {
+      "descricao": "Faixas do imposto devido na DAA usadas pelo campo tax_band do simulador e por ir_devido_faixa do CRM (simulador-spec.md, secao 4.6; personas-e-funis.md, secao 9.3). Valores em reais; max null = sem teto; nao_sei nao e faixa.",
+      "faixas": [
+        {"codigo": "ate_20k", "min": 0.01, "max": 20000},
+        {"codigo": "20k_80k", "min": 20000, "max": 80000},
+        {"codigo": "acima_80k", "min": 80000, "max": null}
+      ],
+      "fonte": "docs/estrategia/personas-e-funis.md, secao 9.3 (contrato com o CRM)",
+      "status": "verificado"
+    },
     "fonte": "Lei 9.250/1995, art. 12; Lei 9.532/1997, art. 22; Lei 8.313/1991, art. 26, I; Lei 11.438/2006, art. 1, par. 1, II (Lei 14.439/2022); ECA art. 260-A; Lei 13.797/2019; Receita, P&R IRPF 2026, pergunta 455",
     "status": "verificado"
   },
