@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import { toast } from "sonner";
 import { moveLeadStageAction } from "@/actions/crm-leads";
@@ -128,9 +129,9 @@ export function StageMoveDialog(props: Props) {
                 <p className="font-medium">Este movimento depende do aporte ou do projeto.</p>
                 <p className="mt-1">
                   Registre primeiro em{" "}
-                  <a href="/app/projetos" className="underline">
+                  <Link href="/app/projetos" className="underline">
                     Projetos
-                  </a>
+                  </Link>
                   : {blocked.map((b) => b.label.toLowerCase()).join("; ")}. Depois volte aqui e mova
                   o lead.
                 </p>
@@ -139,9 +140,9 @@ export function StageMoveDialog(props: Props) {
             {orgBlock && orgBlock.length > 0 ? (
               <p className="text-muted-foreground text-sm">
                 A empresa patrocinadora precisa estar cadastrada com CNPJ em{" "}
-                <a href="/app/organizacoes" className="underline">
+                <Link href="/app/organizacoes" className="underline">
                   Organizações
-                </a>{" "}
+                </Link>{" "}
                 e vinculada ao lead.
               </p>
             ) : null}
