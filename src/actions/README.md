@@ -1,6 +1,10 @@
 # Server Actions
 
-Convenções: toda Server Action do CRM começa com `const ctx = await requireSession();` (AGENTS.md; `tests/auth-guard.test.ts`). A única exceção é `leads.ts`, pública de propósito, marcada com o comentário `// public-action: ...` que o teste reconhece.
+Convenções: toda Server Action do CRM começa com `const ctx = await requireSession();` (AGENTS.md; `tests/auth-guard.test.ts`). As exceções são `leads.ts` e `simulator.ts`, públicas de propósito, marcadas com o comentário `// public-action: ...` que o teste reconhece. O núcleo comum das duas (IP e user agent, antispam, limite por IP, consentimentos, e-mails) fica em `src/lib/leads/submit.ts`.
+
+## Gate do simulador: `submitSimulatorLead`
+
+`src/actions/simulator.ts` exporta `submitSimulatorLead(prev, formData)` (usada com `useActionState` por `src/components/simulator/gate-form.tsx`) e `recordReturningSimulation(inputJson, sourcePage)` (visitante com o cookie assinado do gate). Diferente de `createLeadFromForm`, devolvem o resultado detalhado (`SimulatorGateState`, em `src/components/simulator/state.ts`) sem redirecionar: criam ou atualizam o lead, gravam a `simulation` com o hash do token do link `/simulador/resultado/[token]` (30 dias, `src/lib/simulation-token.ts`), definem o cookie `prospekto_simulador_gate` e enviam o e-mail `simulador`. Campos e mapeamento em `src/lib/validation/forms/simulator.ts` (fora do registro `FORMS`). Testes em `tests/actions/simulator.test.ts`.
 
 ## Captura de leads: `createLeadFromForm`
 

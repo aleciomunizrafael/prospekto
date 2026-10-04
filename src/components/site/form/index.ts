@@ -1,4 +1,4 @@
-export { LeadForm, useLeadForm, useLeadField } from "./lead-form";
+export { LeadForm, LeadFormProvider, useLeadForm, useLeadField } from "./lead-form";
 export {
   CheckboxField,
   FieldShell,

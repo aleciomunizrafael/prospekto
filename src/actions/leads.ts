@@ -5,31 +5,33 @@
 //
 // Server Action pública de captura de leads (estrutura-e-copy.md, seção 5; modelo-de-dados.md,
 // regras R-1, R-2 e R-18). Usada com useActionState pelo componente LeadForm. É o único ponto de
-// escrita aberto ao público e, por isso, concentra o antispam (honeypot, carimbo de tempo assinado
-// com mínimo de 3 s, limite de 5 envios por IP por hora) e a deduplicação.
+// escrita aberto ao público junto com o gate do simulador (src/actions/simulator.ts); por isso o
+// antispam (honeypot, carimbo de tempo assinado com mínimo de 3 s, limite de 5 envios por IP por
+// hora), os consentimentos e os e-mails ficam no núcleo compartilhado src/lib/leads/submit.ts.
 // A resposta nunca revela se o e-mail já existia; erros de gravação não vazam detalhes.
 // Como criar um formulário novo sobre esta infraestrutura: src/actions/README.md.
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { env } from "@/env";
 import { site } from "@/config/site";
-import { renderLeadNotification, renderTemplate } from "@/lib/email/templates";
-import { sendEmail } from "@/lib/email/send";
+import {
+  RATE_LIMIT_ERROR,
+  STORAGE_ERROR,
+  TOKEN_ERROR,
+  VALIDATION_ERROR,
+  appUrl,
+  buildConsents,
+  checkAntispam,
+  checkRateLimit,
+  notifyLead,
+  publicValues,
+  requestMeta,
+} from "@/lib/leads/submit";
 import { log } from "@/lib/log";
 import type { Ctx } from "@/lib/repos/ctx";
-import { hitFormAttempt } from "@/lib/repos/form-attempts";
 import { createLead } from "@/lib/repos/leads";
-import { hashIp, issueFormTimestamp, issueGuideToken, verifyFormTimestamp } from "@/lib/signing";
-import type { ConsentInput } from "@/lib/validation/leads";
-import { formDataToObject, getForm, type FormOutput, type LeadDraft } from "@/lib/validation/forms";
+import { issueFormTimestamp, issueGuideToken } from "@/lib/signing";
+import { formDataToObject, getForm, type FormOutput } from "@/lib/validation/forms";
 import type { LeadFormState } from "@/lib/validation/forms/state";
-
-const STORAGE_ERROR =
-  "Não conseguimos registrar seu pedido agora. Tente de novo em alguns minutos ou escreva para projetos@prospekto.com.br.";
-const RATE_LIMIT_ERROR =
-  "Recebemos muitos envios deste endereço em pouco tempo. Tente de novo em uma hora ou fale pelo WhatsApp.";
-const TOKEN_ERROR = "Não foi possível validar o envio. Recarregue a página e tente de novo.";
-const VALIDATION_ERROR = "Confira os campos destacados abaixo.";
 
 // Carimbo de tempo assinado, pedido pelo LeadForm ao montar (as páginas são estáticas, então o
 // carimbo não pode vir do HTML gerado no build).
@@ -79,31 +81,17 @@ export async function createLeadFromForm(
   const thanksPath = `/obrigado/${draft.thanksType}?${thanks.toString()}`;
 
   // Regra R-18: honeypot preenchido ou envio em menos de 3 segundos responde sucesso sem gravar.
-  if (raw.website) {
-    log("info", "formulário descartado: honeypot", { formId: form.id });
-    redirect(thanksPath);
-  }
-  const stamp = verifyFormTimestamp(raw.form_ts);
-  if (stamp.status === "too_fast") {
-    log("info", "formulário descartado: envio rápido", { formId: form.id });
-    redirect(thanksPath);
-  }
-  if (stamp.status !== "ok") {
+  const antispam = checkAntispam(raw, form.id);
+  if (antispam === "honeypot" || antispam === "too_fast") redirect(thanksPath);
+  if (antispam === "token_invalid") {
     return { status: "error", errorCode: "token", message: TOKEN_ERROR, values };
   }
 
   const ctx: Ctx = { tenantId: env.DEFAULT_TENANT_ID, userId: null };
   const meta = await requestMeta();
 
-  // Limite de 5 envios por IP por hora (form_attempts). Falha do contador não bloqueia o envio.
-  try {
-    const attempt = await hitFormAttempt(ctx, hashIp(meta.ip));
-    if (!attempt.allowed) {
-      log("warn", "formulário bloqueado: limite por IP", { formId: form.id, count: attempt.count });
-      return { status: "error", errorCode: "rate_limited", message: RATE_LIMIT_ERROR, values };
-    }
-  } catch (error) {
-    log("error", "falha ao registrar tentativa de formulário", { formId: form.id, error });
+  if (!(await checkRateLimit(ctx, meta.ip, form.id))) {
+    return { status: "error", errorCode: "rate_limited", message: RATE_LIMIT_ERROR, values };
   }
 
   let created: boolean;
@@ -165,143 +153,18 @@ export async function createLeadFromForm(
 
   // Reenvio em 10 minutos (R-2) não grava nem reenvia e-mails; a resposta é a mesma.
   if (!deduplicated) {
-    await notify(draft, { formId: form.id, leadId, pipeline, stage, created, guideToken });
+    const templateData =
+      draft.emailTemplate.id === "guia"
+        ? {
+            ...draft.emailTemplate.data,
+            downloadUrl: guideToken
+              ? `${appUrl()}/api/downloads/guia?token=${encodeURIComponent(guideToken)}&s=email`
+              : null,
+          }
+        : undefined;
+    await notifyLead(draft, { formId: form.id, leadId, pipeline, stage, created, templateData });
   }
 
   if (guideToken) thanks.set("t", guideToken);
   redirect(`/obrigado/${draft.thanksType}?${thanks.toString()}`);
-}
-
-function publicValues(raw: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (key !== "website" && key !== "form_ts") out[key] = value;
-  }
-  return out;
-}
-
-async function requestMeta(): Promise<{ ip: string | null; userAgent: string | null }> {
-  try {
-    const h = await headers();
-    const forwarded = h.get("x-forwarded-for");
-    const ip = forwarded?.split(",")[0]?.trim() || h.get("x-real-ip") || null;
-    return { ip, userAgent: h.get("user-agent") };
-  } catch {
-    // Fora de uma requisição (testes): sem IP nem user agent.
-    return { ip: null, userAgent: null };
-  }
-}
-
-// Regra R-1 e seção 5.1: caixa 1 obrigatória (contato_comercial), caixa 2 opcional (marketing);
-// canais conforme a caixa e o telefone informado; texto integral e versão da política.
-function buildConsents(
-  draft: LeadDraft,
-  sourcePage: string,
-  userAgent: string | null,
-): ConsentInput[] {
-  const page = sourcePage || draft.sourceDetail || "/";
-  const consents: ConsentInput[] = [
-    {
-      purpose: "contato_comercial",
-      granted: true,
-      policyVersion: site.policyVersion,
-      consentText: site.consent.contact,
-      channels: draft.phone ? ["email", "telefone"] : ["email"],
-      sourcePage: page,
-      userAgent: userAgent ?? undefined,
-    },
-  ];
-  if (draft.consentMarketing) {
-    consents.push({
-      purpose: "marketing",
-      granted: true,
-      policyVersion: site.policyVersion,
-      consentText: site.consent.marketing,
-      channels: draft.phone ? ["email", "whatsapp"] : ["email"],
-      sourcePage: page,
-      userAgent: userAgent ?? undefined,
-    });
-  }
-  return consents;
-}
-
-// E-mails: resposta automática ao lead (seção 5.6) e aviso interno. Falhas só vão ao log.
-async function notify(
-  draft: LeadDraft,
-  info: {
-    formId: string;
-    leadId: string;
-    pipeline: string;
-    stage: string;
-    created: boolean;
-    guideToken: string | null;
-  },
-): Promise<void> {
-  const appUrl = env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
-  const now = new Date();
-  // Descadastro de um clique entra com o webhook do Resend (próxima onda); até lá, o lead responde
-  // ao e-mail ou escreve para projetos@. O link aponta para a seção de direitos da política.
-  const unsubscribeUrl = draft.consentMarketing ? `${appUrl}/privacidade#direitos` : undefined;
-  try {
-    const template = draft.emailTemplate;
-    const data =
-      template.id === "guia"
-        ? {
-            ...template.data,
-            downloadUrl: info.guideToken
-              ? `${appUrl}/api/downloads/guia?token=${encodeURIComponent(info.guideToken)}&s=email`
-              : null,
-          }
-        : template.data;
-    const rendered = renderTemplate(
-      template.id,
-      {
-        name: draft.name,
-        actionLabel: draft.actionLabel,
-        sentAt: now,
-        marketing: draft.consentMarketing,
-        unsubscribeUrl,
-      },
-      data as never,
-    );
-    await sendEmail({
-      to: draft.email,
-      subject: rendered.subject,
-      text: rendered.text,
-      html: rendered.html,
-      replyTo: site.email,
-      templateId: template.id,
-      leadId: info.leadId,
-      unsubscribeUrl,
-    });
-  } catch (error) {
-    log("error", "falha na resposta automática", { leadId: info.leadId, error });
-  }
-  try {
-    const summary: Record<string, string> = {};
-    for (const [key, value] of Object.entries(draft.formData)) {
-      if (value === null || value === undefined || value === "") continue;
-      summary[key] = typeof value === "string" ? value : JSON.stringify(value);
-    }
-    const rendered = renderLeadNotification({
-      formId: info.formId,
-      segment: draft.segment,
-      pipeline: info.pipeline,
-      stage: info.stage,
-      created: info.created,
-      leadId: info.leadId,
-      summary,
-    });
-    await sendEmail({
-      to: env.LEAD_NOTIFY_EMAIL,
-      subject: rendered.subject,
-      text: rendered.text,
-      html: rendered.html,
-      replyTo: draft.email,
-      templateId: "lead-notification",
-      leadId: info.leadId,
-    });
-  } catch (error) {
-    log("error", "falha no aviso interno de lead", { leadId: info.leadId, error });
-  }
 }

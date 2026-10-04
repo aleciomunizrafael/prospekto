@@ -27,12 +27,23 @@ import { ErrorSummary } from "./error-summary";
 //   form_id, utm_source, utm_medium, utm_campaign, referrer, landing_path, source_page,
 //   form_ts (carimbo de tempo assinado) e website (honeypot; precisa continuar vazio).
 type LeadFormContextValue = {
-  formId: FormId;
+  // FormId nos formulários registrados em FORMS; o gate do simulador (src/components/simulator)
+  // usa a sua própria Server Action e passa o id do formulário como texto.
+  formId: FormId | string;
   state: LeadFormState;
   pending: boolean;
 };
 
 const LeadFormContext = createContext<LeadFormContextValue | null>(null);
+
+// Fornece aos campos (TextField, SelectField, ConsentFields, SubmitButton...) o estado de um
+// formulário que não usa createLeadFromForm (o gate do simulador), com os mesmos erros por campo.
+export function LeadFormProvider({
+  children,
+  ...value
+}: LeadFormContextValue & { children: ReactNode }) {
+  return <LeadFormContext.Provider value={value}>{children}</LeadFormContext.Provider>;
+}
 
 export function useLeadForm(): LeadFormContextValue {
   const ctx = useContext(LeadFormContext);
