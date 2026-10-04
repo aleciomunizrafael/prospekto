@@ -74,7 +74,7 @@ npm run dev                     # http://localhost:3000 (site) e http://localhos
 npm run check                   # lint + typecheck + format:check + test + build (mesma sequência da CI)
 ```
 
-Variáveis por ambiente e o passo a passo do deploy (Vercel, Neon em São Paulo, Resend, domínio, upgrade para o plano Pro, backup cifrado) estão em `docs/arquitetura/scaffold.md`, seções 9 e 10. Convenções obrigatórias do código em `AGENTS.md`.
+Deploy (Vercel, Neon em São Paulo, Resend, domínio, seed do primeiro acesso, plano Pro, backup cifrado): guia passo a passo em `docs/arquitetura/deploy.md`; variáveis por ambiente em `docs/arquitetura/scaffold.md`, seção 9. Convenções obrigatórias do código em `AGENTS.md`.
 
 ## Próximos passos
 

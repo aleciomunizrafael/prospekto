@@ -86,6 +86,7 @@ Trilhas por papel:
 
 | Arquivo | O que é |
 |---|---|
+| `deploy.md` | Passo a passo do deploy: branch main, segredos, Vercel, Neon pelo Marketplace, Resend (chave, domínio, webhook), seed do primeiro acesso, domínio, plano Pro, backup e checklist de verificação |
 | `ADR-002-defaults-simulador.md` | Padrões do simulador: LC 224/2025 aplicada por padrão na pessoa jurídica (D1) e módulo LIC-RS publicado com aviso (D2), com o que faria cada decisão ser revista |
 | `ADR-001-stack.md` | Decisão de stack e forma do sistema da Fase 1: critérios e pesos, pontuação das três propostas, decisão item a item, stack em uma página, alternativas rejeitadas, consequências e riscos, o que fica para a Fase 2, fontes |
 | `modelo-de-dados.md` | Esquema Drizzle sobre PostgreSQL: convenções, diagrama, as onze entidades (tenants, auth, organizations, contacts, leads, consents, simulations, cultural_projects, contributions, activities, form_attempts), enums, índices e restrições, regras de negócio, como os formulários chegam ao modelo, o que não está modelado |
