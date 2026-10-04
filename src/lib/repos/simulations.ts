@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, lt } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { leads, simulations } from "@/lib/db/schema";
 import { NotFoundError } from "@/lib/errors";
@@ -73,4 +73,25 @@ export async function listSimulations(
     .where(and(...where))
     .orderBy(desc(simulations.createdAt))
     .limit(filter.limit ?? 100);
+}
+
+// Limpeza pelo cron diário: simulações sem lead (visitante que não passou pelo gate) com mais de
+// `days` dias. Simulações ligadas a lead são mantidas (histórico do CRM). Devolve a contagem.
+export async function cleanupOrphanSimulations(
+  ctx: Ctx,
+  now: Date = new Date(),
+  days = 30,
+): Promise<number> {
+  const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const deleted = await db
+    .delete(simulations)
+    .where(
+      and(
+        eq(simulations.tenantId, ctx.tenantId),
+        isNull(simulations.leadId),
+        lt(simulations.createdAt, cutoff),
+      ),
+    )
+    .returning({ id: simulations.id });
+  return deleted.length;
 }

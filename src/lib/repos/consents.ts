@@ -110,3 +110,49 @@ export async function listConsents(ctx: Ctx, leadId: string): Promise<Consent[]>
     .where(and(eq(consents.tenantId, ctx.tenantId), eq(consents.leadId, leadId)))
     .orderBy(desc(consents.createdAt));
 }
+
+// Webhook do Resend (regra R-14; proposta-c, 4.6): bounce e reclamação atualizam
+// `leads.email_status` de todo lead com aquele e-mail no tenant; descadastro e reclamação inserem
+// a revogação de `marketing` (append-only, source_page "webhook"). Devolve só contagens (R-16).
+export type EmailEventKind = "bounced" | "complained" | "unsubscribed";
+
+export async function applyEmailEvent(
+  ctx: Ctx,
+  input: { email: string; kind: EmailEventKind; policyVersion: string; occurredAt?: Date },
+): Promise<{ leadsMatched: number; emailStatusUpdated: number; consentsRevoked: number }> {
+  const email = input.email.trim().toLowerCase();
+  if (!email) return { leadsMatched: 0, emailStatusUpdated: 0, consentsRevoked: 0 };
+  return db.transaction(async (tx) => {
+    const matched = await tx
+      .select({ id: leads.id })
+      .from(leads)
+      .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.email, email)));
+    let emailStatusUpdated = 0;
+    if (input.kind === "bounced" || input.kind === "complained") {
+      const updated = await tx
+        .update(leads)
+        .set({ emailStatus: input.kind })
+        .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.email, email)))
+        .returning({ id: leads.id });
+      emailStatusUpdated = updated.length;
+    }
+    let consentsRevoked = 0;
+    if (input.kind === "unsubscribed" || input.kind === "complained") {
+      for (const lead of matched) {
+        await insertConsent(tx, ctx, lead.id, {
+          purpose: "marketing",
+          granted: false,
+          policyVersion: input.policyVersion,
+          consentText:
+            input.kind === "complained"
+              ? "Revogação registrada por reclamação de spam recebida pelo webhook do provedor de e-mail."
+              : "Revogação registrada por descadastro recebido pelo webhook do provedor de e-mail.",
+          channels: [],
+          sourcePage: "webhook",
+        });
+        consentsRevoked += 1;
+      }
+    }
+    return { leadsMatched: matched.length, emailStatusUpdated, consentsRevoked };
+  });
+}

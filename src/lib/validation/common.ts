@@ -68,3 +68,23 @@ export const slugSchema = z
 export const uuidSchema = z.uuid({ error: "Identificador inválido." });
 
 export const tagsSchema = z.array(z.string().trim().min(1).max(60)).default([]);
+
+// Para schemas de atualização: todo campo opcional passa a aceitar `null` (limpar o campo no
+// formulário do CRM), mantendo os obrigatórios como estão. Usado por updateProjectSchema,
+// updateOrganizationSchema e updateContactSchema.
+export type NullableOptionals<T extends z.ZodRawShape> = {
+  [K in keyof T]: T[K] extends z.ZodOptional<infer Inner extends z.ZodTypeAny>
+    ? z.ZodOptional<z.ZodNullable<Inner>>
+    : T[K];
+};
+
+export function nullableOptionals<T extends z.ZodRawShape>(shape: T): NullableOptionals<T> {
+  const out: Record<string, z.ZodTypeAny> = {};
+  for (const [key, value] of Object.entries(shape)) {
+    out[key] =
+      value instanceof z.ZodOptional
+        ? (value.unwrap() as z.ZodTypeAny).nullable().optional()
+        : (value as z.ZodTypeAny);
+  }
+  return out as unknown as NullableOptionals<T>;
+}
