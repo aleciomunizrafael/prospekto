@@ -51,7 +51,7 @@ O que a action faz, nesta ordem: lê o `form_id`, escolhe o formulário em `src/
    });
    ```
 
-   Mensagens de erro em português e concretas. Campos opcionais: `optionalText(min, max, "Rótulo")`. Campo `projeto_id`: valide que existe e está em `captando` (repo de projetos) e preencha `projectInterestId` e a tag `projeto:[slug]`.
+   Mensagens de erro em português e concretas. Campos opcionais: `optionalText(min, max, "Rótulo")`. Campo `projeto_id`: valide que existe e está publicado (`getPublishedProjectByRef` do repo de projetos) e preencha `projectInterestId` e a tag `projeto:[slug]`. Quando a validação depende do banco, use o hook opcional `prepare(data, ctx)` do `defineForm` (roda antes de `toLead`; devolve `{ ok: false, fieldErrors }` para recusar); para efeitos depois da gravação (ex.: tarefa de agendamento), use `afterCreate(ctx, { leadId, created, data, draft, now })`, que não roda em reenvio deduplicado. Exemplo: `src/lib/validation/forms/diagnostico.ts`.
 
 2. **Registre** o formulário em `FORMS` (`src/lib/validation/forms/index.ts`). A chave é o `form_id`.
 

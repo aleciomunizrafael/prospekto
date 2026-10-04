@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { LeadInterest, LeadSegment, LeadSource, Uf } from "@/lib/domain/enums";
 import { cnpjSchema, emailSchema, phoneSchema, ufSchema } from "@/lib/validation/common";
 import type { EmailTemplateData, EmailTemplateId } from "@/lib/email/templates";
+import type { Ctx } from "@/lib/repos/ctx";
 
 export const nameField = z
   .string({ error: "Informe seu nome." })
@@ -27,6 +28,16 @@ export const phoneField = z
   .transform((v) => (v ? v : undefined))
   .pipe(phoneSchema.optional())
   .transform((v) => (v ? v : undefined));
+
+// Telefone obrigatório (diagnóstico, contadores, municípios, proponentes): a conversa é marcada
+// por WhatsApp ou ligação.
+const PHONE_REQUIRED_MESSAGE = "Informe um telefone com DDD, por exemplo (54) 98403-2180.";
+export const requiredPhoneField = z
+  .string({ error: PHONE_REQUIRED_MESSAGE })
+  .trim()
+  .min(1, { error: PHONE_REQUIRED_MESSAGE })
+  .pipe(phoneSchema)
+  .refine((v) => v !== "", { error: PHONE_REQUIRED_MESSAGE });
 
 export const cityField = z
   .string({ error: "Informe a cidade." })
@@ -162,11 +173,23 @@ export type LeadDraft = {
 // Saída mínima de todo schema de formulário: os campos ocultos (atribuição e antispam).
 export type FormOutput = HiddenFields & Record<string, unknown>;
 
+// Resultado da validação assíncrona de um formulário (ex.: `projeto_id` existe e está publicado).
+export type PrepareResult<T> =
+  { ok: true; data: T } | { ok: false; fieldErrors: Record<string, string> };
+
 export type FormDefinition<S extends z.ZodType = z.ZodType> = {
   // Valor do campo oculto `form_id` e do evento form_start (estrutura-e-copy.md, seção 9.2).
   id: string;
   schema: S;
   toLead: (data: z.output<S>) => LeadDraft;
+  // Opcional: validação que depende do banco, antes de toLead (pode completar os dados).
+  prepare?: (data: z.output<S>, ctx: Ctx) => Promise<PrepareResult<z.output<S>>>;
+  // Opcional: efeito depois de gravar o lead (ex.: tarefa de agendamento); não roda em reenvio
+  // deduplicado. Falhas vão ao log sem derrubar o envio.
+  afterCreate?: (
+    ctx: Ctx,
+    info: { leadId: string; created: boolean; data: z.output<S>; draft: LeadDraft; now: Date },
+  ) => Promise<void>;
 };
 
 export function defineForm<S extends z.ZodType>(def: FormDefinition<S>): FormDefinition<S> {

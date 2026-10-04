@@ -14,6 +14,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Migração do PGlite em memória por arquivo; sob carga (build em paralelo) passa de 10 s.
+    hookTimeout: 60_000,
     include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
     setupFiles: ["tests/setup.ts"],
     // Valores fictícios: src/env.ts é validado em runtime (importado por src/lib/db) e os testes

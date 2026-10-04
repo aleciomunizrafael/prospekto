@@ -72,8 +72,30 @@ export async function createLeadFromForm(
     };
   }
 
+  const ctx: Ctx = { tenantId: env.DEFAULT_TENANT_ID, userId: null };
+
   // Todo schema de formulário inclui hiddenFields (src/lib/validation/forms/common.ts).
-  const data = parsed.data as FormOutput;
+  let data = parsed.data as FormOutput;
+  // Validação que depende do banco (ex.: projeto_id publicado), antes do mapeamento para lead.
+  if (form.prepare) {
+    let prepared: Awaited<ReturnType<NonNullable<typeof form.prepare>>>;
+    try {
+      prepared = await form.prepare(data, ctx);
+    } catch (error) {
+      log("error", "falha na validação assíncrona do formulário", { formId: form.id, error });
+      return { status: "error", errorCode: "storage", message: STORAGE_ERROR, values };
+    }
+    if (!prepared.ok) {
+      return {
+        status: "error",
+        errorCode: "validation",
+        message: VALIDATION_ERROR,
+        fieldErrors: prepared.fieldErrors,
+        values,
+      };
+    }
+    data = prepared.data as FormOutput;
+  }
   const draft = form.toLead(data);
   // Parâmetros da página de obrigado só para analytics (form_submit): id do formulário, segmento e
   // origem. Nenhum dado pessoal na URL.
@@ -87,7 +109,6 @@ export async function createLeadFromForm(
     return { status: "error", errorCode: "token", message: TOKEN_ERROR, values };
   }
 
-  const ctx: Ctx = { tenantId: env.DEFAULT_TENANT_ID, userId: null };
   const meta = await requestMeta();
 
   if (!(await checkRateLimit(ctx, meta.ip, form.id))) {
@@ -153,6 +174,13 @@ export async function createLeadFromForm(
 
   // Reenvio em 10 minutos (R-2) não grava nem reenvia e-mails; a resposta é a mesma.
   if (!deduplicated) {
+    if (form.afterCreate) {
+      try {
+        await form.afterCreate(ctx, { leadId, created, data, draft, now: new Date() });
+      } catch (error) {
+        log("error", "falha no efeito pós-gravação do formulário", { formId: form.id, error });
+      }
+    }
     const templateData =
       draft.emailTemplate.id === "guia"
         ? {

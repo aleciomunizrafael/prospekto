@@ -1,7 +1,7 @@
 import "server-only";
-import { and, desc, eq, getTableColumns, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, isNotNull, sql, type SQL } from "drizzle-orm";
 import { db, type Db } from "@/lib/db";
-import { culturalProjects, leads } from "@/lib/db/schema";
+import { culturalProjects, leads, organizations } from "@/lib/db/schema";
 import { isStageOf, isTerminalStage, requirementsForMove } from "@/lib/domain/pipelines";
 import { MissingFieldsError, NotFoundError, ValidationError } from "@/lib/errors";
 import {
@@ -277,4 +277,119 @@ export async function unpublishProject(
     .set({ publishedOnSite: false })
     .where(and(eq(culturalProjects.tenantId, ctx.tenantId), eq(culturalProjects.id, projectId)));
   return requireProjectWithBalance(db, ctx, projectId);
+}
+
+// Carteira pública (estrutura-e-copy.md, seções 4.6 e 10.5; regra R-11): só o que vai ao site.
+// Sem campos internos (comissão, rubrica, responsável, lead de origem, proponente por id).
+export type PublicProject = {
+  id: string;
+  slug: string;
+  name: string;
+  mechanism: CulturalProject["mechanism"];
+  processNumber: string | null;
+  approvedAmount: number | null;
+  // Regra R-5: saldo calculado no banco.
+  balance: number | null;
+  fundraisingDeadline: string | null;
+  city: string | null;
+  uf: string | null;
+  culturalSegment: string | null;
+  summary: string | null;
+  counterparts: string | null;
+  deckUrl: string | null;
+  salicUrl: string | null;
+  proponentName: string;
+  // ISO 8601: o DTO atravessa o cache do Next (JSON) sem perder o tipo.
+  publishedAt: string | null;
+};
+
+const publicProjectColumns = {
+  id: culturalProjects.id,
+  slug: culturalProjects.slug,
+  name: culturalProjects.name,
+  mechanism: culturalProjects.mechanism,
+  processNumber: culturalProjects.processNumber,
+  approvedAmount: culturalProjects.approvedAmount,
+  balance: balanceExpr,
+  fundraisingDeadline: culturalProjects.fundraisingDeadline,
+  city: culturalProjects.city,
+  uf: culturalProjects.uf,
+  culturalSegment: culturalProjects.culturalSegment,
+  summary: culturalProjects.summary,
+  counterparts: culturalProjects.counterparts,
+  deckUrl: culturalProjects.deckUrl,
+  salicUrl: culturalProjects.salicUrl,
+  proponentName: organizations.name,
+  publishedAt: culturalProjects.publishAuthorizedAt,
+};
+
+// Regra R-11 na consulta: captando, published_on_site e autorização por escrito preenchida.
+function publishedScope(ctx: Ctx): SQL {
+  return and(
+    eq(culturalProjects.tenantId, ctx.tenantId),
+    eq(culturalProjects.stage, "captando"),
+    eq(culturalProjects.publishedOnSite, true),
+    isNotNull(culturalProjects.publishAuthorizedBy),
+    isNotNull(culturalProjects.publishAuthorizedAt),
+  )!;
+}
+
+type PublicProjectRow = Omit<PublicProject, "balance" | "publishedAt"> & {
+  balance: unknown;
+  publishedAt: Date | null;
+};
+
+function toPublicProject(row: PublicProjectRow): PublicProject {
+  return {
+    ...row,
+    balance: row.balance == null ? null : Number(row.balance),
+    publishedAt: row.publishedAt ? row.publishedAt.toISOString() : null,
+  };
+}
+
+// Lista de /projetos: prazo mais próximo primeiro; sem prazo por último; limite alto o bastante
+// para a carteira da Fase 1.
+export async function listPublishedProjects(ctx: Ctx): Promise<PublicProject[]> {
+  const rows = await db
+    .select(publicProjectColumns)
+    .from(culturalProjects)
+    .innerJoin(organizations, eq(organizations.id, culturalProjects.proponentOrgId))
+    .where(publishedScope(ctx))
+    .orderBy(
+      sql`${culturalProjects.fundraisingDeadline} asc nulls last`,
+      asc(culturalProjects.name),
+    )
+    .limit(200);
+  return rows.map(toPublicProject);
+}
+
+export async function getPublishedProjectBySlug(
+  ctx: Ctx,
+  slug: string,
+): Promise<PublicProject | null> {
+  const [row] = await db
+    .select(publicProjectColumns)
+    .from(culturalProjects)
+    .innerJoin(organizations, eq(organizations.id, culturalProjects.proponentOrgId))
+    .where(and(publishedScope(ctx), eq(culturalProjects.slug, slug)));
+  return row ? toPublicProject(row) : null;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Campo oculto `projeto_id` do diagnóstico (seção 5.4): aceita o id ou o slug e só devolve
+// projeto publicado (R-11). Fora disso, null: o formulário recusa o envio.
+export async function getPublishedProjectByRef(
+  ctx: Ctx,
+  ref: string,
+): Promise<PublicProject | null> {
+  const value = ref.trim();
+  if (!value) return null;
+  if (!UUID_RE.test(value)) return getPublishedProjectBySlug(ctx, value.toLowerCase());
+  const [row] = await db
+    .select(publicProjectColumns)
+    .from(culturalProjects)
+    .innerJoin(organizations, eq(organizations.id, culturalProjects.proponentOrgId))
+    .where(and(publishedScope(ctx), eq(culturalProjects.id, value.toLowerCase())));
+  return row ? toPublicProject(row) : null;
 }
