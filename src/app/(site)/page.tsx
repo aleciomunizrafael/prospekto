@@ -9,12 +9,15 @@ import { NumberBlock, SourceNotes } from "@/components/site/number-block";
 import { NumberedList } from "@/components/site/numbered-list";
 import { SectionHeader } from "@/components/site/section-header";
 import { HOME_SOURCES } from "@/components/site/sources";
+import { ProjectCard } from "@/components/site/project-card";
+import { PROJECTS_DISCLAIMER } from "@/components/site/project-mechanism";
 import { WhatsappButton } from "@/components/site/whatsapp-button";
 import { site } from "@/config/site";
+import { getPublicProjects } from "@/lib/site/public-projects";
 
 // Home (docs/site/estrutura-e-copy.md, seção 4.1). Página estática: o bloco "Projetos em captação"
-// mostra o estado de carteira vazia com o aviso de novos projetos; os cartões puxados do CRM
-// entram com /projetos (próxima onda, com revalidação por tag).
+// lê a carteira pública pelo cache com a tag `projects` (src/lib/site/public-projects.ts) e mostra
+// o estado de carteira vazia com o aviso de novos projetos quando não há projeto publicado.
 export const metadata: Metadata = {
   title: { absolute: "Incentivo fiscal à cultura na Serra Gaúcha · Prospekto" },
   description:
@@ -93,7 +96,11 @@ const organizationJsonLd = {
   // Endereço só quando confirmado (seção 6.3) [verificar].
 };
 
-export default function HomePage() {
+// Rede de segurança (ISR) além da tag `projects`; literal porque o Next exige valor estático.
+export const revalidate = 3600;
+
+export default async function HomePage() {
+  const projects = await getPublicProjects();
   return (
     <>
       <script
@@ -241,27 +248,51 @@ export default function HomePage() {
           id="projetos"
           label="Projetos em captação"
           title="Projetos aprovados, com saldo a captar, na sua região."
-          subtitle="Novos projetos entram na carteira ao longo do ano. Quer ser avisado? Deixe seu e-mail."
+          subtitle={
+            projects.length
+              ? PROJECTS_DISCLAIMER
+              : "Novos projetos entram na carteira ao longo do ano. Quer ser avisado? Deixe seu e-mail."
+          }
         />
-        <div className="grid gap-10 lg:grid-cols-2">
-          <div className="border-border flex flex-col gap-3 rounded-lg border border-dashed p-6">
-            <p className="site-label">Carteira</p>
-            <p className="text-muted-foreground">
-              A carteira pública de projetos é publicada em{" "}
-              <Link href="/projetos" className="underline underline-offset-4">
-                Projetos em captação
-              </Link>{" "}
-              conforme cada proponente autoriza a divulgação. Valores e prazos conforme portaria
-              publicada; sujeitos a atualização.
-            </p>
+        {projects.length ? (
+          <>
+            <ul className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {projects.slice(0, 3).map((p) => (
+                <li key={p.id}>
+                  <ProjectCard project={p} />
+                </li>
+              ))}
+            </ul>
+            <CtaLink
+              href="/projetos"
+              ctaId="home_projects_all"
+              variant="link"
+              className="self-start"
+            >
+              Ver todos os projetos em captação
+            </CtaLink>
+          </>
+        ) : (
+          <div className="grid gap-10 lg:grid-cols-2">
+            <div className="border-border flex flex-col gap-3 rounded-lg border border-dashed p-6">
+              <p className="site-label">Carteira</p>
+              <p className="text-muted-foreground">
+                A carteira pública de projetos é publicada em{" "}
+                <Link href="/projetos" className="underline underline-offset-4">
+                  Projetos em captação
+                </Link>{" "}
+                conforme cada proponente autoriza a divulgação. Valores e prazos conforme portaria
+                publicada; sujeitos a atualização.
+              </p>
+            </div>
+            <div className="flex flex-col gap-4">
+              <h3 id="aviso-projetos-titulo" className="site-h3">
+                Quero ser avisado sobre novos projetos
+              </h3>
+              <ProjectsNotifyForm titleId="aviso-projetos-titulo" />
+            </div>
           </div>
-          <div className="flex flex-col gap-4">
-            <h3 id="aviso-projetos-titulo" className="site-h3">
-              Quero ser avisado sobre novos projetos
-            </h3>
-            <ProjectsNotifyForm titleId="aviso-projetos-titulo" />
-          </div>
-        </div>
+        )}
       </section>
 
       {/* Guia gratuito */}
