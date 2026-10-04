@@ -24,10 +24,18 @@ describe("autorização do CRM em cada página e Server Action", () => {
     }
   });
 
-  it("toda Server Action em src/actions/*.ts chama requireSession()", async () => {
+  // Exceção única e explícita: a Server Action pública de captura de leads (src/actions/leads.ts)
+  // declara o marcador `// public-action:` com a justificativa na primeira linha de comentário.
+  it("toda Server Action em src/actions/*.ts chama requireSession() ou se declara pública", async () => {
     const actions = (await listFiles("src/actions/*.ts")).filter((f) => !f.endsWith(".test.ts"));
     for (const file of actions) {
       const source = await readFile(path.join(root, file), "utf8");
+      if (/^\/\/ public-action: .+/m.test(source)) {
+        expect(source, `${file} é pública e não deve importar requireSession`).not.toMatch(
+          /requireSession\(/,
+        );
+        continue;
+      }
       expect(source, `${file} não chama requireSession()`).toMatch(/await requireSession\(/);
     }
   });
