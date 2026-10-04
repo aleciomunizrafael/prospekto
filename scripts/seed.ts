@@ -5,6 +5,9 @@
 // auth.api.signUpEmail; usamos o contexto interno (auth.$context), que é exatamente o que a
 // rota de sign-up faz por dentro (node_modules/better-auth/dist/api/routes/sign-up.mjs):
 // password.hash + internalAdapter.createUser + internalAdapter.linkAccount(providerId "credential").
+import { chmod, mkdtemp, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { generateRandomString } from "better-auth/crypto";
 import { auth } from "../src/lib/auth";
 import { db } from "../src/lib/db";
@@ -13,6 +16,20 @@ import { and, eq } from "drizzle-orm";
 
 const TENANT_ID = process.env.DEFAULT_TENANT_ID ?? "prospekto";
 const TENANT_NAME = "Prospekto Consultoria & Projetos";
+
+// Sem credenciais nem e-mails no stdout (R-16; logs da CI e do Vercel persistem): a senha temporária
+// vai para um arquivo 0600 em diretório temporário fora do repositório, e o e-mail sai mascarado.
+const maskEmail = (email: string) => `${email.slice(0, 1)}***@${email.split("@")[1] ?? ""}`;
+let credentialsFile: string | null = null;
+async function storeCredentials(email: string, password: string) {
+  if (!credentialsFile) {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "prospekto-seed-"));
+    await chmod(dir, 0o700);
+    credentialsFile = path.join(dir, "credenciais.txt");
+    await writeFile(credentialsFile, "", { mode: 0o600 });
+  }
+  await writeFile(credentialsFile, `${email}\t${password}\n`, { flag: "a", mode: 0o600 });
+}
 
 type SeedUser = { name: string; email: string };
 
@@ -40,7 +57,7 @@ if (users.length === 0) {
   for (const [index, user] of users.entries()) {
     const existing = await ctx.internalAdapter.findUserByEmail(user.email);
     if (existing?.user) {
-      console.log(`usuário já existe, pulado: ${user.email}`);
+      console.log(`usuário já existe, pulado: ${maskEmail(user.email)}`);
       continue;
     }
     const password = generateRandomString(20, "a-z", "A-Z", "0-9");
@@ -61,9 +78,11 @@ if (users.length === 0) {
       accountId: created.id,
       password: hash,
     });
-    console.log(
-      `usuário criado: ${user.email} (${index === 0 ? "owner" : "operator"}); senha temporária: ${password}`,
-    );
+    await storeCredentials(user.email, password);
+    console.log(`usuário criado: ${maskEmail(user.email)} (${index === 0 ? "owner" : "operator"})`);
+  }
+  if (credentialsFile) {
+    console.log(`senhas temporárias em ${credentialsFile} (0600); apague após o primeiro acesso`);
   }
 }
 

@@ -104,3 +104,19 @@ describe("resetPasswordAction", () => {
     expect(reused.message).toMatch(/não vale mais/);
   });
 });
+
+describe("limite de pedidos de redefinição", () => {
+  it("acima de 5 pedidos por hora não dispara e-mail e a resposta continua igual", async () => {
+    const before = mail.sent.length;
+    const messages = new Set<string>();
+    for (let i = 0; i < 10; i += 1) {
+      const state = await requestPasswordResetAction(initialCrmActionState, fd({ email }));
+      expect(state.status).toBe("ok");
+      messages.add(state.message ?? "");
+    }
+    expect(messages.size).toBe(1);
+    const delta = mail.sent.length - before;
+    expect(delta).toBeGreaterThanOrEqual(1);
+    expect(delta).toBeLessThanOrEqual(5);
+  });
+});

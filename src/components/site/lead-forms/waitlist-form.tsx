@@ -15,7 +15,7 @@ import {
   WAITLIST_EXPERIENCES,
   WAITLIST_GOAL_LABELS,
   WAITLIST_GOALS,
-} from "@/lib/validation/forms/mentoria";
+} from "@/lib/validation/forms/mentoria-options";
 
 const opts = <T extends readonly string[]>(values: T, labels: Record<T[number], string>) =>
   values.map((value) => ({ value, label: labels[value as T[number]] }));

@@ -1,4 +1,5 @@
-import { formatDateTime } from "@/lib/crm/dates";
+import { formActivitySubject, formActivityText } from "@/lib/crm/activity-text";
+import { formatDateTime } from "@/lib/crm/format";
 import { ACTIVITY_TYPE_LABELS, LOST_REASON_LABELS, stageLabel } from "@/lib/crm/labels";
 import type { Activity } from "@/lib/repos/activities";
 import { cn } from "@/lib/utils";
@@ -28,19 +29,6 @@ function systemText(data: Record<string, unknown> | null): string | null {
   return parts.length ? parts.join(" · ") : null;
 }
 
-function formText(data: Record<string, unknown> | null): string | null {
-  if (!data) return null;
-  const skip = new Set(["form_id", "consent_lgpd", "consent_marketing"]);
-  const parts = Object.entries(data)
-    .filter(
-      ([k, v]) =>
-        !skip.has(k) && v !== null && v !== undefined && v !== "" && typeof v !== "object",
-    )
-    .slice(0, 12)
-    .map(([k, v]) => `${k}: ${String(v)}`);
-  return parts.length ? parts.join(" · ") : null;
-}
-
 export function ActivityTimeline({
   activities,
   users,
@@ -63,7 +51,7 @@ export function ActivityTimeline({
           a.type === "sistema"
             ? systemText(a.data)
             : a.type === "formulario"
-              ? formText(a.data)
+              ? formActivityText(a.data)
               : null;
         const who = a.createdByUserId ? users.get(a.createdByUserId) : null;
         return (
@@ -77,7 +65,9 @@ export function ActivityTimeline({
               >
                 {ACTIVITY_TYPE_LABELS[a.type]}
               </span>
-              <span className="font-medium">{a.subject}</span>
+              <span className="font-medium">
+                {a.type === "formulario" ? formActivitySubject(a.subject) : a.subject}
+              </span>
               <span className="text-muted-foreground text-xs">
                 {formatDateTime(a.occurredAt)}
                 {who ? ` · ${who}` : ""}

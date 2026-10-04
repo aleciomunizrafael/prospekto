@@ -20,6 +20,7 @@ beforeAll(async () => {
     interest: "rouanet",
     name: 'Empresa "Aspas"; Ltda',
     email: uniqueEmail("a"),
+    phone: "+5554999990000",
     source: "site",
     consents: [consentContato],
     attributes: { empresa: "Empresa A", regime_tributario: "lucro_real", chave_extra: 1 },
@@ -73,6 +74,8 @@ describe("exportTable", () => {
     expect(csv.startsWith(`${CSV_BOM}id;segmento;pipeline`)).toBe(true);
     expect(csv).toContain('"Empresa ""Aspas""; Ltda"');
     expect(csv).toContain("2026-10-10T12:00:00.000Z");
+    // Telefone E.164 começa com "+": sai neutralizado contra fórmula (apóstrofo e aspas).
+    expect(csv).toContain(';"\'+5554999990000";');
   });
 
   it("isola por tenant em todas as tabelas", async () => {

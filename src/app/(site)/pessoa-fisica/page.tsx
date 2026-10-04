@@ -85,7 +85,7 @@ export default function PessoaFisicaPage() {
           subtitle="Pessoas físicas que entregam a declaração pelo modelo completo podem destinar parte do imposto devido a projetos culturais aprovados. O procedimento é direto: simular o imposto, transferir o valor para a conta do projeto até o último dia útil bancário de dezembro e informar na declaração do ano seguinte."
         />
         <div className="flex flex-col gap-3 sm:flex-row">
-          <CtaLink href="/simulador?tipo=pf" ctaId="pf_hero_simulate">
+          <CtaLink href="/simulador?tipo=PF" ctaId="pf_hero_simulate">
             Simular meu limite
           </CtaLink>
           <CtaLink href="/projetos" ctaId="pf_hero_projects" variant="outline">
@@ -191,7 +191,7 @@ export default function PessoaFisicaPage() {
           </h2>
           <div className="flex flex-col gap-3 sm:flex-row">
             <CtaLink
-              href="/simulador?tipo=pf"
+              href="/simulador?tipo=PF"
               ctaId="pf_final_simulate"
               className="bg-background text-primary hover:bg-background/90"
             >

@@ -22,7 +22,7 @@ import {
   type MechanismParam,
   type SimulatorParams,
 } from "./params";
-import { renderText, textsFor } from "./texts";
+import { formatLegalBasis, renderText, textsFor } from "./texts";
 import type {
   CalculationBase,
   Comparison,
@@ -284,7 +284,7 @@ function buildRow(
   return {
     key: spec.key,
     name: MECHANISM_LABELS[spec.key],
-    legal_basis: m.fonte,
+    legal_basis: formatLegalBasis(m.fonte),
     status: m.status,
     highlighted,
     group: spec.group,
@@ -570,7 +570,7 @@ export function simulateLicRs(
           total_outlay: 0,
         },
       },
-      legal_basis: lic.fonte,
+      legal_basis: formatLegalBasis(lic.fonte),
       notes: [...notes, "no_icms"],
     };
   }
@@ -608,7 +608,7 @@ export function simulateLicRs(
         total_outlay: round2(total + (a - credit)),
       },
     },
-    legal_basis: lic.fonte,
+    legal_basis: formatLegalBasis(lic.fonte),
     notes,
   };
 }
@@ -1036,12 +1036,8 @@ function simulatePf(
       }
     }
   }
-  const deadlines: Deadline[] = [
-    {
-      key: "pf_deposit",
-      text: `Depósito identificado com o CPF na conta do projeto ${p.pf.prazo_aporte}; o valor entra na ${p.pf.onde_declarar}.`,
-    },
-  ];
+  // O prazo PF (depósito até o último dia útil bancário de dezembro e ficha da DIRPF) é o texto
+  // pf_deadline, acentuado, renderizado pela tela; p.pf.prazo_aporte fica como referência.
   return finish(
     {
       ...skeleton,
@@ -1051,7 +1047,7 @@ function simulatePf(
       comparison,
       featured_mechanism: featured,
       band: base.band,
-      deadlines,
+      deadlines: [],
     },
     limits.mechanisms.map((r) => r.key),
     p,

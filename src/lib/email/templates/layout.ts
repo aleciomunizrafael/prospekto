@@ -2,6 +2,7 @@
 // ("você recebe este e-mail porque [ação] em [data]"), cidade no rodapé, link de descadastro
 // quando houver consent_marketing e ressalva legal. Texto simples com versão HTML leve (seção 10.2).
 import { site } from "@/config/site";
+import { formatDateTime } from "@/lib/crm/format";
 
 export type RenderedEmail = { subject: string; text: string; html: string };
 
@@ -29,11 +30,7 @@ export function escapeHtml(value: string): string {
 }
 
 export function formatDateTimeBr(date: Date): string {
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-    timeZone: "America/Sao_Paulo",
-  }).format(date);
+  return formatDateTime(date);
 }
 
 function blockToText(block: EmailBlock): string {

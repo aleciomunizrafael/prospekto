@@ -7,7 +7,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { describeOverdue, formatDateTime } from "@/lib/crm/dates";
+import { describeOverdue } from "@/lib/crm/dates";
+import { formatDateTime } from "@/lib/crm/format";
 import { SEGMENT_LABELS, SOURCE_LABELS, stageLabel } from "@/lib/crm/labels";
 import { leadCompany, stageInfo } from "@/lib/crm/lead-view";
 import type { LeadListRow } from "@/lib/repos/leads";

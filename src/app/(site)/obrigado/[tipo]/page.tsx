@@ -7,11 +7,13 @@ import { SectionHeader } from "@/components/site/section-header";
 import { WhatsappButton } from "@/components/site/whatsapp-button";
 import { site, thankYouWhatsappMessage } from "@/config/site";
 import { THANKS_TYPES, type ThanksType } from "@/lib/validation/forms/common";
+import { DIAGNOSTIC_GENERIC_NEXT_STEP, DiagnosticoNextStep } from "./diagnostico-next-step";
 import { GuideDownloadLink } from "./guide-download-link";
 
 // Página de obrigado (docs/site/estrutura-e-copy.md, seções 4.6 e 10.1): "Recebemos. Próximo
 // passo:" com a mensagem por tipo e o botão de WhatsApp com a ação no lugar do trecho entre
-// colchetes. Estática para os oito tipos; parâmetros de consulta só no cliente (analytics e token).
+// colchetes. Estática para os oito tipos; parâmetros de consulta só no cliente (analytics, token do
+// guia e `v`, a variante do próximo passo do diagnóstico).
 export const dynamicParams = false;
 
 export function generateStaticParams() {
@@ -43,8 +45,8 @@ const CONTENT: Record<ThanksType, ThanksContent> = {
   diagnostico: {
     title: "marcar o diagnóstico.",
     action: "pedir o diagnóstico",
-    nextStep:
-      "A Daniela entra em contato em até 1 dia útil pelo WhatsApp ou telefone informado para marcar o diagnóstico: 30 minutos com o seu contador (PJ) ou uma ligação de 15 minutos (PF). Se quiser adiantar, responda ao e-mail com dois horários.",
+    // Texto genérico (metadata e fallback); na tela, DiagnosticoNextStep varia pelo formato (`v`).
+    nextStep: DIAGNOSTIC_GENERIC_NEXT_STEP,
   },
   contadores: {
     title: "combinar o diagnóstico da carteira.",
@@ -110,7 +112,15 @@ export default async function ObrigadoPage({ params }: PageProps<"/obrigado/[tip
         as="h1"
         label="Recebemos"
         title={`Recebemos. Próximo passo: ${content.title}`}
-        subtitle={content.nextStep}
+        subtitle={
+          tipo === "diagnostico" ? (
+            <Suspense fallback={<p>{content.nextStep}</p>}>
+              <DiagnosticoNextStep />
+            </Suspense>
+          ) : (
+            content.nextStep
+          )
+        }
       />
       {tipo === "guia" ? (
         <Suspense fallback={null}>

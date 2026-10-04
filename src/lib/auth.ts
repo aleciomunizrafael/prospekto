@@ -25,5 +25,14 @@ export const auth = betterAuth({
       role: { type: "string", required: true, defaultValue: "operator", input: false },
     },
   },
+  // Limite por IP no handler HTTP (/api/auth/*): ligado só em produção (padrão do Better Auth),
+  // armazenamento em memória por instância; o login fica em 5 tentativas por minuto. O pedido de
+  // redefinição de senha é chamado por Server Action (auth.api.*), fora deste limitador, e tem o
+  // seu próprio limite em src/actions/auth.ts.
+  rateLimit: {
+    customRules: {
+      "/sign-in/email": { window: 60, max: 5 },
+    },
+  },
   plugins: [nextCookies()],
 });

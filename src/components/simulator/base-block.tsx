@@ -85,7 +85,7 @@ export function BaseBlock({ base, input }: Props) {
         </div>
       ) : null}
       <p className="text-muted-foreground text-[14px] leading-snug">
-        {pj ? renderText("base_pj") : base.description}
+        {renderText(pj ? "base_pj" : "base_pf")}
       </p>
     </div>
   );

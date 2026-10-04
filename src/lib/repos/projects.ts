@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, desc, eq, getTableColumns, isNotNull, sql, type SQL } from "drizzle-orm";
 import { db, type Db } from "@/lib/db";
 import { contributions, culturalProjects, leads, organizations, users } from "@/lib/db/schema";
+import { calendarDateInSaoPaulo } from "@/lib/crm/format";
 import { isStageOf, isTerminalStage, requirementsForMove } from "@/lib/domain/pipelines";
 import { MissingFieldsError, NotFoundError, ValidationError } from "@/lib/errors";
 import {
@@ -436,15 +437,6 @@ const raisedPercentExpr = sql<
   number | null
 >`case when ${culturalProjects.approvedAmount} is null or ${culturalProjects.approvedAmount} = 0 then null else round(${culturalProjects.raisedAmount} / ${culturalProjects.approvedAmount} * 100, 1)::float8 end`;
 
-function todayIso(now: Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(now);
-}
-
 function daysBetween(from: string, to: string): number {
   const [y1, m1, d1] = from.split("-").map(Number);
   const [y2, m2, d2] = to.split("-").map(Number);
@@ -456,7 +448,7 @@ export async function listProjectSummaries(
   input: ListProjectSummariesInput = {},
   now: Date = new Date(),
 ): Promise<ProjectSummary[]> {
-  const today = todayIso(now);
+  const today = calendarDateInSaoPaulo(now);
   const { deadlineSoon, lowRaised } = alertExprs(today);
   const where: SQL[] = [eq(culturalProjects.tenantId, ctx.tenantId)];
   if (input.stage && isStageOf("projetos", input.stage))
@@ -545,7 +537,7 @@ export async function getProjectDetail(
   projectId: string,
   now: Date = new Date(),
 ): Promise<ProjectDetail | null> {
-  const today = todayIso(now);
+  const today = calendarDateInSaoPaulo(now);
   const { deadlineSoon, lowRaised } = alertExprs(today);
   const [row] = await db
     .select({

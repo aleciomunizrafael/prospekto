@@ -4,7 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { registerActivityAction } from "@/actions/crm-leads";
 import { initialCrmActionState } from "@/lib/crm/action-state";
-import { toDateTimeLocal } from "@/lib/crm/dates";
+import { toDateTimeLocal } from "@/lib/crm/format";
 import { ACTIVITY_TYPE_LABELS, MEETING_KINDS } from "@/lib/crm/labels";
 import { FormMessage, SelectField, TextField, TextareaField } from "./fields";
 import { SubmitButton } from "./submit-button";

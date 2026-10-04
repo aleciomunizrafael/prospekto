@@ -128,3 +128,50 @@ export function verifyGuideToken(
 export function hashIp(ip: string | null | undefined, secret: string = env.FORM_SECRET): string {
   return hmac(`ip:${ip?.trim() || "desconhecido"}`, secret);
 }
+
+// Link de descadastro de um clique (estrutura-e-copy.md, seção 10.2; RFC 8058): lead, tenant e
+// finalidade marketing. Vale por um ano, porque o e-mail pode ser aberto muito depois do envio.
+export const UNSUBSCRIBE_TOKEN_DAYS = 365;
+
+export type UnsubscribeTokenPayload = { leadId: string; tenantId: string };
+
+export function issueUnsubscribeToken(
+  input: UnsubscribeTokenPayload,
+  now: Date = new Date(),
+  secret?: string,
+): string {
+  return signPayload(
+    {
+      kind: "unsub",
+      leadId: input.leadId,
+      tenantId: input.tenantId,
+      exp: now.getTime() + UNSUBSCRIBE_TOKEN_DAYS * 24 * 60 * 60 * 1000,
+    },
+    secret,
+  );
+}
+
+export type UnsubscribeTokenCheck =
+  | { status: "ok"; payload: UnsubscribeTokenPayload }
+  | { status: "expired" }
+  | { status: "invalid" };
+
+export function verifyUnsubscribeToken(
+  token: string | null | undefined,
+  now: Date = new Date(),
+  secret?: string,
+): UnsubscribeTokenCheck {
+  if (!token || token.length > 400) return { status: "invalid" };
+  const payload = verifyPayload(token, secret);
+  if (
+    !payload ||
+    payload.kind !== "unsub" ||
+    typeof payload.leadId !== "string" ||
+    typeof payload.tenantId !== "string" ||
+    typeof payload.exp !== "number"
+  ) {
+    return { status: "invalid" };
+  }
+  if (now.getTime() > payload.exp) return { status: "expired" };
+  return { status: "ok", payload: { leadId: payload.leadId, tenantId: payload.tenantId } };
+}

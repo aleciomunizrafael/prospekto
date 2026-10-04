@@ -5,9 +5,14 @@
 // O cadastro público continua desligado (disableSignUp em src/lib/auth.ts).
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { env } from "@/env";
 import { auth } from "@/lib/auth";
 import { firstIssueByField, type CrmActionState } from "@/lib/crm/action-state";
+import { requestMeta } from "@/lib/leads/submit";
 import { log } from "@/lib/log";
+import type { Ctx } from "@/lib/repos/ctx";
+import { hitFormAttempt } from "@/lib/repos/form-attempts";
+import { hashIp } from "@/lib/signing";
 
 const RESET_PATH = "/redefinir-senha";
 
@@ -15,7 +20,14 @@ const requestSchema = z.object({
   email: z.email({ error: "Informe um e-mail válido." }).trim().toLowerCase().max(254),
 });
 
+const REQUEST_OK_MESSAGE =
+  "Se este e-mail tiver acesso ao CRM, o link para definir a nova senha chega em até 1 minuto. Ele vale por uma hora.";
+
 // Resposta sempre igual, exista ou não a conta: não revela quem tem acesso ao CRM.
+// Limite de pedidos por IP e por e-mail (5 por hora, mesma tabela form_attempts da regra R-18;
+// hash com sal, R-16): o limitador do Better Auth só roda no handler HTTP, não em auth.api.*,
+// então sem isto um visitante dispararia e-mails de redefinição sem parar. Acima do limite a
+// resposta é a mesma, sem revelar o limite nem a conta.
 export async function requestPasswordResetAction(
   _prev: CrmActionState,
   formData: FormData,
@@ -28,6 +40,17 @@ export async function requestPasswordResetAction(
       fieldErrors: firstIssueByField(parsed.error.issues),
     };
   }
+  const meta = await requestMeta();
+  const ctx: Ctx = { tenantId: env.DEFAULT_TENANT_ID, userId: null };
+  const byIp = await hitFormAttempt(ctx, hashIp(meta.ip));
+  const byEmail = await hitFormAttempt(ctx, hashIp(`reset:${parsed.data.email}`));
+  if (!byIp.allowed || !byEmail.allowed) {
+    log("warn", "pedido de redefinição de senha acima do limite", {
+      byIp: byIp.count,
+      byEmail: byEmail.count,
+    });
+    return { status: "ok", message: REQUEST_OK_MESSAGE };
+  }
   try {
     await auth.api.requestPasswordReset({
       body: { email: parsed.data.email, redirectTo: RESET_PATH },
@@ -35,11 +58,7 @@ export async function requestPasswordResetAction(
   } catch (error) {
     log("error", "falha ao pedir redefinição de senha", { error });
   }
-  return {
-    status: "ok",
-    message:
-      "Se este e-mail tiver acesso ao CRM, o link para definir a nova senha chega em até 1 minuto. Ele vale por uma hora.",
-  };
+  return { status: "ok", message: REQUEST_OK_MESSAGE };
 }
 
 const resetSchema = z

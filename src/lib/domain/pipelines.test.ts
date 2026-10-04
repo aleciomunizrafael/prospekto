@@ -9,8 +9,10 @@ import {
   TERMINAL_STAGES,
   isStageOf,
   pipelineForSegment,
+  allowedStageMoves,
   requirementsForMove,
   stageIndex,
+  stageMoveKind,
 } from "./pipelines";
 
 describe("pipelines", () => {
@@ -81,5 +83,36 @@ describe("pipelines", () => {
     expect(
       requirementsForMove("alunos", "lista_espera", "pesquisado").flatMap((r) => r.fields),
     ).toContain("owner_user_id");
+  });
+
+  it("regras de saída não valem ao marcar perdido nem ao voltar um estágio", () => {
+    const fields = (from: string, to: string) =>
+      requirementsForMove("patrocinadores", from, to).flatMap((r) => r.fields);
+    expect(fields("aporte", "perdido")).toEqual(["lost_reason"]);
+    expect(fields("termo", "perdido")).toEqual(["lost_reason"]);
+    expect(fields("aporte", "termo")).not.toContain("contribution.deposited_at");
+    expect(fields("aporte", "recibo")).toContain("contribution.deposited_at");
+    // Retorno do playbook continua exigindo a nova proposta.
+    expect(fields("renovacao", "proposta")).toContain("contribution.new_proposal");
+    // R-3 vale mesmo ao perder a partir do inicial.
+    expect(fields("novo", "perdido")).toContain("owner_user_id");
+  });
+
+  it("allowedStageMoves lista próximo, retorno, voltar, perdido e reativar; sem saltos", () => {
+    expect(allowedStageMoves("patrocinadores", "novo")).toEqual([
+      { stage: "qualificado", kind: "next" },
+      { stage: "perdido", kind: "lost" },
+    ]);
+    expect(allowedStageMoves("patrocinadores", "renovacao")).toEqual([
+      { stage: "proposta", kind: "return" },
+      { stage: "recibo", kind: "back" },
+      { stage: "perdido", kind: "lost" },
+    ]);
+    expect(allowedStageMoves("patrocinadores", "perdido")).toEqual([
+      { stage: "novo", kind: "reactivate" },
+    ]);
+    expect(stageMoveKind("patrocinadores", "novo", "aporte")).toBeNull();
+    expect(stageMoveKind("contadores", "inativo", "ativo")).toBe("return");
+    expect(stageMoveKind("projetos", "captando", "arquivado")).toBe("lost");
   });
 });

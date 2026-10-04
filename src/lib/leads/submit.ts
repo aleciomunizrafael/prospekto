@@ -6,13 +6,14 @@ import "server-only";
 // action traduz os resultados para o seu estado.
 import { headers } from "next/headers";
 import { env } from "@/env";
+import { appUrl } from "@/lib/app-url";
 import { site } from "@/config/site";
 import { renderLeadNotification, renderTemplate } from "@/lib/email/templates";
 import { sendEmail } from "@/lib/email/send";
 import { log } from "@/lib/log";
 import type { Ctx } from "@/lib/repos/ctx";
 import { hitFormAttempt } from "@/lib/repos/form-attempts";
-import { hashIp, verifyFormTimestamp } from "@/lib/signing";
+import { hashIp, issueUnsubscribeToken, verifyFormTimestamp } from "@/lib/signing";
 import type { ConsentInput } from "@/lib/validation/leads";
 import type { LeadDraft } from "@/lib/validation/forms/common";
 
@@ -20,7 +21,8 @@ export const STORAGE_ERROR =
   "Não conseguimos registrar seu pedido agora. Tente de novo em alguns minutos ou escreva para projetos@prospekto.com.br.";
 export const RATE_LIMIT_ERROR =
   "Recebemos muitos envios deste endereço em pouco tempo. Tente de novo em uma hora ou fale pelo WhatsApp.";
-export const TOKEN_ERROR = "Não foi possível validar o envio. Recarregue a página e tente de novo.";
+export const TOKEN_ERROR =
+  "Não foi possível validar o envio. O formulário precisa de JavaScript ativo; recarregue a página e tente de novo ou, se preferir, escreva para projetos@prospekto.com.br ou chame no WhatsApp.";
 export const VALIDATION_ERROR = "Confira os campos destacados abaixo.";
 
 export type RequestMeta = { ip: string | null; userAgent: string | null };
@@ -118,13 +120,13 @@ export function buildConsents(
   return consents;
 }
 
-export function appUrl(): string {
-  return env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
-}
+export { appUrl } from "@/lib/app-url";
 
 export type NotifyInfo = {
   formId: string;
   leadId: string;
+  // Tenant do lead, para o token de descadastro; padrão DEFAULT_TENANT_ID (site público).
+  tenantId?: string;
   pipeline: string;
   stage: string;
   created: boolean;
@@ -135,11 +137,19 @@ export type NotifyInfo = {
 // Resposta automática ao lead (estrutura-e-copy.md, seção 5.6). Falhas só vão ao log.
 export async function sendAutoReply(
   draft: Pick<LeadDraft, "name" | "email" | "actionLabel" | "consentMarketing" | "emailTemplate">,
-  info: Pick<NotifyInfo, "leadId" | "templateData">,
+  info: Pick<NotifyInfo, "leadId" | "tenantId" | "templateData">,
 ): Promise<void> {
-  // Descadastro de um clique entra com o webhook do Resend (próxima onda); até lá, o lead responde
-  // ao e-mail ou escreve para projetos@. O link aponta para a seção de direitos da política.
-  const unsubscribeUrl = draft.consentMarketing ? `${appUrl()}/privacidade#direitos` : undefined;
+  // Descadastro de um clique (seção 10.2; RFC 8058): /api/descadastro com token assinado de lead e
+  // tenant (src/lib/signing.ts), sem dado pessoal na URL. Só em e-mails com consentimento de
+  // marketing; as respostas automáticas sem marketing não levam link nem cabeçalho.
+  const unsubscribeUrl = draft.consentMarketing
+    ? `${appUrl()}/api/descadastro?t=${encodeURIComponent(
+        issueUnsubscribeToken({
+          leadId: info.leadId,
+          tenantId: info.tenantId ?? env.DEFAULT_TENANT_ID,
+        }),
+      )}`
+    : undefined;
   try {
     const template = draft.emailTemplate;
     const rendered = renderTemplate(

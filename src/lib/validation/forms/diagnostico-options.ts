@@ -73,3 +73,23 @@ export const AVAILABILITY_LABELS: Record<(typeof AVAILABILITY_OPTIONS)[number], 
   tarde: "Tarde",
   qualquer: "Qualquer horário comercial",
 };
+
+// Próximo passo por formato e tipo, usado no e-mail "diagnostico" (templates/index.ts) e na página
+// de obrigado (DiagnosticoNextStep): uma fonte só, para a confirmação não contradizer o formulário.
+export const DIAGNOSTIC_NEXT_STEP_VARIANTS = ["simulacao", "pj", "pf"] as const;
+export type DiagnosticNextStepVariant = (typeof DIAGNOSTIC_NEXT_STEP_VARIANTS)[number];
+
+export const DIAGNOSTIC_NEXT_STEP: Record<DiagnosticNextStepVariant, string> = {
+  simulacao:
+    "marcar a simulação de 20 minutos. O contador não precisa participar desta primeira conversa.",
+  pj: "marcar o diagnóstico: 30 minutos com o seu contador.",
+  pf: "marcar o diagnóstico: uma ligação de 15 minutos.",
+};
+
+export function diagnosticNextStepVariant(
+  formato: "diagnostico" | "simulacao",
+  tipoPessoa: "PJ" | "PF",
+): DiagnosticNextStepVariant {
+  if (formato === "simulacao") return "simulacao";
+  return tipoPessoa === "PF" ? "pf" : "pj";
+}

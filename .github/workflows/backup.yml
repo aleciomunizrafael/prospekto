@@ -1,4 +1,6 @@
 name: backup
+# Agendamento semanal (scaffold.md, seção 5.14; README). Sem os segredos, o job termina sem
+# executar nada: `secrets` não entra no `if` de job, por isso a presença vira env de job.
 on:
   schedule:
     - cron: "0 6 * * 0" # domingo 6h UTC, 3h em Brasília
@@ -7,15 +9,29 @@ jobs:
   dump:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      HAS_SECRETS: ${{ secrets.DATABASE_URL_UNPOOLED != '' && secrets.BACKUP_PASSPHRASE != '' }}
     steps:
-      - run: |
+      - if: env.HAS_SECRETS != 'true'
+        run: echo "::warning::DATABASE_URL_UNPOOLED ou BACKUP_PASSPHRASE ausente no repositório; backup não executado"
+      # O artefato é legível por qualquer identidade com leitura no repositório, então o dump
+      # (leads, telefones, CNPJs, consentimentos; R-17) sobe cifrado e o arquivo em claro é destruído.
+      # Restaurar: gpg --decrypt prospekto.dump.gpg | pg_restore -d "$DATABASE_URL" (pede a
+      # passphrase de BACKUP_PASSPHRASE, guardada pela Prospekto fora do GitHub).
+      - if: env.HAS_SECRETS == 'true'
+        run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
           pg_dump -Fc -d "$DATABASE_URL_UNPOOLED" -f prospekto.dump
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --symmetric --cipher-algo AES256 \
+            --pinentry-mode loopback --passphrase-fd 0 -o prospekto.dump.gpg prospekto.dump
+          shred -u prospekto.dump
         env:
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
       # atualizar major quando confirmar (https://github.com/actions/upload-artifact/releases/latest)
-      - uses: actions/upload-artifact@v4
+      - if: env.HAS_SECRETS == 'true'
+        uses: actions/upload-artifact@v4
         with:
           name: db-dump-${{ github.run_id }}
-          path: prospekto.dump
-          retention-days: 90
+          path: prospekto.dump.gpg
+          retention-days: 14

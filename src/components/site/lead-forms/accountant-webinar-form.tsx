@@ -7,7 +7,10 @@ import {
   SubmitButton,
   TextField,
 } from "@/components/site/form";
-import { LUCRO_REAL_BAND_LABELS, LUCRO_REAL_BANDS } from "@/lib/validation/forms/contadores";
+import {
+  LUCRO_REAL_BAND_LABELS,
+  LUCRO_REAL_BANDS,
+} from "@/lib/validation/forms/contadores-options";
 
 const bandOptions = LUCRO_REAL_BANDS.map((value) => ({
   value,

@@ -19,7 +19,7 @@ import {
   MUNICIPALITY_ROLES,
   PNAB_STATUS_LABELS,
   PNAB_STATUSES,
-} from "@/lib/validation/forms/municipios";
+} from "@/lib/validation/forms/municipios-options";
 
 const opts = <T extends readonly string[]>(values: T, labels: Record<T[number], string>) =>
   values.map((value) => ({ value, label: labels[value as T[number]] }));

@@ -216,6 +216,33 @@ describe("submitSimulatorLead: PJ no lucro real", () => {
     expect(without).toMatchObject({ status: "error", errorCode: "token" });
   });
 
+  it("com o cookie do gate, o limite de 5 por IP por hora também vale e source_page é saneado", async () => {
+    request.ip = freshIp();
+    request.jar.clear();
+    const email = uniqueEmail("sim-cookie-limit");
+    const first = await submit(pjFields(email));
+    expect(first.status).toBe("success");
+    const lead = await getLeadByEmail(ctx, email, "PJ");
+
+    // O gate já contou 1; mais 4 chamadas passam, a sexta é bloqueada sem gravar.
+    for (let i = 0; i < 4; i += 1) {
+      const again = await recordReturningSimulation(
+        JSON.stringify({ ...PJ_INPUT, tax_due: 100000 + i }),
+        i === 0 ? "javascript:alert(1)" : "/simulador",
+      );
+      expect(again.status).toBe("success");
+    }
+    const sixth = await recordReturningSimulation(JSON.stringify(PJ_INPUT), "/simulador");
+    expect(sixth).toMatchObject({ status: "error", errorCode: "rate_limited" });
+    expect(await listSimulations(ctx, { leadId: lead!.id })).toHaveLength(5);
+
+    const activities = await listActivities(ctx, { leadId: lead!.id, type: "formulario" });
+    const pages = activities.map((a) => (a.data as { source_page?: string }).source_page);
+    expect(pages).not.toContain("javascript:alert(1)");
+    // As 4 chamadas com cookie gravam /simulador (a primeira, saneada para o fallback).
+    expect(pages.filter((p) => p === "/simulador").length).toBeGreaterThanOrEqual(4);
+  });
+
   it("regime presumido com ICMS no RS recebe a tag desqualificado_rouanet e interesse lic_rs", async () => {
     request.ip = freshIp();
     const email = uniqueEmail("sim-presumido");

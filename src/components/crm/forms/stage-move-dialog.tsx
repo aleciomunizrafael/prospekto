@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { initialCrmActionState, type CrmActionState } from "@/lib/crm/action-state";
-import { toDateTimeLocal } from "@/lib/crm/dates";
+import { toDateTimeLocal } from "@/lib/crm/format";
 import { LOST_REASON_LABELS, stageLabel } from "@/lib/crm/labels";
 import type { StageMovePlan } from "@/lib/crm/stage-moves";
 import { LOST_REASONS } from "@/lib/domain/enums";

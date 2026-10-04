@@ -25,7 +25,9 @@ import type { SimulatorDetailData, SimulatorGateOutcome } from "./state";
 import { ExamplesTable } from "./summary";
 import {
   LC224_LABEL,
+  culturalBasketPercent,
   diagnosticHref,
+  storeDiagnosticPrefill,
   formatDateTimeBr,
   formatIsoDate,
   noticeKeys,
@@ -142,7 +144,9 @@ export function SimulatorDetail({ data, outcome, emailTo, onRestart }: Props) {
   }, [input.taxpayer_type, data.result.lc224.applied]);
 
   const notices = noticeKeys(result);
-  const diagnostic = diagnosticHref(data.gate, input.taxpayer_type, data.simulationId);
+  const diagnostic = diagnosticHref(input.taxpayer_type, data.simulationId);
+  // Dados do gate para o formulário de diagnóstico vão por sessionStorage, nunca pela URL.
+  const rememberGate = () => storeDiagnosticPrefill(data.gate);
   const whatsapp = waLink(whatsappMessage(input, result));
   const techTexts = textsFor(result).filter((key) => !SHOWN_ELSEWHERE.has(key));
   const paramsDate = formatIsoDate(result.parameters_version);
@@ -161,9 +165,10 @@ export function SimulatorDetail({ data, outcome, emailTo, onRestart }: Props) {
           <Link
             href={diagnostic}
             className={siteButtonClass("primary")}
-            onClick={() =>
-              track("cta_click", { cta_id: "simulator_detail_diagnostic", path: currentPath() })
-            }
+            onClick={() => {
+              rememberGate();
+              track("cta_click", { cta_id: "simulator_detail_diagnostic", path: currentPath() });
+            }}
           >
             Agendar diagnóstico
           </Link>
@@ -246,8 +251,7 @@ export function SimulatorDetail({ data, outcome, emailTo, onRestart }: Props) {
             <span className="font-medium">
               Aplicar redução da {LC224_LABEL}{" "}
               <span className="text-muted-foreground font-normal">
-                (limite de cultura a{" "}
-                {formatPercent(result.lc224.applied ? 4 * result.lc224.factor : 4)})
+                (limite de cultura a {formatPercent(culturalBasketPercent(result))})
               </span>
             </span>
           </label>
@@ -313,17 +317,18 @@ export function SimulatorDetail({ data, outcome, emailTo, onRestart }: Props) {
           <Link
             href={diagnostic}
             className={siteButtonClass("primary")}
-            onClick={() =>
+            onClick={() => {
+              rememberGate();
               track("cta_click", {
                 cta_id: "simulator_detail_diagnostic_bottom",
                 path: currentPath(),
-              })
-            }
+              });
+            }}
           >
             Agendar diagnóstico gratuito com a Daniela e o seu contador
           </Link>
           <Link
-            href={projectsHref(result)}
+            href={projectsHref()}
             className={siteButtonClass("outline")}
             onClick={() =>
               track("cta_click", { cta_id: "simulator_detail_projects", path: currentPath() })
@@ -377,7 +382,11 @@ export function SimulatorDetail({ data, outcome, emailTo, onRestart }: Props) {
 
       {/* Rodapé fixo no celular: diagnóstico e WhatsApp (tela 4). */}
       <div className="bg-background border-border fixed inset-x-0 bottom-0 z-10 flex gap-2 border-t p-3 md:hidden">
-        <Link href={diagnostic} className={siteButtonClass("primary", "flex-1 justify-center")}>
+        <Link
+          href={diagnostic}
+          className={siteButtonClass("primary", "flex-1 justify-center")}
+          onClick={rememberGate}
+        >
           Agendar diagnóstico
         </Link>
         <a

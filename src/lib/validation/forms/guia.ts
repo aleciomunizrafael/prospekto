@@ -13,16 +13,9 @@ import {
   ufField,
   type LeadDraft,
 } from "./common";
+import { GUIDE_PROFILES, type GuideProfile } from "./guia-options";
 
-export const GUIDE_PROFILES = ["empresa", "contador", "pessoa_fisica", "outro"] as const;
-export type GuideProfile = (typeof GUIDE_PROFILES)[number];
-
-export const GUIDE_PROFILE_LABELS: Record<GuideProfile, string> = {
-  empresa: "Empresa",
-  contador: "Escritório contábil",
-  pessoa_fisica: "Pessoa física",
-  outro: "Outro",
-};
+export * from "./guia-options";
 
 const perfilField = z.enum(GUIDE_PROFILES, { error: "Escolha o seu perfil." });
 

@@ -20,7 +20,7 @@ import {
   type SimulatorParams,
 } from "./params";
 import { bandFor, compareScenario, simulate, simulateLicRs } from "./simulate";
-import { TEXT_KEYS, SIMULATOR_TEXTS, renderText, textsFor } from "./texts";
+import { TEXT_KEYS, SIMULATOR_TEXTS, formatLegalBasis, renderText, textsFor } from "./texts";
 import type { SimulatorResult } from "./types";
 
 // Data fixa para o aviso params_stale não depender do relógio da máquina.
@@ -584,10 +584,42 @@ describe("9.5 Pessoa física", () => {
 
   it("prazos e textos da PF", () => {
     const result = run(pf());
-    expect(result.deadlines.map((d) => d.key)).toEqual(["pf_deposit"]);
-    expect(result.deadlines[0].text).toContain(params.pf.prazo_aporte);
+    // O prazo PF é o texto acentuado pf_deadline (a tela não exibe o JSON sem acentos).
+    expect(result.deadlines).toEqual([]);
     expect(result.texts).toEqual(
-      expect.arrayContaining(["pf_basket", "pf_deadline", "pf_no_8pct", "disclaimer_main"]),
+      expect.arrayContaining([
+        "base_pf",
+        "pf_basket",
+        "pf_deadline",
+        "pf_no_8pct",
+        "disclaimer_main",
+      ]),
+    );
+    expect(renderText("pf_deadline")).toContain("último dia útil bancário de dezembro");
+    expect(renderText("base_pf")).toContain("Declaração de Ajuste Anual");
+  });
+
+  it("base legal exibida vem acentuada e com § no lugar de par.", () => {
+    const pjResult = run(pj());
+    const pfResult = run(pf());
+    const shown = [
+      ...pjResult.limits!.mechanisms.map((m) => m.legal_basis),
+      ...pfResult.limits!.mechanisms.map((m) => m.legal_basis),
+      run(
+        pj({
+          regime: "lucro_presumido",
+          icms_contributor_rs: "sim",
+          icms_prior_year: 500000,
+          tax_due: undefined,
+        }),
+      ).lic_rs!.legal_basis,
+    ];
+    for (const text of shown) {
+      expect(text).not.toMatch(/\bpar\.|\bprorrogacao\b|\bate\b|Declaracao|Doacoes/);
+    }
+    expect(shown.some((t) => t.includes("§"))).toBe(true);
+    expect(formatLegalBasis("Lei 8.313/1991, art. 18 e par. 1 (prorrogacao ate 2029)")).toBe(
+      "Lei 8.313/1991, art. 18 e § 1 (prorrogação até 2029)",
     );
   });
 });

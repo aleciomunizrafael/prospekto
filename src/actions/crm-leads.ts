@@ -9,7 +9,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { firstIssueByField, formDataToStrings, type CrmActionState } from "@/lib/crm/action-state";
 import { attributesFromForm } from "@/lib/crm/attributes";
-import { fromDateTimeLocal } from "@/lib/crm/dates";
+import { fromDateTimeLocal } from "@/lib/crm/format";
 import { ACTIVITY_TYPE_LABELS, MEETING_KINDS } from "@/lib/crm/labels";
 import {
   CONSENT_CHANNELS,

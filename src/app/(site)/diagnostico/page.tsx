@@ -7,8 +7,9 @@ import { WhatsappButton } from "@/components/site/whatsapp-button";
 import { site } from "@/config/site";
 
 // Diagnóstico gratuito (docs/site/estrutura-e-copy.md, seções 4.6 e 5.4). Página estática: a
-// query string (tipo, empresa, nome, email, regime, faixa, projeto, simulation_id) é lida no
-// cliente pelo formulário depois da montagem; o carimbo de tempo vem por Server Action.
+// query string (tipo, empresa, regime, faixa, projeto, simulation_id, formato; nenhum dado pessoal)
+// é lida no cliente pelo formulário depois da montagem, assim como os dados do gate do simulador
+// guardados em sessionStorage; o carimbo de tempo vem por Server Action.
 export const metadata: Metadata = {
   title: { absolute: "Diagnóstico gratuito de incentivo fiscal · Prospekto" },
   description:

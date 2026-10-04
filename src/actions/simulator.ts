@@ -65,6 +65,12 @@ import {
 } from "@/lib/validation/forms/simulator";
 
 const INPUT_ERROR = "Refaça a simulação antes de pedir o resultado detalhado.";
+// Caminho interno do site (currentPath() em summary.tsx); qualquer outra coisa vira /simulador.
+const SOURCE_PAGE_PATTERN = /^\/[^\s]{0,199}$/;
+
+function safeSourcePage(value: unknown): string {
+  return typeof value === "string" && SOURCE_PAGE_PATTERN.test(value) ? value : "/simulador";
+}
 const GATE_EXPIRED_ERROR =
   "Seu acesso ao resultado detalhado expirou. Preencha o formulário de novo.";
 
@@ -296,7 +302,9 @@ export async function submitSimulatorLead(
 }
 
 // Visitante que já passou pelo gate (cookie assinado de 30 dias): grava a nova simulação ligada
-// ao lead, atualiza faixa e interesse e devolve o detalhe direto (spec, seção 6).
+// ao lead, atualiza faixa e interesse e devolve o detalhe direto (spec, seção 6). Sem formulário
+// não há honeypot nem carimbo; vale o mesmo limite por IP de 5 por hora (R-18), para o cookie não
+// virar um laço de gravação em simulations e activities.
 export async function recordReturningSimulation(
   inputJson: string,
   sourcePage: string,
@@ -327,6 +335,9 @@ export async function recordReturningSimulation(
   }
 
   const meta = await requestMeta();
+  if (!(await checkRateLimit(ctx, meta.ip, SIMULATOR_FORM_IDS[input.taxpayer_type]))) {
+    return { status: "error", errorCode: "rate_limited", message: RATE_LIMIT_ERROR };
+  }
   const simulation = await saveSimulation(ctx, input, result, lead.id, meta.ip);
   const attrs = lead.attributes as Record<string, unknown>;
   const str = (key: string) =>
@@ -357,7 +368,7 @@ export async function recordReturningSimulation(
       data: {
         form_id: SIMULATOR_FORM_IDS[input.taxpayer_type],
         simulation_id: simulation?.id ?? null,
-        source_page: sourcePage.slice(0, 200),
+        source_page: safeSourcePage(sourcePage),
         simulacao: simulationSummaryForCrm(input, result),
       },
       leadId: lead.id,

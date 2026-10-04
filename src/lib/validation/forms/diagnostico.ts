@@ -32,6 +32,7 @@ import {
   IR_BANDS,
   IRPJ_BANDS,
   TAX_REGIME_OPTIONS,
+  diagnosticNextStepVariant,
   type DiagnosticFormat,
 } from "./diagnostico-options";
 
@@ -201,6 +202,7 @@ export const diagnosticoForm = defineForm({
       consentMarketing: d.consent_marketing,
       formData,
       thanksType: "diagnostico",
+      thanksVariant: diagnosticNextStepVariant(formato, d.tipo_pessoa),
       actionLabel:
         formato === "simulacao"
           ? "pediu a simulação de 20 minutos"

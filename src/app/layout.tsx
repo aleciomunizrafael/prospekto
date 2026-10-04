@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Source_Serif_4 } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { site } from "@/config/site";
+import { appUrl } from "@/lib/app-url";
 import "./globals.css";
 
 // Tipografia (estrutura-e-copy.md, seção 7.3): Source Serif 4 nos títulos e Inter no texto,
@@ -20,10 +21,10 @@ const sourceSerif = Source_Serif_4({
   display: "swap",
 });
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+const siteUrl = appUrl();
 
 export const metadata: Metadata = {
-  metadataBase: new URL(appUrl),
+  metadataBase: new URL(siteUrl),
   title: { default: site.name, template: `%s · ${site.shortName}` },
   description: "Projetos culturais, leis de incentivo e captação de patrocínio na Serra Gaúcha.",
   openGraph: { siteName: site.name, locale: "pt_BR", type: "website" },

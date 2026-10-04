@@ -8,7 +8,7 @@ import {
   TextareaField,
   TextField,
 } from "@/components/site/form";
-import { CONTACT_SUBJECTS, CONTACT_SUBJECT_LABELS } from "@/lib/validation/forms/contato";
+import { CONTACT_SUBJECTS, CONTACT_SUBJECT_LABELS } from "@/lib/validation/forms/contato-options";
 
 const subjectOptions = CONTACT_SUBJECTS.map((value) => ({
   value,

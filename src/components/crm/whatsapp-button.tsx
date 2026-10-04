@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { whatsappHrefFor, type WhatsappLead } from "@/lib/crm/whatsapp-messages";
 
-// "Abrir WhatsApp" com a mensagem do playbook para o estágio; só aparece com telefone.
-export function WhatsappButton({
+// "Abrir WhatsApp" do CRM com a mensagem do playbook para o estágio; só aparece com telefone.
+// (O site tem o seu próprio WhatsappButton em src/components/site, com analytics.)
+export function LeadWhatsappButton({
   lead,
   size = "sm",
   label = "Abrir WhatsApp",

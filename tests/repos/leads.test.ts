@@ -3,9 +3,11 @@ import { MissingFieldsError, ValidationError } from "@/lib/errors";
 import type { Ctx } from "@/lib/repos/ctx";
 import { listActivities } from "@/lib/repos/activities";
 import { getCurrentConsent, listConsents, revokeConsent } from "@/lib/repos/consents";
+import { createContact } from "@/lib/repos/contacts";
 import {
   createLead,
   getLeadByEmail,
+  getLeadDetail,
   listLeads,
   moveLeadStage,
   updateLead,
@@ -308,6 +310,38 @@ describe("moveLeadStage (R-3, R-4)", () => {
     await expect(moveLeadStage(ctx, { leadId: lead.id, to: "novo" })).rejects.toThrow(/já está/);
   });
 
+  it("recusa salto de estágio e permite perdido ou voltar (com motivo) de qualquer estágio", async () => {
+    const owner = await makeUser(ctx);
+    const { lead } = await createLead(ctx, {
+      segment: "PJ",
+      interest: "rouanet",
+      name: "Salto",
+      email: uniqueEmail("salto"),
+      source: "site",
+      consents: [consentContato],
+    });
+    const base = { leadId: lead.id, ownerUserId: owner, nextActionAt: new Date() };
+    // novo -> aporte: fora de allowedStageMoves (não é falta de campo, é destino proibido).
+    await expect(moveLeadStage(ctx, { ...base, to: "aporte" })).rejects.toThrow(
+      /Não é possível mover/,
+    );
+    await moveLeadStage(ctx, { ...base, to: "qualificado" });
+    await moveLeadStage(ctx, { ...base, to: "diagnostico" });
+    // Voltar um estágio exige motivo; com motivo volta sem exigir regras "sair".
+    await expect(moveLeadStage(ctx, { ...base, to: "qualificado" })).rejects.toThrow(/motivo/);
+    expect(
+      (await moveLeadStage(ctx, { ...base, to: "qualificado", reason: "registro errado" })).stage,
+    ).toBe("qualificado");
+    // Perdido de qualquer estágio só exige o motivo de perda (personas-e-funis.md, 8.1).
+    const lost = await moveLeadStage(ctx, { ...base, to: "perdido", lostReason: "sem_interesse" });
+    expect(lost.stage).toBe("perdido");
+    // Reativar leva ao inicial; nada mais é permitido a partir do terminal.
+    await expect(moveLeadStage(ctx, { ...base, to: "qualificado" })).rejects.toThrow(
+      /Não é possível mover/,
+    );
+    expect((await moveLeadStage(ctx, { ...base, to: "novo" })).stage).toBe("novo");
+  });
+
   it("não move lead de outro tenant", async () => {
     const other = await makeTenant();
     const { lead } = await createLead(other, {
@@ -379,6 +413,55 @@ describe("moveLeadStage (R-3, R-4)", () => {
 });
 
 describe("updateLead e consentimentos", () => {
+  it("org_id, contact_id e owner_user_id precisam pertencer ao tenant (e o contato à organização)", async () => {
+    const other = await makeTenant();
+    const foreignOrg = await createOrganization(other, { type: "empresa", name: "Alheia" });
+    const foreignUser = await makeUser(other);
+    const ownOrg = await createOrganization(ctx, { type: "empresa", name: "Própria" });
+    const otherOwnOrg = await createOrganization(ctx, { type: "empresa", name: "Outra própria" });
+    const contact = await createContact(ctx, {
+      orgId: otherOwnOrg.id,
+      name: "Contato",
+      sourceDetail: "teste",
+    });
+    const { lead } = await createLead(ctx, {
+      segment: "PJ",
+      interest: "rouanet",
+      name: "Vínculo",
+      email: uniqueEmail("vinculo"),
+      source: "site",
+      consents: [consentContato],
+    });
+    await expect(updateLead(ctx, { leadId: lead.id, orgId: foreignOrg.id })).rejects.toThrow(
+      /não encontrad/,
+    );
+    await expect(updateLead(ctx, { leadId: lead.id, ownerUserId: foreignUser })).rejects.toThrow(
+      /responsável/,
+    );
+    await expect(
+      moveLeadStage(ctx, {
+        leadId: lead.id,
+        to: "qualificado",
+        ownerUserId: foreignUser,
+        nextActionAt: new Date(),
+      }),
+    ).rejects.toThrow(/responsável/);
+    await expect(
+      updateLead(ctx, { leadId: lead.id, orgId: ownOrg.id, contactId: contact.id }),
+    ).rejects.toThrow(/não pertence/);
+    const linked = await updateLead(ctx, {
+      leadId: lead.id,
+      orgId: otherOwnOrg.id,
+      contactId: contact.id,
+    });
+    expect(linked.contactId).toBe(contact.id);
+    // Junções nunca devolvem nome ou CNPJ de organização de outro tenant.
+    const detail = await getLeadDetail(ctx, lead.id);
+    expect(detail?.orgName).toBe("Outra própria");
+    const foreignDetail = await getLeadDetail(other, lead.id);
+    expect(foreignDetail).toBeNull();
+  });
+
   it("recalcula score e registra activities.sistema de score e dono (R-12)", async () => {
     const { lead } = await createLead(ctx, {
       segment: "PJ",

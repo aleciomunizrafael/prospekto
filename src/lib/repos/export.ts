@@ -1,5 +1,5 @@
 import "server-only";
-import { aliasedTable, desc, eq, getTableColumns } from "drizzle-orm";
+import { aliasedTable, and, desc, eq, getTableColumns } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   activities,
@@ -76,10 +76,22 @@ async function exportLeads(ctx: Ctx): Promise<ExportResult> {
       projectInterestName: culturalProjects.name,
     })
     .from(leads)
-    .leftJoin(organizations, eq(organizations.id, leads.orgId))
-    .leftJoin(users, eq(users.id, leads.ownerUserId))
-    .leftJoin(referredBy, eq(referredBy.id, leads.referredByOrgId))
-    .leftJoin(culturalProjects, eq(culturalProjects.id, leads.projectInterestId))
+    .leftJoin(
+      organizations,
+      and(eq(organizations.id, leads.orgId), eq(organizations.tenantId, ctx.tenantId)),
+    )
+    .leftJoin(users, and(eq(users.id, leads.ownerUserId), eq(users.tenantId, ctx.tenantId)))
+    .leftJoin(
+      referredBy,
+      and(eq(referredBy.id, leads.referredByOrgId), eq(referredBy.tenantId, ctx.tenantId)),
+    )
+    .leftJoin(
+      culturalProjects,
+      and(
+        eq(culturalProjects.id, leads.projectInterestId),
+        eq(culturalProjects.tenantId, ctx.tenantId),
+      ),
+    )
     .where(eq(leads.tenantId, ctx.tenantId))
     .orderBy(desc(leads.createdAt));
   const consentRows = await db
@@ -193,7 +205,7 @@ async function exportOrganizations(ctx: Ctx): Promise<ExportResult> {
   const rows = await db
     .select({ ...getTableColumns(organizations), ownerName: users.name })
     .from(organizations)
-    .leftJoin(users, eq(users.id, organizations.ownerUserId))
+    .leftJoin(users, and(eq(users.id, organizations.ownerUserId), eq(users.tenantId, ctx.tenantId)))
     .where(eq(organizations.tenantId, ctx.tenantId))
     .orderBy(desc(organizations.createdAt));
   const nameById = new Map(rows.map((r) => [r.id, r.name]));
@@ -242,7 +254,10 @@ async function exportContacts(ctx: Ctx): Promise<ExportResult> {
   const rows = await db
     .select({ contact: contacts, orgName: organizations.name, orgCnpj: organizations.cnpj })
     .from(contacts)
-    .leftJoin(organizations, eq(organizations.id, contacts.orgId))
+    .leftJoin(
+      organizations,
+      and(eq(organizations.id, contacts.orgId), eq(organizations.tenantId, ctx.tenantId)),
+    )
     .where(eq(contacts.tenantId, ctx.tenantId))
     .orderBy(desc(contacts.createdAt));
   const headers = [
@@ -280,7 +295,7 @@ async function exportConsents(ctx: Ctx): Promise<ExportResult> {
   const rows = await db
     .select({ consent: consents, leadName: leads.name, leadEmail: leads.email })
     .from(consents)
-    .leftJoin(leads, eq(leads.id, consents.leadId))
+    .leftJoin(leads, and(eq(leads.id, consents.leadId), eq(leads.tenantId, ctx.tenantId)))
     .where(eq(consents.tenantId, ctx.tenantId))
     .orderBy(desc(consents.createdAt));
   const headers = [
@@ -318,7 +333,7 @@ async function exportSimulations(ctx: Ctx): Promise<ExportResult> {
   const rows = await db
     .select({ sim: simulations, leadName: leads.name, leadEmail: leads.email })
     .from(simulations)
-    .leftJoin(leads, eq(leads.id, simulations.leadId))
+    .leftJoin(leads, and(eq(leads.id, simulations.leadId), eq(leads.tenantId, ctx.tenantId)))
     .where(eq(simulations.tenantId, ctx.tenantId))
     .orderBy(desc(simulations.createdAt));
   const headers = [
@@ -357,8 +372,17 @@ async function exportProjects(ctx: Ctx): Promise<ExportResult> {
       ownerName: users.name,
     })
     .from(culturalProjects)
-    .leftJoin(organizations, eq(organizations.id, culturalProjects.proponentOrgId))
-    .leftJoin(users, eq(users.id, culturalProjects.ownerUserId))
+    .leftJoin(
+      organizations,
+      and(
+        eq(organizations.id, culturalProjects.proponentOrgId),
+        eq(organizations.tenantId, ctx.tenantId),
+      ),
+    )
+    .leftJoin(
+      users,
+      and(eq(users.id, culturalProjects.ownerUserId), eq(users.tenantId, ctx.tenantId)),
+    )
     .where(eq(culturalProjects.tenantId, ctx.tenantId))
     .orderBy(desc(culturalProjects.createdAt));
   const headers = [
@@ -446,9 +470,18 @@ async function exportContributions(ctx: Ctx): Promise<ExportResult> {
       orgCnpj: organizations.cnpj,
     })
     .from(contributions)
-    .leftJoin(culturalProjects, eq(culturalProjects.id, contributions.projectId))
-    .leftJoin(leads, eq(leads.id, contributions.leadId))
-    .leftJoin(organizations, eq(organizations.id, contributions.orgId))
+    .leftJoin(
+      culturalProjects,
+      and(
+        eq(culturalProjects.id, contributions.projectId),
+        eq(culturalProjects.tenantId, ctx.tenantId),
+      ),
+    )
+    .leftJoin(leads, and(eq(leads.id, contributions.leadId), eq(leads.tenantId, ctx.tenantId)))
+    .leftJoin(
+      organizations,
+      and(eq(organizations.id, contributions.orgId), eq(organizations.tenantId, ctx.tenantId)),
+    )
     .where(eq(contributions.tenantId, ctx.tenantId))
     .orderBy(desc(contributions.createdAt));
   const headers = [
@@ -524,11 +557,23 @@ async function exportActivities(ctx: Ctx): Promise<ExportResult> {
       creatorName: creator.name,
     })
     .from(activities)
-    .leftJoin(leads, eq(leads.id, activities.leadId))
-    .leftJoin(organizations, eq(organizations.id, activities.orgId))
-    .leftJoin(culturalProjects, eq(culturalProjects.id, activities.projectId))
-    .leftJoin(owner, eq(owner.id, activities.ownerUserId))
-    .leftJoin(creator, eq(creator.id, activities.createdByUserId))
+    .leftJoin(leads, and(eq(leads.id, activities.leadId), eq(leads.tenantId, ctx.tenantId)))
+    .leftJoin(
+      organizations,
+      and(eq(organizations.id, activities.orgId), eq(organizations.tenantId, ctx.tenantId)),
+    )
+    .leftJoin(
+      culturalProjects,
+      and(
+        eq(culturalProjects.id, activities.projectId),
+        eq(culturalProjects.tenantId, ctx.tenantId),
+      ),
+    )
+    .leftJoin(owner, and(eq(owner.id, activities.ownerUserId), eq(owner.tenantId, ctx.tenantId)))
+    .leftJoin(
+      creator,
+      and(eq(creator.id, activities.createdByUserId), eq(creator.tenantId, ctx.tenantId)),
+    )
     .where(eq(activities.tenantId, ctx.tenantId))
     .orderBy(desc(activities.occurredAt));
   const headers = [

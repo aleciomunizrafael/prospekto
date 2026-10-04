@@ -9,7 +9,8 @@ import type {
   LeadTemperature,
   LostReason,
 } from "@/lib/domain/enums";
-import type { Pipeline } from "@/lib/domain/pipelines";
+import type { Pipeline, Stage } from "@/lib/domain/pipelines";
+import { AVAILABILITY_LABELS } from "@/lib/validation/forms/diagnostico-options";
 
 export const PIPELINE_LABELS: Record<Pipeline, string> = {
   patrocinadores: "Patrocinadores",
@@ -19,7 +20,7 @@ export const PIPELINE_LABELS: Record<Pipeline, string> = {
   alunos: "Alunos",
 };
 
-export const STAGE_LABELS: Record<string, string> = {
+export const STAGE_LABELS: Record<Stage, string> = {
   novo: "Novo",
   qualificado: "Qualificado",
   diagnostico: "Diagnóstico",
@@ -198,6 +199,7 @@ export const ATTRIBUTE_VALUE_LABELS: Record<string, string> = {
   pf: "Pessoa física",
   mei: "MEI",
   pj: "Pessoa jurídica",
+  ...AVAILABILITY_LABELS,
   instituicao: "Instituição",
   municipio: "Município",
   rouanet: "Lei Rouanet",
@@ -225,7 +227,7 @@ export const ATTRIBUTE_VALUE_LABELS: Record<string, string> = {
 };
 
 export function stageLabel(stage: string): string {
-  return STAGE_LABELS[stage] ?? stage;
+  return (STAGE_LABELS as Record<string, string>)[stage] ?? stage;
 }
 
 export function pipelineLabel(pipeline: string): string {
@@ -238,4 +240,21 @@ export function enumLabel(value: unknown): string {
   if (typeof value === "number") return String(value);
   if (typeof value === "string") return ATTRIBUTE_VALUE_LABELS[value] ?? value;
   return JSON.stringify(value);
+}
+
+// Tags gravadas pelos formulários e pela triagem (personas-e-funis.md, seção 9); `projeto:[slug]`
+// vira "Projeto: slug". Texto cru quando não há rótulo.
+export const TAG_LABELS: Record<string, string> = {
+  contador_na_reuniao: "Contador na reunião",
+  desqualificado_rouanet: "Desqualificado para Rouanet",
+  fora_do_icp: "Fora do ICP",
+  sem_projeto: "Sem projeto",
+  triagem: "Triagem",
+  avisar_projetos: "Avisar sobre projetos",
+  webinar: "Webinar",
+};
+
+export function tagLabel(tag: string): string {
+  if (tag.startsWith("projeto:")) return `Projeto: ${tag.slice("projeto:".length)}`;
+  return TAG_LABELS[tag] ?? tag;
 }

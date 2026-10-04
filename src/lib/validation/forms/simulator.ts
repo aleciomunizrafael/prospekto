@@ -23,17 +23,9 @@ import {
   phoneField,
   ufField,
 } from "./common";
+import { SIMULATOR_FORM_IDS, CARGO_OPTIONS } from "./simulator-options";
 
-export const SIMULATOR_FORM_IDS = { pj: "simulator_pj", pf: "simulator_pf" } as const;
-export type SimulatorFormId = (typeof SIMULATOR_FORM_IDS)[TaxpayerType];
-
-export const CARGO_OPTIONS = [
-  { value: "dono_ou_socio", label: "Dono ou sócio" },
-  { value: "financeiro", label: "Financeiro" },
-  { value: "contabilidade", label: "Contabilidade" },
-  { value: "marketing_esg", label: "Marketing ou ESG" },
-  { value: "outro", label: "Outro" },
-] as const;
+export * from "./simulator-options";
 
 const CARGO_VALUES = CARGO_OPTIONS.map((o) => o.value) as [string, ...string[]];
 
@@ -75,21 +67,6 @@ export type SimulatorGate = SimulatorGatePj | SimulatorGatePf;
 export function gateSchemaFor(type: TaxpayerType) {
   return type === "pj" ? simulatorGatePjSchema : simulatorGatePfSchema;
 }
-
-// Rótulos para o resumo de erros (ErrorSummary).
-export const SIMULATOR_GATE_LABELS: Record<string, string> = {
-  nome: "Nome",
-  email: "E-mail",
-  empresa: "Empresa",
-  cargo: "Papel na empresa",
-  cidade: "Cidade",
-  uf: "UF",
-  telefone: "Telefone",
-  contador_escritorio: "Escritório contábil",
-  consent_lgpd: "Autorização de contato",
-  consent_marketing: "Materiais da Prospekto",
-  simulator_input: "Simulação",
-};
 
 export type SimulatorLeadDraft = {
   segment: LeadSegment;

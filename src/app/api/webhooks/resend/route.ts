@@ -10,10 +10,11 @@ import type { Ctx } from "@/lib/repos/ctx";
 // src/lib/crm/resend-signature.ts com RESEND_WEBHOOK_SECRET; sem segredo configurado responde 503
 // (o endpoint nunca fica aberto). Eventos (https://resend.com/docs/dashboard/webhooks/event-types,
 // lida em 04/10/2026): `email.bounced` -> leads.email_status = bounced; `email.complained` ->
-// complained e revogação de marketing; descadastro -> revogação de marketing. O Resend não tem um
-// evento `email.unsubscribed`: o descadastro chega como `contact.updated` com `unsubscribed: true`
-// (contatos/broadcasts) [verificar na conta]; `email.unsubscribed` é aceito como equivalente.
-// Responde JSON só com contagens; nunca registra o e-mail em log (R-16).
+// complained e revogação de marketing; `contact.updated` com `unsubscribed: true` (audiências e
+// broadcasts, tipo ContactEventData do SDK) -> revogação de marketing. O Resend não processa o
+// descadastro de e-mails transacionais: o List-Unsubscribe de um clique aponta para a rota própria
+// src/app/api/descadastro/route.ts. Responde JSON só com contagens; nunca registra o e-mail em log
+// (R-16).
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {

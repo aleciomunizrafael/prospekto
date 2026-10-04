@@ -1,5 +1,6 @@
 import { env } from "@/env";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { appUrl } from "@/lib/app-url";
 import { calendarDateInSaoPaulo } from "@/lib/crm/format";
 import { sendEmail } from "@/lib/email/send";
 import { renderDigestEmail } from "@/lib/email/templates/digest";
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
       digest.recipients = users.length;
       for (const user of users) {
         const email = renderDigestEmail(data, {
-          appUrl: env.NEXT_PUBLIC_APP_URL,
+          appUrl: appUrl(),
           now,
           recipientName: user.name,
         });
@@ -63,7 +64,7 @@ export async function GET(request: Request) {
       }
       if (users.length === 0) {
         const email = renderDigestEmail(data, {
-          appUrl: env.NEXT_PUBLIC_APP_URL,
+          appUrl: appUrl(),
           now,
           recipientName: "equipe",
         });

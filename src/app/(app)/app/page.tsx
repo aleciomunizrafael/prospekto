@@ -9,7 +9,8 @@ import {
   UpcomingBlock,
   type ContributionLine,
 } from "@/components/crm/today";
-import { addDays, addMonths, dayBounds } from "@/lib/crm/dates";
+import { addDays, addMonths } from "@/lib/crm/dates";
+import { dayBounds } from "@/lib/crm/format";
 import { listOpenTasksWithLead } from "@/lib/repos/activities";
 import { listContributions } from "@/lib/repos/contributions";
 import {

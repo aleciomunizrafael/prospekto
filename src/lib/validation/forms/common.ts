@@ -163,6 +163,8 @@ export type LeadDraft = {
   // Dados enviados, gravados em activities.formulario (regra R-1) e usados no aviso interno.
   formData: Record<string, unknown>;
   thanksType: ThanksType;
+  // Variante não pessoal da página de obrigado (`v` na query; ex.: formato do diagnóstico).
+  thanksVariant?: string;
   // Ação no passado para o motivo do e-mail ("baixou o guia Contabilizando Cultura").
   actionLabel: string;
   emailTemplate: {

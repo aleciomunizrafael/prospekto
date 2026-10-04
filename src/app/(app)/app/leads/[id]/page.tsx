@@ -7,12 +7,13 @@ import { ActivityForm } from "@/components/crm/forms/activity-form";
 import { LeadEditDialog } from "@/components/crm/forms/lead-edit-dialog";
 import { OwnerForm } from "@/components/crm/forms/owner-form";
 import { StageMoveDialog } from "@/components/crm/forms/stage-move-dialog";
-import { WhatsappButton } from "@/components/crm/whatsapp-button";
+import { LeadWhatsappButton } from "@/components/crm/whatsapp-button";
 import { SimulatorDetail } from "@/components/simulator/detail";
 import type { SimulatorDetailData } from "@/components/simulator/state";
 import { Button } from "@/components/ui/button";
 import { ATTRIBUTE_FIELDS } from "@/lib/crm/attributes";
-import { describeOverdue, formatDate, formatDateTime, formatMoney } from "@/lib/crm/dates";
+import { describeOverdue } from "@/lib/crm/dates";
+import { formatBRL, formatDate, formatDateTime, formatPhoneBR } from "@/lib/crm/format";
 import {
   CONSENT_CHANNEL_LABELS,
   CONSENT_PURPOSE_LABELS,
@@ -22,6 +23,7 @@ import {
   SOURCE_LABELS,
   enumLabel,
   pipelineLabel,
+  tagLabel,
 } from "@/lib/crm/labels";
 import { leadCompany, stageInfo } from "@/lib/crm/lead-view";
 import { isTerminal, stageMovePlans, terminalStageOf } from "@/lib/crm/stage-moves";
@@ -217,7 +219,9 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
               {lead.lostReasonDetail ? ` · ${lead.lostReasonDetail}` : ""}
             </Row>
           ) : null}
-          {lead.tags.length ? <Row label="Tags">{lead.tags.join(", ")}</Row> : null}
+          {lead.tags.length ? (
+            <Row label="Tags">{lead.tags.map((t) => tagLabel(t)).join(", ")}</Row>
+          ) : null}
         </dl>
       </header>
 
@@ -235,7 +239,11 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
               ) : null}
             </Row>
             <Row label="Telefone">
-              {lead.phone ?? <span className="text-muted-foreground">não informado</span>}
+              {lead.phone ? (
+                formatPhoneBR(lead.phone)
+              ) : (
+                <span className="text-muted-foreground">não informado</span>
+              )}
             </Row>
             <Row label="Cidade">
               {[lead.city, lead.uf].filter(Boolean).join(" / ") || (
@@ -245,7 +253,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
             {lead.message ? <Row label="Mensagem">{lead.message}</Row> : null}
           </dl>
           <div className="flex flex-wrap gap-2">
-            <WhatsappButton lead={{ ...lead, company }} />
+            <LeadWhatsappButton lead={{ ...lead, company }} />
             <Button
               variant="outline"
               size="sm"
@@ -340,7 +348,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
               {contributions.map((c) => (
                 <li key={c.id} className="flex flex-wrap gap-x-3 gap-y-1 py-2">
                   <span className="font-medium">{projectNames.get(c.projectId) ?? "projeto"}</span>
-                  <span>{formatMoney(c.proposedAmount)}</span>
+                  <span>{formatBRL(c.proposedAmount)}</span>
                   <span className="text-muted-foreground">{c.status.replace("_", " ")}</span>
                   {c.expectedCloseAt ? (
                     <span className="text-muted-foreground">
@@ -349,7 +357,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
                   ) : null}
                   {c.depositedAt ? (
                     <span className="text-muted-foreground">
-                      depositado {formatDate(c.depositedAt)} ({formatMoney(c.depositedAmount)})
+                      depositado {formatDate(c.depositedAt)} ({formatBRL(c.depositedAmount)})
                     </span>
                   ) : null}
                   {c.receiptNumber ? (

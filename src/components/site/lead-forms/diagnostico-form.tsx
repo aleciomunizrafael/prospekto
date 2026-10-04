@@ -32,15 +32,18 @@ import {
   TAX_REGIME_OPTIONS,
   type DiagnosticFormat,
 } from "@/lib/validation/forms/diagnostico-options";
+import { DIAGNOSTIC_PREFILL_KEY, type DiagnosticPrefill } from "@/components/simulator/view-model";
 import { subscribeNoop } from "@/lib/analytics";
 import { UFS } from "@/lib/domain/enums";
 
 // Formulário de diagnóstico (estrutura-e-copy.md, seção 5.4; form_id diagnostic). `tipo_pessoa`
-// alterna os campos PJ e PF; a query string pré-preenche (tipo, empresa, nome, email, regime,
-// faixa, projeto ou projeto_id, simulation_id, formato) vinda do simulador, de /empresas ou de um
-// cartão de projeto. A query string é lida no cliente depois da montagem (useSyncExternalStore,
-// como a atribuição no LeadForm): a página continua estática e o formulário, com honeypot e campos
-// ocultos, já vem no HTML. Depois de um erro, os valores enviados prevalecem sobre a query string.
+// alterna os campos PJ e PF; a query string pré-preenche só dados não pessoais (tipo, empresa,
+// regime, faixa, projeto ou projeto_id, simulation_id, formato) vinda do simulador, de /empresas ou
+// de um cartão de projeto. Nome, e-mail, telefone, cidade, UF, cargo e escritório contábil vindos do
+// gate do simulador chegam por sessionStorage (DIAGNOSTIC_PREFILL_KEY), nunca pela URL. Tudo é
+// lido no cliente depois da montagem (useSyncExternalStore, como a atribuição no LeadForm): a
+// página continua estática e o formulário, com honeypot e campos ocultos, já vem no HTML. Depois
+// de um erro, os valores enviados prevalecem sobre o pré-preenchimento.
 type TaxpayerType = "PJ" | "PF";
 
 type Prefill = {
@@ -48,6 +51,11 @@ type Prefill = {
   empresa: string;
   nome: string;
   email: string;
+  telefone: string;
+  cargo: string;
+  cidade: string;
+  uf: string;
+  contador_escritorio: string;
   regime: string;
   faixa: string;
   projeto: string;
@@ -60,7 +68,22 @@ const options = <T extends readonly string[]>(values: T, labels: Record<T[number
 
 const UF_OPTIONS = UFS.map((uf) => ({ value: uf, label: uf }));
 
-function readPrefill(params: URLSearchParams): Prefill {
+function readStoredPrefill(json: string): DiagnosticPrefill {
+  if (!json) return {};
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === "string") out[key] = value;
+    }
+    return out as DiagnosticPrefill;
+  } catch {
+    return {};
+  }
+}
+
+function readPrefill(params: URLSearchParams, stored: DiagnosticPrefill): Prefill {
   const tipoRaw = (params.get("tipo") ?? "").toUpperCase();
   const tipo: TaxpayerType | null = tipoRaw === "PJ" || tipoRaw === "PF" ? tipoRaw : null;
   const formatoRaw = params.get("formato") ?? "";
@@ -69,9 +92,14 @@ function readPrefill(params: URLSearchParams): Prefill {
     : null;
   return {
     tipo,
-    empresa: params.get("empresa") ?? "",
-    nome: params.get("nome") ?? "",
-    email: params.get("email") ?? "",
+    empresa: params.get("empresa") || stored.empresa || "",
+    nome: stored.nome ?? "",
+    email: stored.email ?? "",
+    telefone: stored.telefone ?? "",
+    cargo: stored.cargo ?? "",
+    cidade: stored.cidade ?? "",
+    uf: stored.uf ?? "",
+    contador_escritorio: stored.contador_escritorio ?? "",
     regime: params.get("regime") ?? "",
     faixa: params.get("faixa") ?? "",
     projeto: params.get("projeto") ?? params.get("projeto_id") ?? "",
@@ -81,11 +109,22 @@ function readPrefill(params: URLSearchParams): Prefill {
 }
 
 const getSearch = () => window.location.search;
-const getServerSearch = () => "";
+const getStored = () => {
+  try {
+    return window.sessionStorage.getItem(DIAGNOSTIC_PREFILL_KEY) ?? "";
+  } catch {
+    return "";
+  }
+};
+const getServerSnapshot = () => "";
 
 export function DiagnosticoForm({ titleId }: { titleId: string }) {
-  const search = useSyncExternalStore(subscribeNoop, getSearch, getServerSearch);
-  const prefill = useMemo(() => readPrefill(new URLSearchParams(search)), [search]);
+  const search = useSyncExternalStore(subscribeNoop, getSearch, getServerSnapshot);
+  const stored = useSyncExternalStore(subscribeNoop, getStored, getServerSnapshot);
+  const prefill = useMemo(
+    () => readPrefill(new URLSearchParams(search), readStoredPrefill(stored)),
+    [search, stored],
+  );
   return (
     <LeadForm
       formId="diagnostic"
@@ -196,6 +235,7 @@ function DiagnosticoFields({ prefill }: { prefill: Prefill }) {
         inputMode="tel"
         required
         help="Com DDD. A reunião é marcada por WhatsApp ou ligação."
+        defaultValue={value("telefone", prefill.telefone)}
       />
 
       {taxpayerType === "PJ" ? (
@@ -219,6 +259,10 @@ function DiagnosticoFields({ prefill }: { prefill: Prefill }) {
             label="Seu papel na empresa"
             required
             options={options(DIAGNOSTIC_ROLES, DIAGNOSTIC_ROLE_LABELS)}
+            defaultValue={value(
+              "cargo",
+              (DIAGNOSTIC_ROLES as readonly string[]).includes(prefill.cargo) ? prefill.cargo : "",
+            )}
           />
           <SelectField
             name="regime_tributario"
@@ -246,6 +290,7 @@ function DiagnosticoFields({ prefill }: { prefill: Prefill }) {
             name="contador_escritorio"
             label="Escritório contábil"
             help="Opcional. O escritório que apura o imposto da empresa."
+            defaultValue={value("contador_escritorio", prefill.contador_escritorio)}
           />
           <RadioChoice
             name="formato"
@@ -289,8 +334,21 @@ function DiagnosticoFields({ prefill }: { prefill: Prefill }) {
       )}
 
       <div className="grid gap-5 sm:grid-cols-[1fr_8rem]">
-        <TextField name="cidade" label="Cidade" autoComplete="address-level2" required />
-        <SelectField name="uf" label="UF" required options={UF_OPTIONS} placeholder="UF" />
+        <TextField
+          name="cidade"
+          label="Cidade"
+          autoComplete="address-level2"
+          required
+          defaultValue={value("cidade", prefill.cidade)}
+        />
+        <SelectField
+          name="uf"
+          label="UF"
+          required
+          options={UF_OPTIONS}
+          placeholder="UF"
+          defaultValue={value("uf", prefill.uf)}
+        />
       </div>
       <SelectField
         name="disponibilidade"

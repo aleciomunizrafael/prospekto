@@ -2,6 +2,7 @@ import "server-only";
 import {
   aliasedTable,
   and,
+  type AnyColumn,
   count,
   desc,
   eq,
@@ -19,6 +20,7 @@ import {
 import { db, type Db } from "@/lib/db";
 import {
   activities,
+  contacts,
   contributions,
   culturalProjects,
   leads,
@@ -34,6 +36,7 @@ import {
   pipelineForSegment,
   requirementsForMove,
   stageIndex,
+  stageMoveKind,
   type Pipeline,
 } from "@/lib/domain/pipelines";
 import { scoreLead } from "@/lib/domain/scoring";
@@ -79,6 +82,50 @@ function leadScope(ctx: Ctx, leadId: string) {
 
 function contributionScope(ctx: Ctx, contributionId: string) {
   return and(eq(contributions.tenantId, ctx.tenantId), eq(contributions.id, contributionId));
+}
+
+// Junções das listas e do detalhe sempre restritas ao tenant (ADR-001): um org_id, owner_user_id
+// ou project_interest_id apontando para outro tenant nunca devolve nome, CNPJ ou projeto alheio.
+function orgJoin(ctx: Ctx, table: typeof organizations, column: AnyColumn) {
+  return and(eq(table.id, column), eq(table.tenantId, ctx.tenantId));
+}
+function ownerJoin(ctx: Ctx) {
+  return and(eq(users.id, leads.ownerUserId), eq(users.tenantId, ctx.tenantId));
+}
+
+// Referências gravadas em leads (org_id, contact_id, owner_user_id) precisam pertencer ao tenant;
+// contact_id também precisa ser contato da organização do lead.
+async function assertLeadReferences(
+  tx: Db,
+  ctx: Ctx,
+  current: Lead,
+  data: { orgId?: string | null; contactId?: string | null; ownerUserId?: string | null },
+): Promise<void> {
+  if (data.orgId) {
+    const [org] = await tx
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(and(eq(organizations.tenantId, ctx.tenantId), eq(organizations.id, data.orgId)));
+    if (!org) throw new NotFoundError("Organização", data.orgId);
+  }
+  if (data.contactId) {
+    const [contact] = await tx
+      .select({ orgId: contacts.orgId })
+      .from(contacts)
+      .where(and(eq(contacts.tenantId, ctx.tenantId), eq(contacts.id, data.contactId)));
+    if (!contact) throw new NotFoundError("Contato", data.contactId);
+    const orgId = data.orgId === undefined ? current.orgId : data.orgId;
+    if (!orgId || contact.orgId !== orgId) {
+      throw new ValidationError("O contato não pertence à organização do lead.");
+    }
+  }
+  if (data.ownerUserId) {
+    const [user] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.tenantId, ctx.tenantId), eq(users.id, data.ownerUserId)));
+    if (!user) throw new ValidationError("O responsável informado não é usuário deste tenant.");
+  }
 }
 
 export async function getLead(ctx: Ctx, leadId: string): Promise<Lead | null> {
@@ -250,6 +297,7 @@ export async function updateLead(ctx: Ctx, input: UpdateLeadInput): Promise<Lead
   const { leadId, ...data } = updateLeadSchema.parse(input);
   return db.transaction(async (tx) => {
     const current = await requireLead(tx, ctx, leadId);
+    await assertLeadReferences(tx, ctx, current, data);
     const attributes = data.attributes
       ? parseAttributes(current.segment, { ...current.attributes, ...data.attributes })
       : current.attributes;
@@ -307,6 +355,18 @@ export async function moveLeadStage(ctx: Ctx, input: MoveLeadStageInput): Promis
       throw new ValidationError(`O estágio ${data.to} não existe no pipeline ${pipeline}.`);
     }
     if (lead.stage === data.to) throw new ValidationError(`O lead já está em ${data.to}.`);
+    // Só os destinos de allowedStageMoves: próximo, retorno do playbook, voltar um estágio (com
+    // motivo), perdido de qualquer estágio e reativar. Sem saltos (novo -> aporte).
+    const kind = stageMoveKind(pipeline, lead.stage, data.to);
+    if (!kind) {
+      throw new ValidationError(
+        `Não é possível mover de ${lead.stage} para ${data.to}: avance um estágio por vez ou marque como perdido.`,
+      );
+    }
+    if (kind === "back" && !data.reason) {
+      throw new ValidationError("Voltar um estágio exige o motivo da correção.");
+    }
+    await assertLeadReferences(tx, ctx, lead, { ownerUserId: data.ownerUserId });
 
     const fields = new Set(
       requirementsForMove(pipeline, lead.stage, data.to).flatMap((r) => r.fields),
@@ -528,8 +588,8 @@ export async function searchLeads(
     db
       .select(leadListColumns)
       .from(leads)
-      .leftJoin(organizations, eq(organizations.id, leads.orgId))
-      .leftJoin(users, eq(users.id, leads.ownerUserId))
+      .leftJoin(organizations, orgJoin(ctx, organizations, leads.orgId))
+      .leftJoin(users, ownerJoin(ctx))
       .where(and(...where))
       .orderBy(...orderBy)
       .limit(pageSize)
@@ -537,7 +597,7 @@ export async function searchLeads(
     db
       .select({ total: count() })
       .from(leads)
-      .leftJoin(organizations, eq(organizations.id, leads.orgId))
+      .leftJoin(organizations, orgJoin(ctx, organizations, leads.orgId))
       .where(and(...where)),
   ]);
   return { rows, total: Number(total) };
@@ -568,8 +628,8 @@ export async function listNewLeadsWithoutContact(ctx: Ctx, limit = 20): Promise<
   return db
     .select(leadListColumns)
     .from(leads)
-    .leftJoin(organizations, eq(organizations.id, leads.orgId))
-    .leftJoin(users, eq(users.id, leads.ownerUserId))
+    .leftJoin(organizations, orgJoin(ctx, organizations, leads.orgId))
+    .leftJoin(users, ownerJoin(ctx))
     .where(
       and(eq(leads.tenantId, ctx.tenantId), initialStageCondition(), isNull(leads.lastContactAt)),
     )
@@ -582,8 +642,8 @@ export async function listOverdueLeads(ctx: Ctx, now: Date, limit = 20): Promise
   return db
     .select(leadListColumns)
     .from(leads)
-    .leftJoin(organizations, eq(organizations.id, leads.orgId))
-    .leftJoin(users, eq(users.id, leads.ownerUserId))
+    .leftJoin(organizations, orgJoin(ctx, organizations, leads.orgId))
+    .leftJoin(users, ownerJoin(ctx))
     .where(
       and(
         eq(leads.tenantId, ctx.tenantId),
@@ -612,8 +672,8 @@ export async function listLeadsWithNextActionBetween(
   return db
     .select(leadListColumns)
     .from(leads)
-    .leftJoin(organizations, eq(organizations.id, leads.orgId))
-    .leftJoin(users, eq(users.id, leads.ownerUserId))
+    .leftJoin(organizations, orgJoin(ctx, organizations, leads.orgId))
+    .leftJoin(users, ownerJoin(ctx))
     .where(and(...where))
     .orderBy(leads.nextActionAt)
     .limit(filter.limit ?? 20);
@@ -635,10 +695,16 @@ export async function getLeadDetail(ctx: Ctx, leadId: string): Promise<LeadDetai
       projectInterestName: culturalProjects.name,
     })
     .from(leads)
-    .leftJoin(organizations, eq(organizations.id, leads.orgId))
-    .leftJoin(users, eq(users.id, leads.ownerUserId))
-    .leftJoin(referredBy, eq(referredBy.id, leads.referredByOrgId))
-    .leftJoin(culturalProjects, eq(culturalProjects.id, leads.projectInterestId))
+    .leftJoin(organizations, orgJoin(ctx, organizations, leads.orgId))
+    .leftJoin(users, ownerJoin(ctx))
+    .leftJoin(referredBy, orgJoin(ctx, referredBy, leads.referredByOrgId))
+    .leftJoin(
+      culturalProjects,
+      and(
+        eq(culturalProjects.id, leads.projectInterestId),
+        eq(culturalProjects.tenantId, ctx.tenantId),
+      ),
+    )
     .where(leadScope(ctx, leadId));
   return row ?? null;
 }

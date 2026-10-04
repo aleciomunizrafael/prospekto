@@ -17,7 +17,7 @@ const ctx = {
 
 const sampleData: { [K in EmailTemplateId]: EmailTemplateData[K] } = {
   guia: { guideAvailable: true, downloadUrl: "http://localhost:3000/api/downloads/guia?token=abc" },
-  simulador: { amountLabel: "R$ 12.000", summaryLines: ["Rouanet art. 18: R$ 12.000"] },
+  simulador: { amountPhrase: "até R$ 12.000", summaryLines: ["Rouanet art. 18: R$ 12.000"] },
   diagnostico: { formato: "diagnostico", tipoPessoa: "PJ" },
   contadores: { foraDoIcp: false },
   municipios: {},
@@ -30,7 +30,7 @@ const sampleData: { [K in EmailTemplateId]: EmailTemplateData[K] } = {
 describe("sendEmail em modo log (sem RESEND_API_KEY)", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("não envia, devolve mode=log e registra só template, lead e assunto (R-16)", async () => {
+  it("não envia, devolve mode=log e registra só template e lead, sem assunto (R-16)", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     const result = await sendEmail({
       to: "pessoa@example.test",
@@ -45,7 +45,8 @@ describe("sendEmail em modo log (sem RESEND_API_KEY)", () => {
     const line = JSON.parse(spy.mock.calls[0][0] as string) as Record<string, unknown>;
     expect(line.templateId).toBe("contato");
     expect(line.leadId).toBe("lead-1");
-    expect(line.subject).toBe("Recebemos sua mensagem");
+    expect(line.subject).toBeUndefined();
+    expect(JSON.stringify(line)).not.toContain("Recebemos sua mensagem");
     expect(JSON.stringify(line)).not.toContain("pessoa@example.test");
   });
 });

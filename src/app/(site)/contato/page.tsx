@@ -42,7 +42,7 @@ export default function ContatoPage() {
           <li className="border-border flex flex-col gap-2 rounded-lg border p-5">
             <p className="site-label">Endereço e horário</p>
             <p className="text-muted-foreground">
-              {site.city} {site.legal.address}
+              {site.legal.address ? `${site.city}, ${site.legal.address}` : site.city}
             </p>
             <p className="text-muted-foreground">Horário de atendimento [verificar]</p>
           </li>

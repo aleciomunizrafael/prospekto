@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { claimLeadAction } from "@/actions/crm-leads";
 import { Button } from "@/components/ui/button";
-import { describeOverdue, formatDate, formatDateTime, formatMoney } from "@/lib/crm/dates";
+import { describeOverdue } from "@/lib/crm/dates";
+import { formatBRL, formatDate, formatDateTime } from "@/lib/crm/format";
 import { SEGMENT_LABELS, SOURCE_LABELS, pipelineLabel, stageLabel } from "@/lib/crm/labels";
 import { leadCompany, stageInfo } from "@/lib/crm/lead-view";
 import type { TaskRow } from "@/lib/repos/activities";
@@ -11,7 +12,7 @@ import type { CulturalProjectWithBalance } from "@/lib/repos/projects";
 import { cn } from "@/lib/utils";
 import { TemperatureBadge } from "./badges";
 import { TaskCompleteButton } from "./forms/task-complete-button";
-import { WhatsappButton } from "./whatsapp-button";
+import { LeadWhatsappButton } from "./whatsapp-button";
 
 // Blocos da tela "Hoje" (proposta-c, seção 9.1; regra R-13), em ordem de urgência. Cada bloco tem
 // no máximo 20 linhas, link para o lead e "Abrir WhatsApp" quando há telefone.
@@ -88,7 +89,11 @@ function LeadLine({
           </Button>
         </form>
       ) : null}
-      <WhatsappButton lead={{ ...lead, company: leadCompany(lead) }} size="xs" label="WhatsApp" />
+      <LeadWhatsappButton
+        lead={{ ...lead, company: leadCompany(lead) }}
+        size="xs"
+        label="WhatsApp"
+      />
     </li>
   );
 }
@@ -255,7 +260,7 @@ export function ContributionsBlock({ rows }: { rows: ContributionLine[] }) {
               {c.leadName ?? "patrocinador"}
             </Link>
             <span className="text-muted-foreground">{c.projectName ?? "projeto"}</span>
-            <span>{formatMoney(c.proposedAmount)}</span>
+            <span>{formatBRL(c.proposedAmount)}</span>
             <span className="text-muted-foreground text-xs">
               previsto para {formatDate(c.expectedCloseAt)}
             </span>
@@ -310,7 +315,7 @@ export function ProjectsBlock({
                 prazo {formatDate(p.fundraisingDeadline) || "não informado"}
               </span>
               <span className="text-muted-foreground text-xs">
-                saldo {formatMoney(p.balance)} ·{" "}
+                saldo {formatBRL(p.balance)} ·{" "}
                 {pct === null ? "sem valor aprovado" : `${pct}% captado`}
               </span>
             </li>

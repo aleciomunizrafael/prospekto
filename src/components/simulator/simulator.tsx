@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { SectionHeader } from "@/components/site/section-header";
 import { site } from "@/config/site";
-import { track } from "@/lib/analytics";
+import { subscribeNoop, track } from "@/lib/analytics";
 import {
   params,
   simulate,
@@ -12,6 +12,7 @@ import {
   type TaxpayerType,
 } from "@/lib/simulator";
 import { SimulatorDetail } from "./detail";
+import { taxpayerTypeFromQuery } from "./view-model";
 import { PfForm } from "./pf-form";
 import { PjForm } from "./pj-form";
 import type { SimulatorGateState } from "./state";
@@ -20,7 +21,8 @@ import { SimulatorSummary } from "./summary";
 
 // Raiz do simulador (simulador-spec.md, seção 10): telas 1 a 3 no cliente (o cálculo é puro e roda
 // no navegador) e tela 4 após o gate. Progresso em texto ("Passo 1 de 3"). Eventos de analytics
-// simulator_start e simulator_step (estrutura-e-copy.md, 9.2); só tipos e faixas.
+// simulator_start e simulator_step (estrutura-e-copy.md, 9.2); só tipos e faixas. Com
+// /simulador?tipo=PF (ou PJ), a tela 1 é pulada depois da montagem (a página continua estática).
 type Props = {
   // Cookie assinado do gate presente: o detalhe abre direto (spec, seção 6).
   gatePassed: boolean;
@@ -41,19 +43,29 @@ const STEP_TITLES: Record<1 | 2 | 3, { pj: string; pf: string }> = {
   3: { pj: "Resultado resumido", pf: "Resultado resumido" },
 };
 
+const getSearch = () => window.location.search;
+const getServerSearch = () => "";
+
 export function Simulator({ gatePassed }: Props) {
-  const [screen, setScreen] = useState<Screen>({ step: 1 });
+  // Tipo escolhido na página de origem (/pessoa-fisica -> /simulador?tipo=PF): a query é lida no
+  // cliente depois da montagem (snapshot vazio no servidor) e vale enquanto ninguém mudou de tela.
+  const search = useSyncExternalStore(subscribeNoop, getSearch, getServerSearch);
+  const queryType = useMemo(() => taxpayerTypeFromQuery(search), [search]);
+  const [chosen, setScreen] = useState<Screen | null>(null);
+  const screen: Screen = chosen ?? (queryType ? { step: 2, type: queryType } : { step: 1 });
   const top = useRef<HTMLDivElement>(null);
-  const first = useRef(true);
 
   useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
+    if (!chosen) return;
     top.current?.scrollIntoView({ block: "start" });
     top.current?.focus();
-  }, [screen]);
+  }, [chosen]);
+
+  useEffect(() => {
+    if (!queryType) return;
+    track("simulator_start", { taxpayer_type: queryType });
+    track("simulator_step", { taxpayer_type: queryType, step: 2 });
+  }, [queryType]);
 
   const onSelect = useCallback((type: TaxpayerType) => {
     track("simulator_start", { taxpayer_type: type });

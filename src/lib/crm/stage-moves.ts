@@ -2,73 +2,40 @@
 // em português dos campos exigidos por STAGE_REQUIREMENTS e a data sugerida pela SLA.
 import { slaDeadline } from "@/lib/domain/sla";
 import {
-  INITIAL_STAGES,
-  STAGES,
   TERMINAL_STAGES,
+  allowedStageMoves,
   isInitialStage,
   isTerminalStage,
   requirementsForMove,
-  stageIndex,
   type Pipeline,
+  type StageMoveKind,
 } from "@/lib/domain/pipelines";
 import { stageLabel } from "./labels";
-
-// Retornos previstos em personas-e-funis.md, seção 8.
-const RETURNS: Record<Pipeline, Record<string, string[]>> = {
-  patrocinadores: { renovacao: ["proposta"] },
-  contadores: { inativo: ["ativo"], ativo: ["inativo"] },
-  municipios: { encerrado: ["proposta"] },
-  projetos: { encerrado: ["elaboracao"] },
-  alunos: {},
-};
 
 export type StageTarget = {
   stage: string;
   label: string;
-  kind: "next" | "return" | "back" | "reactivate";
+  kind: Exclude<StageMoveKind, "lost">;
   description: string;
 };
 
+const KIND_DESCRIPTIONS: Record<StageTarget["kind"], string> = {
+  next: "Próximo estágio na ordem do pipeline.",
+  return: "Retorno previsto no playbook.",
+  back: "Voltar um estágio: só para corrigir um registro errado (exige motivo).",
+  reactivate: "Reativar: o lead volta ao início do pipeline.",
+};
+
+// Destinos do diálogo "Mover para" (a lista vem do domínio; "Marcar perdido" é outro diálogo).
 export function stageTargets(pipeline: Pipeline, current: string): StageTarget[] {
-  const stages = STAGES[pipeline] as readonly string[];
-  const idx = stageIndex(pipeline, current);
-  const terminal = TERMINAL_STAGES[pipeline];
   const out: StageTarget[] = [];
-  if (current === terminal) {
+  for (const move of allowedStageMoves(pipeline, current)) {
+    if (move.kind === "lost") continue;
     out.push({
-      stage: INITIAL_STAGES[pipeline],
-      label: stageLabel(INITIAL_STAGES[pipeline]),
-      kind: "reactivate",
-      description: "Reativar: o lead volta ao início do pipeline.",
-    });
-    return out;
-  }
-  const next = stages[idx + 1];
-  if (next && next !== terminal) {
-    out.push({
-      stage: next,
-      label: stageLabel(next),
-      kind: "next",
-      description: "Próximo estágio na ordem do pipeline.",
-    });
-  }
-  for (const r of RETURNS[pipeline][current] ?? []) {
-    if (!out.some((t) => t.stage === r)) {
-      out.push({
-        stage: r,
-        label: stageLabel(r),
-        kind: "return",
-        description: "Retorno previsto no playbook.",
-      });
-    }
-  }
-  const prev = stages[idx - 1];
-  if (prev && !out.some((t) => t.stage === prev)) {
-    out.push({
-      stage: prev,
-      label: stageLabel(prev),
-      kind: "back",
-      description: "Voltar um estágio: só para corrigir um registro errado (exige motivo).",
+      stage: move.stage,
+      label: stageLabel(move.stage),
+      kind: move.kind,
+      description: KIND_DESCRIPTIONS[move.kind],
     });
   }
   return out;

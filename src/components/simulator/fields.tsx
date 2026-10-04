@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { FieldShell } from "@/components/site/form";
-import { describedBy, fieldIds } from "@/components/site/form/field";
+import { useFieldIds } from "@/components/site/form/field";
 import { formatBRL, parseCurrencyBR } from "@/lib/simulator";
 import { cn } from "@/lib/utils";
 
@@ -35,7 +35,7 @@ export function ControlledRadioGroup({
   onChange,
   error,
 }: RadioProps) {
-  const { id } = fieldIds(name);
+  const { id, describedBy } = useFieldIds(name, Boolean(help), Boolean(error));
   return (
     <FieldShell
       name={name}
@@ -47,7 +47,7 @@ export function ControlledRadioGroup({
     >
       <div
         role="radiogroup"
-        aria-describedby={describedBy(name, Boolean(help), Boolean(error))}
+        aria-describedby={describedBy}
         aria-invalid={error ? true : undefined}
         className="flex flex-col gap-2"
       >
@@ -102,7 +102,7 @@ export function ControlledSelect({
   error,
   placeholder = "Selecione",
 }: SelectProps) {
-  const { id } = fieldIds(name);
+  const { id, describedBy } = useFieldIds(name, Boolean(help), Boolean(error));
   return (
     <FieldShell name={name} label={label} required={required} help={help} error={error}>
       <select
@@ -112,7 +112,7 @@ export function ControlledSelect({
         onChange={(event) => onChange(event.target.value)}
         aria-required={required || undefined}
         aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy(name, Boolean(help), Boolean(error))}
+        aria-describedby={describedBy}
         className={controlClass}
       >
         <option value="" disabled>
@@ -137,7 +137,7 @@ type CheckboxProps = {
 };
 
 export function ControlledCheckbox({ name, label, help, checked, onChange }: CheckboxProps) {
-  const { id, helpId } = fieldIds(name);
+  const { id, helpId } = useFieldIds(name, Boolean(help));
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={id} className="touch-target flex items-start gap-3">
@@ -194,7 +194,7 @@ export function CurrencyInput({
   size = "normal",
   autoFocus,
 }: CurrencyProps) {
-  const { id } = fieldIds(name);
+  const { id, describedBy } = useFieldIds(name, Boolean(help), Boolean(error));
   return (
     <FieldShell name={name} label={label} required={required} help={help} error={error}>
       <div className="relative">
@@ -220,7 +220,7 @@ export function CurrencyInput({
           onBlur={(event) => onChange(formatCurrencyInput(event.target.value))}
           aria-required={required || undefined}
           aria-invalid={error ? true : undefined}
-          aria-describedby={describedBy(name, Boolean(help), Boolean(error))}
+          aria-describedby={describedBy}
           className={cn(
             controlClass,
             "tabular pl-11",

@@ -26,6 +26,10 @@ export const SIMULATOR_TEXTS: Record<TextKey, SimulatorText> = {
     "ajuda do campo IRPJ",
     "O limite é calculado sobre o imposto de renda à alíquota de 15% sobre o lucro real do período. O adicional de 10% (sobre o lucro acima de R$ 20 mil por mês) é recolhido integralmente e não entra na conta (Lei 9.249/1995, art. 3º, § 4º).",
   ),
+  base_pf: t(
+    "bloco da base de cálculo PF",
+    "Imposto devido apurado na Declaração de Ajuste Anual, modelo completo (deduções legais), antes das deduções de incentivo.",
+  ),
   basket_pj: t(
     "tabela PJ",
     "Rouanet (arts. 18 e 26), Lei do Audiovisual (arts. 1º e 1º-A) e esporte de inclusão social dividem um único teto de 4% do imposto devido (Lei 9.532/1997, art. 6º, II; Solução de Consulta Cosit 4/2026). Esporte geral (2%), fundos da criança e do idoso, Pronon e Pronas (1% cada) têm tetos próprios.",
@@ -136,6 +140,19 @@ export const SIMULATOR_TEXTS: Record<TextKey, SimulatorText> = {
 export const TEXT_KEYS = Object.keys(SIMULATOR_TEXTS) as TextKey[];
 
 // Preenche as variáveis do texto ({{atualizado_em}}, {{teto}} etc.).
+// Base legal do JSON (sem acentos, abreviaturas internas) na forma exibida: "par." vira "§" e as
+// poucas palavras acentuadas são restauradas; o campo `fonte` continua como referência interna.
+const LEGAL_BASIS_WORDS: Array<[RegExp, string]> = [
+  [/\bpar\. /g, "§ "],
+  [/\bprorrogacao\b/g, "prorrogação"],
+  [/\bate\b/g, "até"],
+  [/\bsecao\b/g, "seção"],
+];
+
+export function formatLegalBasis(fonte: string): string {
+  return LEGAL_BASIS_WORDS.reduce((text, [pattern, word]) => text.replace(pattern, word), fonte);
+}
+
 export function renderText(key: TextKey, vars: Record<string, string | number> = {}): string {
   return SIMULATOR_TEXTS[key].text.replace(/\{\{(\w+)\}\}/g, (match, name: string) =>
     name in vars ? String(vars[name]) : match,
@@ -174,7 +191,8 @@ export function textsFor(result: SimulatorResult): TextKey[] {
       if (result.lc224.available) add("lc224_notice");
       add("art26_notice", "operating_expense_range", "art1a_notice", "art1_notice");
     } else {
-      add("pf_basket", "pf_deadline", "art26_notice", "art1a_notice", "art1_notice", "pf_no_8pct");
+      add("base_pf", "pf_basket", "pf_deadline");
+      add("art26_notice", "art1a_notice", "art1_notice", "pf_no_8pct");
     }
     if (result.contribution_type === "doacao") add("donation_notice");
   }

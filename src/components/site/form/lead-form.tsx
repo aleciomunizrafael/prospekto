@@ -51,6 +51,12 @@ export function useLeadForm(): LeadFormContextValue {
   return ctx;
 }
 
+// Id do formulário para prefixar os ids dos campos (páginas com dois formulários, como /contadores,
+// repetem nomes de campo); null fora de um LeadForm (telas 2 do simulador, que são únicas na página).
+export function useFormIdPrefix(): string | null {
+  return useContext(LeadFormContext)?.formId ?? null;
+}
+
 // Erro e valor enviado de um campo, pelo atributo `name`.
 export function useLeadField(name: string): { error?: string; value?: string } {
   const { state } = useLeadForm();

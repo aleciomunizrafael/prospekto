@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
+import { appUrl } from "@/lib/app-url";
 
-const baseUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+const baseUrl = appUrl();
 
 // robots.txt (estrutura-e-copy.md, seção 6.3). CRM, API, login e páginas de obrigado não indexam.
 export default function robots(): MetadataRoute.Robots {

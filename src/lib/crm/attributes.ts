@@ -2,6 +2,7 @@
 // português e tipo de controle para "Editar". As chaves e os enums são os de
 // src/lib/validation/lead-attributes.ts (que valida o que a tela grava).
 import type { LeadSegment } from "@/lib/domain/enums";
+import { AVAILABILITY_OPTIONS } from "@/lib/validation/forms/diagnostico-options";
 
 export type AttributeField = {
   key: string;
@@ -55,7 +56,12 @@ const PJ: AttributeField[] = [
   { key: "setor", label: "Setor", type: "text" },
   { key: "numero_funcionarios_faixa", label: "Faixa de funcionários", type: "text" },
   { key: "contador_participa", label: "Contador participa da conversa", type: "boolean" },
-  { key: "disponibilidade", label: "Disponibilidade", type: "text" },
+  {
+    key: "disponibilidade",
+    label: "Disponibilidade",
+    type: "select",
+    options: AVAILABILITY_OPTIONS,
+  },
   { key: "decisor_em_contato", label: "Decisor em contato", type: "boolean" },
   { key: "conhece_incentivos", label: "Conhece incentivos", type: "boolean" },
   {
@@ -90,7 +96,12 @@ const PF: AttributeField[] = [
   { key: "contador_declaracao", label: "Contador da declaração", type: "text" },
   { key: "ja_doa_com_incentivo", label: "Já doa com incentivo", type: "boolean" },
   { key: "contador_participa", label: "Contador participa da conversa", type: "boolean" },
-  { key: "disponibilidade", label: "Disponibilidade", type: "text" },
+  {
+    key: "disponibilidade",
+    label: "Disponibilidade",
+    type: "select",
+    options: AVAILABILITY_OPTIONS,
+  },
   {
     key: "vinculo_art27_checado",
     label: "Vínculo com o proponente checado (art. 27)",

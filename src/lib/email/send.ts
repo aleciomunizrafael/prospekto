@@ -1,10 +1,12 @@
 import "server-only";
 import { env } from "@/env";
+import { site } from "@/config/site";
 import { log } from "@/lib/log";
 
 // Única porta de saída de e-mail (ADR-001: Resend atrás de sendEmail(); trocar de provedor é
 // reescrever esta função). Sem RESEND_API_KEY (local, CI, preview sem segredo) nada é enviado:
-// registra em log só o assunto, o template e o id do lead, nunca o destinatário (regra R-16).
+// registra em log só o template e o id do lead, nunca o destinatário nem o assunto (o assunto do
+// simulador traz o valor estimado, dado financeiro que fica só no CRM; regra R-16).
 export type EmailMessage = {
   to: string;
   subject: string;
@@ -23,11 +25,7 @@ export type SendEmailResult =
   | { delivered: false; mode: "error"; error: string };
 
 export async function sendEmail(message: EmailMessage): Promise<SendEmailResult> {
-  const fields = {
-    templateId: message.templateId,
-    leadId: message.leadId ?? null,
-    subject: message.subject,
-  };
+  const fields = { templateId: message.templateId, leadId: message.leadId ?? null };
   if (!env.RESEND_API_KEY) {
     log("info", "e-mail não enviado: sem RESEND_API_KEY (modo log)", fields);
     return { delivered: false, mode: "log" };
@@ -42,9 +40,11 @@ export async function sendEmail(message: EmailMessage): Promise<SendEmailResult>
       text: message.text,
       html: message.html,
       replyTo: message.replyTo,
+      // RFC 8058: o provedor faz POST em unsubscribeUrl (/api/descadastro, que grava a revogação);
+      // o mailto cobre clientes sem um clique.
       headers: message.unsubscribeUrl
         ? {
-            "List-Unsubscribe": `<${message.unsubscribeUrl}>`,
+            "List-Unsubscribe": `<mailto:${site.email}?subject=descadastro>, <${message.unsubscribeUrl}>`,
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
           }
         : undefined,

@@ -108,8 +108,8 @@ export default function GuiaPage() {
             <li className="border-border bg-background flex flex-col gap-2 rounded-lg border p-5">
               <h3 className="site-h3">Empresários e gestores</h3>
               <p className="text-muted-foreground">
-                Quem decide o destino de até 4% do IRPJ devido e quer entender o processo antes de
-                falar com o contador.
+                Quem decide o destino de até 4% do IRPJ devido (3,6% com a LC 224/2025) e quer
+                entender o processo antes de falar com o contador.
               </p>
             </li>
             <li className="border-border bg-background flex flex-col gap-2 rounded-lg border p-5">

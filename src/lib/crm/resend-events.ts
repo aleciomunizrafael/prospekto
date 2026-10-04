@@ -12,8 +12,9 @@ export function eventToKind(event: ResendEvent): EmailEventKind | null {
       return "bounced";
     case "email.complained":
       return "complained";
-    case "email.unsubscribed":
-      return "unsubscribed";
+    // Não existe `email.unsubscribed` na união WebhookEvent do SDK (resend 6.x); o descadastro de
+    // audiências chega como contact.updated com `unsubscribed: true` (ContactEventData). O
+    // descadastro dos e-mails transacionais é a rota própria /api/descadastro (RFC 8058).
     case "contact.updated":
       return event.data?.unsubscribed === true ? "unsubscribed" : null;
     default:

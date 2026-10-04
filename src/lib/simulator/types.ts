@@ -61,6 +61,7 @@ export type SimulatorWarning = {
 export type TextKey =
   | "disclaimer_main"
   | "base_pj"
+  | "base_pf"
   | "basket_pj"
   | "lc224_notice"
   | "art26_notice"
@@ -218,7 +219,8 @@ export type Lc224Info = {
   status: ParamStatus;
 };
 
-export type Deadline = { key: "pf_deposit" | "pj_quarterly" | "pj_period"; text: string };
+// Prazos PJ (apuração); o prazo PF é o texto pf_deadline, renderizado pela tela.
+export type Deadline = { key: "pj_quarterly" | "pj_period"; text: string };
 
 export type SimulatorResult = {
   status: SimulatorStatus;

@@ -54,12 +54,12 @@ function sponsorsNew(lead: WhatsappLead, nome: string, empresa: string): string 
     }
     case "simulador": {
       const valor = faixa ? `na faixa de IRPJ ${faixa}, ` : "";
-      return `Olá, ${nome}. Daniela, da Prospekto. Vi que você simulou: ${valor}até 4% do IRPJ da ${empresa} pode ir para um projeto cultural da região. Quer uma simulação de 20 minutos, em que eu mostro dois ou três projetos e deixo a conta pronta para o seu contador? ${SAIR}`;
+      return `Olá, ${nome}. Daniela, da Prospekto. Vi que você simulou: ${valor}até 4% do IRPJ (3,6% com a LC 224/2025) da ${empresa} pode ir para um projeto cultural da região. Quer uma simulação de 20 minutos, em que eu mostro dois ou três projetos e deixo a conta pronta para o seu contador? ${SAIR}`;
     }
     case "guia":
       return `Olá, ${nome}. Daniela, da Prospekto. O guia já está no seu e-mail. Se quiser, marcamos uma simulação de 20 minutos e eu faço a conta de quanto cabe na ${empresa}. ${SAIR}`;
     default:
-      return `Olá, ${nome}. Aqui é a Daniela, da Prospekto. Trabalho com incentivo fiscal à cultura na Serra (Rouanet, Audiovisual, LIC-RS). Parte do IRPJ da ${empresa} (até 4%) pode virar um projeto cultural com a sua marca. Posso explicar em 5 linhas como funciona? ${SAIR}`;
+      return `Olá, ${nome}. Aqui é a Daniela, da Prospekto. Trabalho com incentivo fiscal à cultura na Serra (Rouanet, Audiovisual, LIC-RS). Parte do IRPJ da ${empresa} (até 4%; 3,6% com a LC 224/2025) pode virar um projeto cultural com a sua marca. Posso explicar em 5 linhas como funciona? ${SAIR}`;
   }
 }
 
@@ -96,7 +96,7 @@ function accountantsMessage(lead: WhatsappLead): string {
     case "novo":
       return `Olá, ${nome}. Sou a Daniela, consultora em leis de incentivo à cultura na Serra. Escrevi um guia para escritórios contábeis sobre a dedução de IRPJ e IRPF (Rouanet, Audiovisual, LIC-RS). Quer o guia? ${SAIR}`;
     case "contato":
-      return `${nome}, vou direto ao ponto: seus clientes no lucro real podem destinar até 4% do IRPJ para cultura, e somando esporte, FIA, Idoso, Pronon e Pronas chega a 10%. O escritório calcula o limite e lança na ECF; eu trago o projeto, faço o termo, o recibo no SALIC e a prestação de contas. Posso apresentar em 30 minutos na [dia] ou [dia]?`;
+      return `${nome}, vou direto ao ponto: seus clientes no lucro real podem destinar até 4% do IRPJ (3,6% com a LC 224/2025) para cultura, e somando esporte, FIA, Idoso, Pronon e Pronas chega a 10%. O escritório calcula o limite e lança na ECF; eu trago o projeto, faço o termo, o recibo no SALIC e a prestação de contas. Posso apresentar em 30 minutos na [dia] ou [dia]?`;
     case "apresentacao":
       return `${nome}, obrigada pelo tempo na apresentação. Posso devolver o diagnóstico da carteira (potencial em reais) em alguns dias; me diga quantos clientes no lucro real vocês têm hoje.`;
     case "parceria":

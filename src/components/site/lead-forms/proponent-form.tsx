@@ -18,7 +18,7 @@ import {
   PROJECT_STATUSES,
   PROPONENT_TYPE_LABELS,
   PROPONENT_TYPES,
-} from "@/lib/validation/forms/proponentes";
+} from "@/lib/validation/forms/proponentes-options";
 
 const opts = <T extends readonly string[]>(values: T, labels: Record<T[number], string>) =>
   values.map((value) => ({ value, label: labels[value as T[number]] }));

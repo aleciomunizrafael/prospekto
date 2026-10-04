@@ -4,13 +4,10 @@ import type {
   ContributionStatus,
   ContributionType,
   IncentiveMechanism,
-  LeadSegment,
-  LostReason,
   OrganizationType,
   RegimeConfirmation,
   TaxRegime,
 } from "@/lib/domain/enums";
-import type { Pipeline, Stage } from "@/lib/domain/pipelines";
 
 export const ORGANIZATION_TYPE_LABELS: Record<OrganizationType, string> = {
   empresa: "Empresa",
@@ -68,72 +65,15 @@ export const CONTRIBUTION_STATUS_LABELS: Record<ContributionStatus, string> = {
   cancelado: "Cancelado",
 };
 
-export const LOST_REASON_LABELS: Record<LostReason, string> = {
-  sem_irpj: "Sem IRPJ a pagar",
-  regime_inelegivel: "Regime tributário inelegível",
-  sem_decisor: "Sem acesso ao decisor",
-  sem_interesse: "Sem interesse",
-  prazo_perdido: "Prazo perdido",
-  escolheu_outro_captador: "Escolheu outro captador",
-  escolheu_outro_incentivo: "Escolheu outro incentivo",
-  vinculo_art27: "Vínculo com o proponente (art. 27)",
-  vantagem_indevida: "Pedido de vantagem indevida",
-  sem_resposta: "Sem resposta",
-  outro: "Outro (detalhar)",
-};
-
-export const SEGMENT_LABELS: Record<LeadSegment, string> = {
-  PJ: "Empresa (PJ)",
-  PF: "Pessoa física (PF)",
-  CONT: "Contador",
-  MUN: "Município",
-  PROP: "Proponente",
-  ALUNO: "Aluno",
-};
-
-export const PIPELINE_LABELS: Record<Pipeline, string> = {
-  patrocinadores: "Patrocinadores",
-  contadores: "Contadores",
-  municipios: "Municípios",
-  projetos: "Projetos",
-  alunos: "Alunos",
-};
-
-export const STAGE_LABELS: Record<Stage, string> = {
-  novo: "Novo",
-  qualificado: "Qualificado",
-  diagnostico: "Diagnóstico",
-  proposta: "Proposta",
-  termo: "Termo",
-  aporte: "Aporte",
-  recibo: "Recibo",
-  renovacao: "Renovação",
-  perdido: "Perdido",
-  contato: "Contato",
-  apresentacao: "Apresentação",
-  parceria: "Parceria",
-  ativo: "Ativo",
-  inativo: "Inativo",
-  contrato: "Contrato",
-  execucao: "Execução",
-  encerrado: "Encerrado",
-  prospeccao: "Prospecção",
-  avaliacao: "Avaliação",
-  elaboracao: "Elaboração",
-  inscrito: "Inscrito",
-  autorizado: "Autorizado",
-  captando: "Captando",
-  prestacao_contas: "Prestação de contas",
-  arquivado: "Arquivado",
-  lista_espera: "Lista de espera",
-  pesquisado: "Pesquisado",
-  aluno: "Aluno",
-  alumni: "Alumni",
-};
-
-export function stageLabel(stage: string): string {
-  return (STAGE_LABELS as Record<string, string>)[stage] ?? stage;
-}
+// Rótulos compartilhados com as telas de leads: uma fonte só (src/lib/crm/labels.ts), para o mesmo
+// segmento ou motivo não aparecer com texto diferente em leads, projetos e aportes.
+export {
+  LOST_REASON_LABELS,
+  PIPELINE_LABELS,
+  SEGMENT_LABELS,
+  STAGE_LABELS,
+  stageLabel,
+} from "./labels";
 
 export function mechanismLabel(mechanism: string | null | undefined): string {
   if (!mechanism) return "";

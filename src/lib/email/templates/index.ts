@@ -3,16 +3,20 @@
 // Os templates de segmento (simulador, diagnostico, contadores, municipios, proponentes, mentoria)
 // são usados pelos formulários da próxima onda.
 import { site } from "@/config/site";
+import { appUrl } from "@/lib/app-url";
+import {
+  DIAGNOSTIC_NEXT_STEP,
+  diagnosticNextStepVariant,
+} from "@/lib/validation/forms/diagnostico-options";
 import { renderEmail, type EmailBlock, type EmailContext, type RenderedEmail } from "./layout";
 
 export type { EmailContext, RenderedEmail } from "./layout";
 
-const appUrl = () =>
-  (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
-
 export type EmailTemplateData = {
   guia: { downloadUrl?: string | null; guideAvailable: boolean };
-  simulador: { amountLabel: string; summaryLines: string[]; resultUrl?: string | null };
+  // amountPhrase já com a preposição ("até R$ X", "entre R$ X e R$ Y", "acima de R$ X"); null
+  // quando não há limite (desqualificado sem LIC-RS, sem imposto).
+  simulador: { amountPhrase: string | null; summaryLines: string[]; resultUrl?: string | null };
   diagnostico: { formato: "diagnostico" | "simulacao"; tipoPessoa: "PJ" | "PF" };
   contadores: { foraDoIcp: boolean };
   municipios: Record<string, never>;
@@ -57,7 +61,7 @@ export const guia: Renderer<"guia"> = (ctx, data) =>
             items: [
               "Os dois mitos sobre a Lei Rouanet e o que diz a lei.",
               "O passo a passo em seis etapas, da elegibilidade à dedução no DARF.",
-              "A tabela de limites: até 4% do IRPJ devido (PJ) e até 6% do imposto devido (PF).",
+              "A tabela de limites: até 4% do IRPJ devido (3,6% com a LC 224/2025) para empresas e até 6% do imposto devido para pessoas físicas.",
             ],
           },
           {
@@ -88,33 +92,34 @@ export const guia: Renderer<"guia"> = (ctx, data) =>
   );
 
 export const simulador: Renderer<"simulador"> = (ctx, data) =>
-  renderEmail(ctx, `Sua simulação: até ${data.amountLabel} para cultura`, [
-    { type: "paragraph", text: "Resumo da sua simulação:" },
-    { type: "list", items: data.summaryLines },
-    ...(data.resultUrl
-      ? [{ type: "cta", label: "Ver o resultado detalhado", href: data.resultUrl } as EmailBlock]
-      : []),
-    {
-      type: "paragraph",
-      text: "Próximo passo: o diagnóstico gratuito, 30 minutos com o seu contador, para confirmar o limite e escolher o projeto.",
-    },
-    { type: "cta", label: "Agendar o diagnóstico", href: `${appUrl()}/diagnostico` },
-    {
-      type: "paragraph",
-      text: "A simulação é uma estimativa com os dados informados; o cálculo final é do contador.",
-    },
-  ]);
+  renderEmail(
+    ctx,
+    data.amountPhrase
+      ? `Sua simulação: ${data.amountPhrase} para cultura`
+      : "Sua simulação: outras formas de apoiar cultura",
+    [
+      { type: "paragraph", text: "Resumo da sua simulação:" },
+      { type: "list", items: data.summaryLines },
+      ...(data.resultUrl
+        ? [{ type: "cta", label: "Ver o resultado detalhado", href: data.resultUrl } as EmailBlock]
+        : []),
+      {
+        type: "paragraph",
+        text: "Próximo passo: o diagnóstico gratuito, 30 minutos com o seu contador, para confirmar o limite e escolher o projeto.",
+      },
+      { type: "cta", label: "Agendar o diagnóstico", href: `${appUrl()}/diagnostico` },
+      {
+        type: "paragraph",
+        text: "A simulação é uma estimativa com os dados informados; o cálculo final é do contador.",
+      },
+    ],
+  );
 
 export const diagnostico: Renderer<"diagnostico"> = (ctx, data) =>
   renderEmail(ctx, "Recebi seu pedido de diagnóstico", [
     {
       type: "paragraph",
-      text:
-        data.formato === "simulacao"
-          ? "Entro em contato em até 1 dia útil pelo WhatsApp ou telefone informado para marcar a simulação de 20 minutos. O contador não precisa participar desta primeira conversa. Se quiser adiantar, responda com dois horários."
-          : data.tipoPessoa === "PF"
-            ? "Entro em contato em até 1 dia útil pelo WhatsApp ou telefone informado para marcar o diagnóstico: uma ligação de 15 minutos. Se quiser adiantar, responda com dois horários."
-            : "Entro em contato em até 1 dia útil pelo WhatsApp ou telefone informado para marcar o diagnóstico: 30 minutos com o seu contador. Se quiser adiantar, responda com dois horários.",
+      text: `Entro em contato em até 1 dia útil pelo WhatsApp ou telefone informado para ${DIAGNOSTIC_NEXT_STEP[diagnosticNextStepVariant(data.formato, data.tipoPessoa)]} Se quiser adiantar, responda com dois horários.`,
     },
     whatsappLine(),
   ]);

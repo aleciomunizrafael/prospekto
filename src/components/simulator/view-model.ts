@@ -12,6 +12,7 @@ import {
   formatPercent,
   formatRange,
   renderText,
+  type LimitsBlock,
   type MoneyRange,
   type PfTaxBand,
   type PjTaxBand,
@@ -95,7 +96,7 @@ export function headline(result: SimulatorResult): Headline | null {
     return {
       value: upToRange(basket),
       caption: `do IRPJ da sua empresa podem ir para projetos culturais (${percent} com a ${LC224_LABEL}).`,
-      secondary: `${formatRange(without)} sem a redução da ${LC224_LABEL} [verificar]`,
+      secondary: `${formatRange(without)} sem a redução da ${LC224_LABEL}`,
       lines,
     };
   }
@@ -270,9 +271,16 @@ export function mechanismShortLabel(key: SimulatorMechanismKey): string {
 }
 
 // Resumo para o e-mail "Sua simulação" (estrutura-e-copy.md, 5.6): limite por mecanismo e, para
-// PJ, os cenários com e sem a LC 224.
+// PJ, os cenários com e sem a LC 224. `amountPhrase` já traz a preposição do assunto ("até R$ X",
+// "entre R$ X e R$ Y", "acima de R$ X", "até R$ X em ICMS"); null quando não há limite a mostrar.
+export function amountPhrase(range: MoneyRange): string {
+  if (range.max === null) return `acima de ${formatBRL(range.min)}`;
+  if (range.min === range.max) return `até ${formatBRL(range.max)}`;
+  return `entre ${formatBRL(range.min)} e ${formatBRL(range.max)}`;
+}
+
 export function emailSummary(result: SimulatorResult): {
-  amountLabel: string;
+  amountPhrase: string | null;
   summaryLines: string[];
 } {
   const lines: string[] = [];
@@ -289,7 +297,7 @@ export function emailSummary(result: SimulatorResult): {
     }
     if (result.scenarios) {
       lines.push(
-        `Cesta cultural com a ${LC224_LABEL}: ${formatRange(result.scenarios.with_lc224.cultural_basket)}; sem a redução: ${formatRange(result.scenarios.without_lc224.cultural_basket)} [verificar]`,
+        `Cesta cultural com a ${LC224_LABEL}: ${formatRange(result.scenarios.with_lc224.cultural_basket)}; sem a redução: ${formatRange(result.scenarios.without_lc224.cultural_basket)}`,
       );
     }
   }
@@ -300,48 +308,72 @@ export function emailSummary(result: SimulatorResult): {
         : renderText("no_icms"),
     );
   }
-  const amountLabel = result.limits
-    ? formatRange(result.limits.cultural_basket)
+  const phrase = result.limits
+    ? amountPhrase(result.limits.cultural_basket)
     : result.lic_rs?.status === "ok"
-      ? formatBRL(result.lic_rs.annual_limit)
-      : "a confirmar";
-  return { amountLabel, summaryLines: lines };
+      ? `até ${formatBRL(result.lic_rs.annual_limit)} em ICMS`
+      : null;
+  return { amountPhrase: phrase, summaryLines: lines };
 }
 
-// Query do diagnóstico (tela 5): dados do gate e simulation_id.
-export function diagnosticHref(
-  gate: {
-    nome: string;
-    email: string;
-    empresa?: string;
-    cargo?: string;
-    cidade: string;
-    uf: string;
-    telefone?: string;
-    contador_escritorio?: string;
-  } | null,
-  taxpayerType: TaxpayerType,
-  simulationId: string | null,
-): string {
+// Percentual da cesta cultural (PJ) ou da cesta PF, já com a LC 224 quando aplicada, lido dos
+// grupos do resultado: a UI não tem percentual literal (simulador-spec.md, seção 4).
+export function basketPercent(limits: LimitsBlock, taxpayerType: TaxpayerType): number {
+  const key = taxpayerType === "pj" ? "cesta_cultural_pj" : "cesta_pf";
+  const group = limits.groups.find((g) => g.key === key) ?? limits.groups[0];
+  return group?.effective_percent ?? 0;
+}
+
+export function culturalBasketPercent(result: SimulatorResult): number {
+  const limits = result.limits ?? result.scenarios?.with_lc224 ?? null;
+  return limits ? basketPercent(limits, result.taxpayer_type) : 0;
+}
+
+// Link do diagnóstico (tela 5): só `tipo` (a convenção de /empresas e do formulário) e o
+// simulation_id. Nenhum dado pessoal na URL (histórico, referrer, logs do host): nome, e-mail e os
+// demais dados do gate seguem por sessionStorage (diagnosticPrefill), lidos pelo DiagnosticoForm.
+export function diagnosticHref(taxpayerType: TaxpayerType, simulationId: string | null): string {
   const params = new URLSearchParams();
-  params.set("tipo_pessoa", taxpayerType === "pj" ? "PJ" : "PF");
-  if (gate) {
-    params.set("nome", gate.nome);
-    params.set("email", gate.email);
-    params.set("cidade", gate.cidade);
-    params.set("uf", gate.uf);
-    if (gate.empresa) params.set("empresa", gate.empresa);
-    if (gate.cargo) params.set("cargo", gate.cargo);
-    if (gate.telefone) params.set("telefone", gate.telefone);
-    if (gate.contador_escritorio) params.set("contador_escritorio", gate.contador_escritorio);
-  }
+  params.set("tipo", taxpayerType === "pj" ? "PJ" : "PF");
   if (simulationId) params.set("simulation_id", simulationId);
   return `/diagnostico?${params.toString()}`;
 }
 
-export function projectsHref(result: SimulatorResult): string {
-  const mechanism = result.featured_mechanism;
-  return `/projetos?mecanismo=${encodeURIComponent(mechanism)}`;
+// Chave do sessionStorage com os dados do gate para pré-preencher /diagnostico (só na mesma aba;
+// some ao fechar). Gravado no clique do link e lido pelo formulário.
+export const DIAGNOSTIC_PREFILL_KEY = "prospekto_diagnostico_prefill";
+
+export type DiagnosticPrefill = {
+  nome?: string;
+  email?: string;
+  empresa?: string;
+  cargo?: string;
+  cidade?: string;
+  uf?: string;
+  telefone?: string;
+  contador_escritorio?: string;
+};
+
+export function storeDiagnosticPrefill(gate: DiagnosticPrefill | null): void {
+  if (!gate) return;
+  try {
+    window.sessionStorage.setItem(DIAGNOSTIC_PREFILL_KEY, JSON.stringify(gate));
+  } catch {
+    // Armazenamento bloqueado: o formulário fica em branco.
+  }
+}
+
+// Tipo de contribuinte vindo da query (/simulador?tipo=PF, /pessoa-fisica): sem distinção de
+// maiúsculas; qualquer outro valor cai na tela 1.
+export function taxpayerTypeFromQuery(search: string): TaxpayerType | null {
+  const raw = (new URLSearchParams(search).get("tipo") ?? "").trim().toLowerCase();
+  return raw === "pj" || raw === "pf" ? raw : null;
+}
+
+// /projetos ainda não filtra por mecanismo (o parâmetro seria ignorado); quando o filtro existir,
+// volta `?mecanismo=<featured_mechanism>`.
+export function projectsHref(): string {
+  return "/projetos";
 }
 
 export type TaxBandCode = PjTaxBand | PfTaxBand;

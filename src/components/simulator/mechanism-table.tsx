@@ -7,6 +7,7 @@ import {
   type MechanismRow,
   type TaxpayerType,
 } from "@/lib/simulator";
+import { basketPercent } from "./view-model";
 
 // Bloco 3 da tela 4 (simulador-spec.md, 5.2): tabela por mecanismo. No celular vira uma lista de
 // cartões, um por mecanismo, com o teto em destaque e "ver detalhes" para as demais colunas.
@@ -33,7 +34,7 @@ function netCost(row: MechanismRow): string {
 
 export function MechanismTable({ limits, taxpayerType, id }: Props) {
   const pj = taxpayerType === "pj";
-  const basketLabel = pj ? "Compartilha a cesta de 4%?" : "Compartilha a cesta de 6%?";
+  const basketLabel = `Compartilha a cesta de ${formatPercent(basketPercent(limits, taxpayerType))}?`;
   return (
     <div className="flex flex-col gap-4">
       <p className="site-prose">{renderText(pj ? "basket_pj" : "pf_basket")}</p>

@@ -105,6 +105,45 @@ export function stageIndex(pipeline: Pipeline, stage: string): number {
   return (STAGES[pipeline] as readonly string[]).indexOf(stage);
 }
 
+// Retornos previstos no playbook (personas-e-funis.md, seção 8).
+export const STAGE_RETURNS: Record<Pipeline, Record<string, readonly string[]>> = {
+  patrocinadores: { renovacao: ["proposta"] },
+  contadores: { inativo: ["ativo"], ativo: ["inativo"] },
+  municipios: { encerrado: ["proposta"] },
+  projetos: { encerrado: ["elaboracao"] },
+  alunos: {},
+};
+
+// Tipos de movimento: `next` (próximo da ordem), `return` (retorno do playbook), `back` (voltar um
+// estágio para corrigir um registro; exige motivo), `lost` (terminal a partir de qualquer estágio,
+// com motivo; personas-e-funis.md, 8.1) e `reactivate` (do terminal para o inicial).
+export type StageMoveKind = "next" | "return" | "back" | "lost" | "reactivate";
+export type StageMove = { stage: string; kind: StageMoveKind };
+
+// Destinos permitidos a partir do estágio atual. Saltos (novo -> aporte) não entram na lista: o
+// repositório recusa qualquer destino fora dela.
+export function allowedStageMoves(pipeline: Pipeline, current: string): StageMove[] {
+  const stages = STAGES[pipeline] as readonly string[];
+  const idx = stageIndex(pipeline, current);
+  const terminal = TERMINAL_STAGES[pipeline];
+  if (idx < 0) return [];
+  if (current === terminal) return [{ stage: INITIAL_STAGES[pipeline], kind: "reactivate" }];
+  const out: StageMove[] = [];
+  const next = stages[idx + 1];
+  if (next && next !== terminal) out.push({ stage: next, kind: "next" });
+  for (const r of STAGE_RETURNS[pipeline][current] ?? []) {
+    if (!out.some((m) => m.stage === r)) out.push({ stage: r, kind: "return" });
+  }
+  const prev = stages[idx - 1];
+  if (prev && !out.some((m) => m.stage === prev)) out.push({ stage: prev, kind: "back" });
+  out.push({ stage: terminal, kind: "lost" });
+  return out;
+}
+
+export function stageMoveKind(pipeline: Pipeline, from: string, to: string): StageMoveKind | null {
+  return allowedStageMoves(pipeline, from).find((m) => m.stage === to)?.kind ?? null;
+}
+
 // SLA de follow-up em dias úteis (personas-e-funis.md, seção 8). `null` quando o documento
 // não fixa prazo em dias (ex.: "quando abrir turma", "contato em janeiro"). `novDec` é o
 // prazo que vale em novembro e dezembro quando o documento o diferencia; `dailyFromDec10`
@@ -295,7 +334,10 @@ export const STAGE_REQUIREMENTS: readonly StageRequirement[] = [
   },
 ];
 
-// Requisitos aplicáveis a um movimento (from -> to) em um pipeline.
+// Requisitos aplicáveis a um movimento (from -> to) em um pipeline. As regras "sair" de um estágio
+// valem ao avançar (`next`) e nos retornos do playbook (`return`: renovacao -> proposta exige nova
+// proposta); ao marcar perdido (`lost`) ou voltar um estágio (`back`) só a regra R-3 (sair do
+// inicial) continua valendo. Movimento fora da lista (ex.: projetos) mantém as duas regras.
 export function requirementsForMove(
   pipeline: Pipeline,
   from: string,
@@ -307,7 +349,11 @@ export function requirementsForMove(
     if (r.stage === "*terminal") return isTerminalStage(pipeline, stage);
     return r.stage === stage;
   };
+  const kind = stageMoveKind(pipeline, from, to);
+  const leavingRulesApply = kind === null || kind === "next" || kind === "return";
   return STAGE_REQUIREMENTS.filter(
-    (r) => (r.moment === "sair" && matches(r, from)) || (r.moment === "entrar" && matches(r, to)),
+    (r) =>
+      (r.moment === "sair" && matches(r, from) && (leavingRulesApply || r.stage === "*initial")) ||
+      (r.moment === "entrar" && matches(r, to)),
   );
 }

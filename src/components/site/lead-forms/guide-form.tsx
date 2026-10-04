@@ -9,7 +9,7 @@ import {
 } from "@/components/site/form";
 import { site } from "@/config/site";
 import { UFS } from "@/lib/domain/enums";
-import { GUIDE_PROFILES, GUIDE_PROFILE_LABELS } from "@/lib/validation/forms/guia";
+import { GUIDE_PROFILES, GUIDE_PROFILE_LABELS } from "@/lib/validation/forms/guia-options";
 
 const profileOptions = GUIDE_PROFILES.map((value) => ({
   value,

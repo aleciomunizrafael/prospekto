@@ -12,14 +12,21 @@ export const metadata: Metadata = {
   alternates: { canonical: "/privacidade" },
 };
 
-type Section = { id: string; title: string; paragraphs: string[]; items?: string[] };
+type Section = {
+  id: string;
+  title: string;
+  // 3 para subseções (3.1), aninhadas sob o h2 anterior.
+  level?: 2 | 3;
+  paragraphs: string[];
+  items?: string[];
+};
 
 const sections: Section[] = [
   {
     id: "quem-somos",
     title: "1. Quem somos",
     paragraphs: [
-      `A controladora dos dados é a ${site.name}, CNPJ ${site.legal.cnpj}, com endereço em ${site.legal.address}, ${site.region}. Contato: ${site.email}.`,
+      `A controladora dos dados é a ${site.name}, CNPJ ${site.legal.cnpj ?? "[verificar]"}, com endereço em ${site.legal.address ?? "[verificar cidade e endereço]"}, ${site.region}. Contato: ${site.email}.`,
     ],
   },
   {
@@ -43,6 +50,7 @@ const sections: Section[] = [
   {
     id: "navegacao",
     title: "3.1 Dados de navegação",
+    level: 3,
     paragraphs: [
       "Páginas visitadas, origem da visita (por exemplo, o parâmetro utm_source de um link), tipo de dispositivo e navegador, de forma agregada e sem cookies. CPF nunca é coletado no site. CNPJ só quando você opta por informar.",
     ],
@@ -149,9 +157,15 @@ export default function PrivacidadePage() {
           aria-labelledby={`${s.id}-titulo`}
           className="flex flex-col gap-3"
         >
-          <h2 id={`${s.id}-titulo`} className="site-h3">
-            {s.title}
-          </h2>
+          {s.level === 3 ? (
+            <h3 id={`${s.id}-titulo`} className="site-h3">
+              {s.title}
+            </h3>
+          ) : (
+            <h2 id={`${s.id}-titulo`} className="site-h3">
+              {s.title}
+            </h2>
+          )}
           {s.paragraphs.map((p) => (
             <p key={p} className="site-prose">
               {p}

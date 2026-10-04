@@ -13,29 +13,9 @@ import {
   requiredMessageField,
   type LeadDraft,
 } from "./common";
+import { CONTACT_SUBJECTS, type ContactSubject } from "./contato-options";
 
-export const CONTACT_SUBJECTS = [
-  "patrocinar",
-  "contador",
-  "pessoa_fisica",
-  "municipio",
-  "proponente",
-  "mentoria",
-  "imprensa",
-  "outro",
-] as const;
-export type ContactSubject = (typeof CONTACT_SUBJECTS)[number];
-
-export const CONTACT_SUBJECT_LABELS: Record<ContactSubject, string> = {
-  patrocinar: "Quero patrocinar um projeto com a minha empresa",
-  contador: "Sou contador e quero conhecer a parceria",
-  pessoa_fisica: "Quero destinar parte do meu IR (pessoa física)",
-  municipio: "Represento um município ou secretaria",
-  proponente: "Tenho um projeto cultural",
-  mentoria: "Tenho interesse na mentoria",
-  imprensa: "Imprensa",
-  outro: "Outro assunto",
-};
+export * from "./contato-options";
 
 export function segmentForSubject(subject: ContactSubject): {
   segment: LeadSegment;

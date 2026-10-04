@@ -21,14 +21,14 @@ import { getPublicProjects } from "@/lib/site/public-projects";
 export const metadata: Metadata = {
   title: { absolute: "Incentivo fiscal à cultura na Serra Gaúcha · Prospekto" },
   description:
-    "Transforme o imposto da sua empresa em cultura na Serra Gaúcha. Até 4% do IRPJ devido para projetos aprovados, com recibo oficial e sem burocracia.",
+    "Transforme o imposto da sua empresa em cultura na Serra Gaúcha. Até 4% do IRPJ devido (3,6% com a LC 224/2025) para projetos aprovados, com recibo oficial e sem burocracia.",
   alternates: { canonical: "/" },
 };
 
 const audiences = [
   {
     title: "Empresas no lucro real",
-    text: "Até 4% do IRPJ devido pode ir para um projeto cultural da sua região, com recibo oficial. Veja quanto cabe na sua empresa.",
+    text: "Até 4% do IRPJ devido (3,6% com a LC 224/2025) pode ir para um projeto cultural da sua região, com recibo oficial. Veja quanto cabe na sua empresa.",
     links: [{ href: "/empresas", label: "Para empresas" }],
   },
   {
@@ -116,7 +116,7 @@ export default async function HomePage() {
           as="h1"
           label="Prospekto Consultoria & Projetos · Serra Gaúcha"
           title="Transforme o imposto da sua empresa em cultura na Serra Gaúcha, sem burocracia."
-          subtitle="Empresas tributadas pelo lucro real podem destinar até 4% do imposto de renda devido a projetos culturais aprovados pelo Ministério da Cultura. O valor sai do imposto que já seria pago; a diferença é que ele vira um projeto com a sua marca, aqui na região. A Prospekto cuida do processo. O seu contador só lança a dedução."
+          subtitle="Empresas tributadas pelo lucro real podem destinar até 4% do imposto de renda devido (3,6% com a LC 224/2025, na leitura da Receita; o simulador mostra os dois cenários) a projetos culturais aprovados pelo Ministério da Cultura. O valor sai do imposto que já seria pago; a diferença é que ele vira um projeto com a sua marca, aqui na região. A Prospekto cuida do processo. O seu contador só lança a dedução."
         />
         <div className="flex flex-col gap-3 sm:flex-row">
           <CtaLink href="/simulador" ctaId="home_hero_simulate">

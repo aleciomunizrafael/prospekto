@@ -3,6 +3,13 @@
 // Datas em ISO 8601 e números com ponto decimal (decisão desta onda: valores reimportáveis sem
 // ambiguidade); booleanos "sim" e "não"; listas separadas por "|"; objetos como JSON. Puro, sem
 // dependências; testado em tests/lib/csv.test.ts.
+//
+// Neutralização de fórmula (OWASP CSV Injection): valor que começa com "=", "+", "-", "@", TAB ou
+// CR recebe um apóstrofo na frente e sai entre aspas, para o Excel/LibreOffice tratá-lo como texto
+// e não como fórmula (DDE/HYPERLINK). Nome, mensagem e origem vêm de formulários públicos e todo
+// telefone E.164 começa com "+": sai como "'+5554999990000" (o Excel esconde o apóstrofo). Uma
+// importação futura (US-37) precisa remover esse apóstrofo quando o caractere seguinte for um dos
+// prefixos acima. Números negativos de colunas numéricas também recebem o apóstrofo.
 export type CsvScalar = string | number | boolean | Date | null | undefined;
 export type CsvValue = CsvScalar | CsvScalar[] | Record<string, unknown>;
 export type CsvRow = Record<string, CsvValue>;
@@ -21,10 +28,14 @@ export function formatCsvValue(value: CsvValue): string {
   return JSON.stringify(value);
 }
 
+const FORMULA_PREFIX = /^[=+\-@\t\r]/;
+
 export function escapeCsvField(text: string): string {
-  const needsQuotes = /[";\r\n]/.test(text);
+  const risky = FORMULA_PREFIX.test(text);
+  const body = risky ? `'${text}` : text;
+  const needsQuotes = risky || /[";\r\n]/.test(text);
   if (!needsQuotes) return text;
-  return `"${text.replace(/"/g, '""')}"`;
+  return `"${body.replace(/"/g, '""')}"`;
 }
 
 // `headers` fixa a ordem das colunas e o texto do cabeçalho: chave da linha -> rótulo.

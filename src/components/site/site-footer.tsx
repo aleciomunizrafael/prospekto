@@ -4,7 +4,7 @@ import { site, waLink } from "@/config/site";
 import { LEGAL_SOURCES } from "./sources";
 
 // Rodapé (estrutura-e-copy.md, seções 4.1 e 7.4): quatro colunas (contato, páginas, legal, fontes),
-// ressalva legal em texto corrido, CNPJ e endereço marcados [verificar] até confirmação.
+// ressalva legal em texto corrido; CNPJ e endereço só aparecem quando confirmados (site.legal).
 export function SiteFooter() {
   return (
     <footer className="bg-sand border-border mt-auto border-t">
@@ -37,9 +37,11 @@ export function SiteFooter() {
               </TrackLink>
             </li>
             <li className="text-muted-foreground">
-              {site.city} {site.legal.address}
+              {site.legal.address ? `${site.city}, ${site.legal.address}` : site.city}
             </li>
-            <li className="text-muted-foreground">CNPJ {site.legal.cnpj}</li>
+            {site.legal.cnpj ? (
+              <li className="text-muted-foreground">CNPJ {site.legal.cnpj}</li>
+            ) : null}
           </ul>
         </div>
 

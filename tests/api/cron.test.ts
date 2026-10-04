@@ -26,6 +26,9 @@ function request(authorization?: string, query = "") {
 
 const ctx: Ctx = { tenantId: env.DEFAULT_TENANT_ID, userId: null };
 const DAY = 86_400_000;
+// Um só instante de referência para os registros e para loadDigestData: as contagens (vencidos,
+// semana, prazo em dias-calendário de São Paulo) não dependem da hora em que a CI roda.
+const now = new Date();
 
 beforeAll(async () => {
   await ensureTenant({ id: ctx.tenantId, name: "Prospekto" });
@@ -47,15 +50,15 @@ beforeAll(async () => {
     attributes: { empresa: "Empresa Vencida" },
     consents: [consentContato],
   });
-  await updateLead(ctx, { leadId: lead.id, nextActionAt: new Date(Date.now() - 3 * DAY) });
+  await updateLead(ctx, { leadId: lead.id, nextActionAt: new Date(now.getTime() - 3 * DAY) });
   await createActivity(ctx, {
     type: "tarefa",
     subject: "Ligar de volta",
     leadId: lead.id,
-    dueAt: new Date(Date.now() - DAY),
+    dueAt: new Date(now.getTime() - DAY),
   });
   const proponent = await createOrganization(ctx, { type: "proponente", name: "Produtora Cron" });
-  const soon = new Date(Date.now() + 90 * DAY).toISOString().slice(0, 10);
+  const soon = new Date(now.getTime() + 90 * DAY).toISOString().slice(0, 10);
   const project = await createProject(ctx, {
     proponentOrgId: proponent.id,
     name: "Projeto em alerta",
@@ -71,7 +74,7 @@ beforeAll(async () => {
     type: "patrocinio",
     mechanism: "rouanet_art18",
     proposedAmount: 20_000,
-    expectedCloseAt: new Date(Date.now() + 5 * DAY).toISOString().slice(0, 10),
+    expectedCloseAt: new Date(now.getTime() + 5 * DAY).toISOString().slice(0, 10),
   });
   // Simulação órfã antiga (apagada) e recente (mantida).
   const old = await createSimulation(ctx, {
@@ -103,7 +106,7 @@ describe("/api/cron/daily", () => {
   });
 
   it("monta o resumo R-13, envia aos usuários, limpa simulações órfãs e responde só contagens", async () => {
-    const data = await loadDigestData(ctx, new Date());
+    const data = await loadDigestData(ctx, now);
     expect(data.overdueLeadsTotal).toBe(1);
     expect(data.overdueLeads[0].organization).toBe("Empresa Vencida");
     expect(data.tasksTotal).toBe(1);

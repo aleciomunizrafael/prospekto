@@ -26,7 +26,7 @@ import {
   CARGO_OPTIONS,
   SIMULATOR_FORM_IDS,
   SIMULATOR_GATE_LABELS,
-} from "@/lib/validation/forms/simulator";
+} from "@/lib/validation/forms/simulator-options";
 import type { LeadFormState } from "@/lib/validation/forms/state";
 import { initialSimulatorGateState, type SimulatorGateState } from "./state";
 import { resultBand } from "./view-model";

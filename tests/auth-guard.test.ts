@@ -15,8 +15,11 @@ async function listFiles(pattern: string): Promise<string[]> {
 }
 
 describe("autorização do CRM em cada página e Server Action", () => {
-  it("toda src/app/(app)/**/page.tsx chama requireSession()", async () => {
-    const pages = await listFiles("src/app/(app)/**/page.tsx");
+  it("toda src/app/(app)/**/page.tsx e route.ts chama requireSession()", async () => {
+    const pages = [
+      ...(await listFiles("src/app/(app)/**/page.tsx")),
+      ...(await listFiles("src/app/(app)/**/route.ts")),
+    ];
     expect(pages.length).toBeGreaterThan(0);
     for (const file of pages) {
       const source = await readFile(path.join(root, file), "utf8");

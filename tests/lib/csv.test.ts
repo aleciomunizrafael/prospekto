@@ -22,6 +22,18 @@ describe("csv.ts", () => {
     expect(escapeCsvField("simples")).toBe("simples");
   });
 
+  it("neutraliza fórmulas: apóstrofo e aspas em valores iniciados por = + - @ TAB ou CR", () => {
+    expect(escapeCsvField('=HYPERLINK("http://x")')).toBe('"\'=HYPERLINK(""http://x"")"');
+    expect(escapeCsvField("=1+1")).toBe('"\'=1+1"');
+    expect(escapeCsvField("+5554999990000")).toBe('"\'+5554999990000"');
+    expect(escapeCsvField("-1")).toBe('"\'-1"');
+    expect(escapeCsvField("@SUM(1)")).toBe('"\'@SUM(1)"');
+    expect(escapeCsvField("\tx")).toBe('"\'\tx"');
+    expect(escapeCsvField("\rx")).toBe('"\'\rx"');
+    expect(escapeCsvField("Maria")).toBe("Maria");
+    expect(escapeCsvField("a = b")).toBe("a = b");
+  });
+
   it("formata datas em ISO, números com ponto, booleanos, listas, objetos e vazios", () => {
     expect(formatCsvValue(new Date("2026-10-04T10:30:00Z"))).toBe("2026-10-04T10:30:00.000Z");
     expect(formatCsvValue(1234.5)).toBe("1234.5");

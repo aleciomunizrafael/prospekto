@@ -6,7 +6,7 @@ import { WhatsappButton } from "@/components/site/whatsapp-button";
 import { site, waLink } from "@/config/site";
 
 // Sobre a Daniela e a Prospekto (docs/site/estrutura-e-copy.md, seção 4.5). Biografia, carteira e
-// contatos sociais ficam marcados [verificar] até a Daniela aprovar o texto (seção 11).
+// contatos sociais (site.social) só aparecem quando a Daniela confirmar as URLs (seção 11).
 export const metadata: Metadata = {
   title: { absolute: "Sobre a Prospekto e Daniela Sandrin Copat" },
   description:
@@ -218,8 +218,30 @@ export default function SobrePage() {
               WhatsApp {site.whatsappDisplay}
             </TrackLink>
           </li>
-          <li className="text-muted-foreground">LinkedIn da Daniela {site.social.linkedin}</li>
-          <li className="text-muted-foreground">Instagram {site.social.instagram}</li>
+          {site.social.linkedin ? (
+            <li>
+              <a
+                href={site.social.linkedin}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-4"
+              >
+                LinkedIn da Daniela
+              </a>
+            </li>
+          ) : null}
+          {site.social.instagram ? (
+            <li>
+              <a
+                href={site.social.instagram}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-4"
+              >
+                Instagram
+              </a>
+            </li>
+          ) : null}
         </ul>
         <div className="flex flex-col gap-3 sm:flex-row">
           <CtaLink href="/contato" ctaId="about_schedule">

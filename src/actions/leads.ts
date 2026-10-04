@@ -98,8 +98,9 @@ export async function createLeadFromForm(
   }
   const draft = form.toLead(data);
   // Parâmetros da página de obrigado só para analytics (form_submit): id do formulário, segmento e
-  // origem. Nenhum dado pessoal na URL.
+  // origem; `v` escolhe a variante do texto (formato do diagnóstico). Nenhum dado pessoal na URL.
   const thanks = new URLSearchParams({ f: form.id, s: draft.segment, o: draft.source });
+  if (draft.thanksVariant) thanks.set("v", draft.thanksVariant);
   const thanksPath = `/obrigado/${draft.thanksType}?${thanks.toString()}`;
 
   // Regra R-18: honeypot preenchido ou envio em menos de 3 segundos responde sucesso sem gravar.

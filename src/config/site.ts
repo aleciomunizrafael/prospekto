@@ -11,14 +11,16 @@ export const site = {
   whatsappDisplay: "(54) 98403-2180",
   city: "Serra Gaúcha, RS",
   region: "Serra Gaúcha, Rio Grande do Sul",
-  // Dados ainda não confirmados (estrutura-e-copy.md, seção 11, perguntas 5 e 9).
+  // Dados ainda não confirmados (estrutura-e-copy.md, seção 11, perguntas 5 e 9): ficam null até
+  // a confirmação e as páginas omitem o item (rodapé, /contato, /sobre), em vez de mostrar o
+  // marcador [verificar] ao visitante. A política de privacidade mantém o marcador no texto.
   legal: {
-    cnpj: "[verificar]",
-    address: "[verificar cidade e endereço]",
+    cnpj: null as string | null,
+    address: null as string | null,
   },
   social: {
-    linkedin: "[verificar URL]",
-    instagram: "[verificar]",
+    linkedin: null as string | null,
+    instagram: null as string | null,
   },
   // Versão da política de privacidade exibida nos formulários (consents.policy_version).
   policyVersion: "2026-10-03",
@@ -78,8 +80,8 @@ export const site = {
     { href: "/sobre", label: "Sobre" },
     { href: "/contato", label: "Contato" },
   ],
-  // Páginas públicas indexáveis (sitemap.ts). Páginas de campanha, /obrigado, /entrar e /app ficam
-  // fora. A próxima onda acrescenta /projetos/[slug] e /conteudo/[slug] a partir do CRM.
+  // Páginas públicas indexáveis (sitemap.ts), que acrescenta /projetos/[slug] a partir do CRM.
+  // Páginas de campanha, /obrigado, /entrar e /app ficam fora. /conteudo/[slug] é da próxima onda.
   publicPages: [
     { path: "/", priority: 1, changeFrequency: "weekly" },
     { path: "/empresas", priority: 0.9, changeFrequency: "monthly" },

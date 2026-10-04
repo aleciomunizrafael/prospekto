@@ -15,9 +15,11 @@ import {
   noticeKeys,
   summaryAnalyticsProps,
   summaryScreen,
+  taxpayerTypeFromQuery,
   whatsappMessage,
 } from "@/components/simulator/view-model";
 import { sanitizeProps } from "@/lib/analytics";
+import { renderTemplate } from "@/lib/email/templates";
 import { parseSimulatorInput, simulate, type SimulatorInput } from "@/lib/simulator";
 import {
   apuracaoFor,
@@ -180,39 +182,54 @@ describe("tela 4: abas da comparação, exemplos e diagnóstico", () => {
     expect(formatIsoDate("2026-10-03")).toBe("03/10/2026");
   });
 
-  it("link do diagnóstico leva os dados do gate e o simulation_id", () => {
-    const href = diagnosticHref(
-      {
-        nome: "Maria",
-        email: "maria@example.test",
-        empresa: "Vinícola",
-        cargo: "financeiro",
-        cidade: "Bento Gonçalves",
-        uf: "RS",
-      },
-      "pj",
-      "11111111-1111-4111-8111-111111111111",
-    );
+  it("link do diagnóstico leva só tipo e simulation_id; nenhum dado pessoal na URL", () => {
+    const href = diagnosticHref("pj", "11111111-1111-4111-8111-111111111111");
     const url = new URL(href, "http://localhost");
     expect(url.pathname).toBe("/diagnostico");
-    expect(url.searchParams.get("tipo_pessoa")).toBe("PJ");
-    expect(url.searchParams.get("empresa")).toBe("Vinícola");
+    expect(url.searchParams.get("tipo")).toBe("PJ");
     expect(url.searchParams.get("simulation_id")).toBe("11111111-1111-4111-8111-111111111111");
-    expect(diagnosticHref(null, "pf", null)).toBe("/diagnostico?tipo_pessoa=PF");
+    expect([...url.searchParams.keys()].sort()).toEqual(["simulation_id", "tipo"]);
+    expect(href).not.toMatch(/nome|email|telefone|cidade|empresa|cargo/);
+    expect(diagnosticHref("pf", null)).toBe("/diagnostico?tipo=PF");
+  });
+
+  it("tipo de contribuinte vindo da query (/simulador?tipo=PF) sem distinção de maiúsculas", () => {
+    expect(taxpayerTypeFromQuery("?tipo=PF")).toBe("pf");
+    expect(taxpayerTypeFromQuery("?tipo=pj&utm_source=x")).toBe("pj");
+    expect(taxpayerTypeFromQuery("?tipo=empresa")).toBeNull();
+    expect(taxpayerTypeFromQuery("")).toBeNull();
   });
 });
 
 describe("e-mail e mapeamento do lead", () => {
   it("resumo do e-mail traz o limite por mecanismo e os dois cenários da LC 224", () => {
-    const { amountLabel, summaryLines } = emailSummary(pj().result);
-    expect(amountLabel).toBe("R$ 18.000,00");
+    const { amountPhrase, summaryLines } = emailSummary(pj().result);
+    expect(amountPhrase).toBe("até R$ 18.000,00");
     expect(summaryLines.some((l) => l.startsWith("Rouanet art. 18: teto de R$ 18.000,00"))).toBe(
       true,
     );
     expect(summaryLines.at(-1)).toContain("sem a redução: R$ 20.000,00");
     const disq = emailSummary(pj({ regime: "simples_nacional" }).result);
-    expect(disq.amountLabel).toBe("a confirmar");
+    expect(disq.amountPhrase).toBeNull();
     expect(disq.summaryLines[0]).toContain("lucro real");
+  });
+
+  it("assunto do e-mail com faixa, faixa sem teto e sem limite fica gramatical", () => {
+    const band = emailSummary(pj({ input_mode: "tax_band", tax_band: "500k_2500k" }).result);
+    expect(band.amountPhrase).toMatch(/^entre R\$ .+ e R\$ /);
+    const open = emailSummary(pj({ input_mode: "tax_band", tax_band: "acima_2500k" }).result);
+    expect(open.amountPhrase).toMatch(/^acima de R\$ /);
+    for (const phrase of [band.amountPhrase, open.amountPhrase]) {
+      expect(phrase).not.toMatch(/até (entre|acima)/);
+    }
+    const subject = (phrase: string | null) =>
+      renderTemplate(
+        "simulador",
+        { name: "Maria", actionLabel: "simulou", sentAt: NOW, marketing: false },
+        { amountPhrase: phrase, summaryLines: [] },
+      ).subject;
+    expect(subject(band.amountPhrase)).toBe(`Sua simulação: ${band.amountPhrase} para cultura`);
+    expect(subject(null)).toBe("Sua simulação: outras formas de apoiar cultura");
   });
 
   it("faixa, apuração, tags e atributos por tipo", () => {

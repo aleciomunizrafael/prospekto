@@ -17,7 +17,7 @@ import {
   LUCRO_REAL_BANDS,
   YES_NO,
   YES_NO_LABELS,
-} from "@/lib/validation/forms/contadores";
+} from "@/lib/validation/forms/contadores-options";
 
 const roleOptions = ACCOUNTANT_ROLES.map((value) => ({
   value,
