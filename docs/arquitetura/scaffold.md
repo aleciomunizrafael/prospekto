@@ -354,7 +354,7 @@ export const auth = betterAuth({
   user: {
     additionalFields: {
       tenantId: { type: "string", required: true, input: false },
-      role: { type: "string", required: false, defaultValue: "operator", input: false },
+      role: { type: "string", required: true, defaultValue: "operator", input: false },
     },
   },
   plugins: [nextCookies()],
