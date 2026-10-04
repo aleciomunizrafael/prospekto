@@ -18,7 +18,15 @@ export const DB_IMPORT_PATTERNS = [
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "drizzle/**", ".pglite/**"]),
+  globalIgnores([
+    ".claude/**",
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+    "drizzle/**",
+    ".pglite/**",
+  ]),
   {
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/lib/repos/**", "src/lib/auth.ts", "src/lib/db/**"],

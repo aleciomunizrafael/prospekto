@@ -6,3 +6,4 @@ docs
 package-lock.json
 src/components/ui
 README.md
+.claude
