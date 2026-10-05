@@ -1,0 +1,63 @@
+name: seed
+# Cria o tenant e os usuários do CRM no banco de produção a partir de um runner do GitHub
+# (o ambiente de nuvem do Claude não alcança o Postgres por TCP). Disparo manual.
+# Segredos: DATABASE_URL_UNPOOLED (Neon, sem pooler) e BACKUP_PASSPHRASE (cifra o arquivo
+# de senhas temporárias; o mesmo do backup.yml). Sem os dois, o job é pulado.
+# As senhas nunca aparecem no log: ficam só no artefato credenciais.txt.gpg (1 dia).
+on:
+  workflow_dispatch:
+    inputs:
+      seed_users:
+        description: 'Usuários no formato "Nome <email>;Nome <email>" (o primeiro é owner; e-mails já existentes são pulados)'
+        required: true
+        type: string
+      seed_example:
+        description: "Criar também o projeto de exemplo (A Tacada Perfeita, não publicado)"
+        required: false
+        type: boolean
+        default: false
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HAS_SECRETS: ${{ secrets.DATABASE_URL_UNPOOLED != '' && secrets.BACKUP_PASSPHRASE != '' }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL_UNPOOLED }}
+      # Valores fictícios só para a validação de variáveis; o seed não usa estes segredos
+      # (a senha é gravada com hash scrypt próprio, independente de BETTER_AUTH_SECRET).
+      BETTER_AUTH_SECRET: seed-only-placeholder-secret-with-at-least-32-characters-0000
+      FORM_SECRET: seed-only-placeholder-form-secret-with-at-least-32-chars-0000
+      BETTER_AUTH_URL: https://prospekto-sistema.vercel.app
+      NEXT_PUBLIC_APP_URL: https://prospekto-sistema.vercel.app
+      SEED_USERS: ${{ inputs.seed_users }}
+      SEED_EXAMPLE: ${{ inputs.seed_example && '1' || '' }}
+    steps:
+      - if: env.HAS_SECRETS != 'true'
+        run: |
+          echo "Segredos DATABASE_URL_UNPOOLED e BACKUP_PASSPHRASE ausentes: configure em Settings > Secrets and variables > Actions."
+          exit 1
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Migrações (idempotente)
+        run: npm run db:migrate
+      - name: Seed
+        run: npm run db:seed | tee seed.log
+      - name: Cifrar senhas temporárias
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          f=$(sed -n 's/^senhas temporárias em \(.*\) (0600).*/\1/p' seed.log | head -1)
+          if [ -z "$f" ]; then echo "Nenhuma senha nova (usuários já existiam ou SEED_USERS vazio)."; exit 0; fi
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase-fd 0 -o credenciais.txt.gpg "$f"
+          shred -u "$f"; rm -rf "$(dirname "$f")"
+          echo "Artefato credenciais.txt.gpg pronto; decifre com: gpg -d credenciais.txt.gpg"
+      - uses: actions/upload-artifact@v7
+        if: hashFiles('credenciais.txt.gpg') != ''
+        with:
+          name: credenciais-${{ github.run_id }}
+          path: credenciais.txt.gpg
+          retention-days: 1
