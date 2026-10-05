@@ -2,6 +2,10 @@
 
 > Guia operacional para colocar a Fase 1 no ar. Complementa `scaffold.md` (seções 9 e 10) e `ADR-001-stack.md`. Telas e nomes de menu dos painéis mudam com o tempo; quando divergirem, siga o painel. Validação feita em 04/10/2026: migração, seed, `vercel-build`, login, CRM e cron rodaram de ponta a ponta contra um PostgreSQL 16 real com o driver `pg` (mesmo caminho que o Neon usa).
 
+## Estado em 05/10/2026
+
+Projeto `prospekto` criado no Vercel (branch de produção `main`), Neon conectado pelo Marketplace, variáveis cadastradas e primeiro deploy verde em `https://prospekto-sistema.vercel.app`. Smoke, 15 páginas públicas, cabeçalhos de segurança, cron (401 sem segredo) e webhook (503 sem segredo) conferidos de fora. Pendentes: seed do primeiro acesso (etapa 4), domínio no Resend e webhook (etapa 3), domínio próprio (etapa 5), plano Pro e backup (etapa 6).
+
 ## 0. Antes de começar (5 minutos)
 
 1. Crie o branch `main` a partir de `claude/charming-wozniak-187o4c` no GitHub (Branches, "New branch", origem o branch atual) e defina `main` como branch padrão em Settings, General. O Vercel usa `main` como branch de produção.
