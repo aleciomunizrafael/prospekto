@@ -18,10 +18,8 @@ jobs:
       FORM_SECRET: ci-only-form-secret-with-at-least-32-chars-0000
       PGLITE_DIR: .pglite
     steps:
-      # atualizar major quando confirmar (https://github.com/actions/checkout/releases/latest)
-      - uses: actions/checkout@v5
-      # atualizar major quando confirmar (https://github.com/actions/setup-node/releases/latest)
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm

@@ -37,14 +37,14 @@ openssl rand -base64 32   # CRON_SECRET
 `DATABASE_URL` e `DATABASE_URL_UNPOOLED` são criadas pela integração do Neon (etapa 2); não cadastre à mão. `PGLITE_DIR` e `PROSPEKTO_ENV` não existem no Vercel.
 
 3. Settings, General, "Node.js Version": 22.x.
-4. Deixe o deploy inicial rodar (ele pode falhar por falta de `DATABASE_URL`; é esperado até a etapa 2).
+4. O Vercel só cria um deploy de produção quando recebe um push no `main` depois da importação (ou por "Deployments", "Create Deployment", branch `main`). Faça isso só depois da etapa 2, para o build já encontrar `DATABASE_URL`.
 
 ## 2. Neon (banco) pelo Marketplace do Vercel
 
 1. No projeto do Vercel, aba "Storage", "Create Database" (ou "Connect Store"), escolha **Neon**.
 2. Plano Free, região **São Paulo (aws-sa-east-1)**, Postgres **17**. Conecte ao projeto `prospekto` em todos os ambientes.
 3. A integração injeta `DATABASE_URL` (com pooler) e `DATABASE_URL_UNPOOLED` e cria um branch do banco para cada preview deployment (deixe ligado: cada preview migra o próprio branch).
-4. "Deployments", "Redeploy" no último deploy. O log deve mostrar `migrações aplicadas` antes do `Compiled successfully`.
+4. Dispare o primeiro deploy (push no `main` ou "Create Deployment"); nos seguintes, "Deployments", "Redeploy". O log deve mostrar `migrações aplicadas` antes do `Compiled successfully`.
 5. Smoke: no terminal, `npm run smoke -- https://<nome-do-projeto>.vercel.app` (espera `/` 200, `/api/health` 200 e `/app` redirecionando para `/entrar`).
 
 ## 3. Resend (e-mail)
@@ -77,7 +77,7 @@ O script cria o tenant `prospekto` e os usuários (a primeira pessoa é `owner`)
 
 - Upgrade para o plano **Pro** (o Hobby proíbe uso comercial; ADR-001).
 - Backup semanal: no GitHub, Settings, Secrets and variables, Actions: `DATABASE_URL_UNPOOLED` e `BACKUP_PASSPHRASE` (senha forte, guardada no gerenciador). Rode o workflow `backup` uma vez por "Run workflow" e confira o artefato `.gpg`.
-- Confirme as majors de `actions/checkout`, `actions/setup-node` e `actions/upload-artifact` em `.github/workflows/` (marcadas para conferência) antes de abrir o primeiro pull request para `main`.
+- As majors das actions (`checkout@v7`, `setup-node@v7`, `upload-artifact@v7`) foram conferidas nos repositórios oficiais em 05/10/2026.
 
 ## 7. Checklist de verificação depois do deploy
 

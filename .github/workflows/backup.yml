@@ -28,9 +28,8 @@ jobs:
         env:
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
-      # atualizar major quando confirmar (https://github.com/actions/upload-artifact/releases/latest)
       - if: env.HAS_SECRETS == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: db-dump-${{ github.run_id }}
           path: prospekto.dump.gpg
