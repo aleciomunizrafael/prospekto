@@ -22,7 +22,7 @@ openssl rand -base64 32   # CRON_SECRET
 ## 1. Vercel (projeto e variáveis)
 
 1. Entre em vercel.com com a conta do GitHub. "Add New", "Project", importe `aleciomunizrafael/prospekto`. O Vercel detecta Next.js; o comando de build vem de `vercel.json` (`npm run vercel-build`, que aplica as migrações antes do build).
-2. Antes do primeiro deploy, abra "Environment Variables" (na própria tela de importação ou em Settings depois) e cadastre, para Production e Preview:
+2. Antes do primeiro deploy, abra "Environment Variables" (na própria tela de importação ou em Settings depois) e cadastre, para Production (Preview só se os previews forem reativados, ver nota abaixo da tabela):
 
 | Variável | Valor |
 |---|---|
@@ -37,6 +37,8 @@ openssl rand -base64 32   # CRON_SECRET
 | `DEV_ALERT_EMAIL` | e-mail do desenvolvedor |
 | `DEFAULT_TENANT_ID` | `prospekto` |
 | `RESEND_WEBHOOK_SECRET` | vazio por enquanto; preenchido na etapa 3.4 |
+
+Previews: o `ignoreCommand` do `vercel.json` cancela o build de qualquer branch que não seja `main` (06/10/2026). Motivo: cada push num branch de trabalho gerava um preview que falhava na validação das variáveis (Preview sem `DATABASE_URL`, `RESEND_API_KEY` e `CRON_SECRET`) e disparava e-mail de "Deployment failed". Para reativar previews, cadastre as variáveis também em Preview (o `BETTER_AUTH_URL` de preview exige tratar a URL variável do Vercel) e remova o `ignoreCommand`. Se um preview ainda for construído com o comando presente, confira em Settings, Environment Variables, se "Automatically expose System Environment Variables" está ligado.
 
 `DATABASE_URL` e `DATABASE_URL_UNPOOLED` são criadas pela integração do Neon (etapa 2); não cadastre à mão. `PGLITE_DIR` e `PROSPEKTO_ENV` não existem no Vercel.
 
