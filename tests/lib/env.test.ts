@@ -16,12 +16,22 @@ describe("variáveis de ambiente: URLs da app", () => {
   it.each([
     ["caminho", "https://prospekto-sistema.vercel.app/entrar"],
     ["barra no fim", "https://prospekto-sistema.vercel.app/"],
-    ["espaço no fim", "https://prospekto-sistema.vercel.app "],
-  ])("rejeita BETTER_AUTH_URL com %s", (_rotulo, url) => {
+  ])("rejeita BETTER_AUTH_URL com %s, citando a variável", (_rotulo, url) => {
     const result = envSchema.safeParse({ ...base, BETTER_AUTH_URL: url });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues.map((i) => i.message).join(" ")).toContain("BETTER_AUTH_URL");
+    }
+  });
+
+  it("aceita espaço no fim de BETTER_AUTH_URL e o remove (o Zod normaliza a URL)", () => {
+    const result = envSchema.safeParse({
+      ...base,
+      BETTER_AUTH_URL: "https://prospekto-sistema.vercel.app ",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.BETTER_AUTH_URL).toBe("https://prospekto-sistema.vercel.app");
     }
   });
 

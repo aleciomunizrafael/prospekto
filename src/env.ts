@@ -10,7 +10,7 @@ export const isDeployed = process.env.NODE_ENV === "production" && !!deployEnv;
 // /api/auth/* e o login passa a responder 404 vazio (visto no primeiro deploy, 06/10/2026).
 const originOnly = (name: string) =>
   z.url().refine((u) => u === u.trim() && !u.endsWith("/") && new URL(u).pathname === "/", {
-    message: `${name} deve ser só a origem, por exemplo https://prospekto.com.br (sem caminho, sem barra no fim, sem espaços)`,
+    message: `${name} deve ser só a origem, por exemplo https://prospekto.com.br (sem caminho nem barra no fim)`,
   });
 
 const schema = z.object({
