@@ -44,7 +44,7 @@ Decisão registrada em `docs/arquitetura/ADR-001-stack.md` (status: aceito, 03/1
 |---|---|---|
 | Framework | Next.js 16 (App Router, Turbopack, `proxy.ts`), React 19, TypeScript | `next@16.3.8`, `react@19.2.8`, `typescript@5.9.3` |
 | CSS e UI | Tailwind CSS 4; shadcn/ui com conjunto fechado de componentes; elementos nativos quando bastam | `tailwindcss@4.3.3`, CLI `shadcn@4.21.1` |
-| Banco | PostgreSQL. Produção: Neon (Vercel Marketplace, plano Free, região São Paulo, Postgres 17). Local e testes: PGlite (Postgres em WASM, sem Docker) | `@electric-sql/pglite@0.5.8`, `pg@8.23.1` |
+| Banco | PostgreSQL. Produção: Neon (Vercel Marketplace, plano Free, região São Paulo, Postgres 18). Local e testes: PGlite (Postgres em WASM, sem Docker) | `@electric-sql/pglite@0.5.8`, `pg@8.23.1` |
 | Acesso a dados | Drizzle ORM com migrações geradas e SQL commitado em `drizzle/`, aplicadas no build do Vercel; toda consulta em `src/lib/repos/` com `ctx: { tenantId, userId }` | `drizzle-orm@0.45.3`, `drizzle-kit@0.31.11` |
 | Autenticação | Better Auth, e-mail e senha, cadastro fechado, usuários criados por seed; plugin `organization` fica para a Fase 2 | `better-auth@1.7.7` |
 | Validação e env | Zod nos formulários e em `src/env.ts` (falha o build se faltar variável) | `zod@4.6.5` |
@@ -169,7 +169,7 @@ Lista única das perguntas levantadas pelos documentos do kickoff, deduplicada e
 | G1 | TypeScript fixado em 5.9.3 porque a tag `latest` já é 7.0.2; subir só quando o Next 16 declarar suporte | `docs/arquitetura/scaffold.md`, passo 2.5 |
 | G2 | Zod 4.6.5: confirmar na compilação o nome `z.treeifyError` usado em `src/env.ts` (alternativa: `parsed.error.issues`) | `docs/arquitetura/scaffold.md`, seção 5.2 |
 | G3 | Better Auth 1.7.7: forma recomendada de criar usuário no seed com `disableSignUp` (API interna ou inserção com hash de `better-auth/crypto`) | `docs/arquitetura/scaffold.md`, seção 5.6 |
-| G4 | Versão do `pg_dump` no runner `ubuntu-latest` precisa coincidir com o Postgres 17 do Neon; confirmar as majors de `actions/checkout`, `actions/setup-node` e `actions/upload-artifact` antes do primeiro push | `docs/arquitetura/scaffold.md`, seções 5.13 e 5.14 |
+| G4 | Resolvida em 06/10/2026: o Neon criou o projeto em Postgres 18 (não 17) e o `pg_dump` 16 do runner recusou o servidor; o workflow `backup` agora lê a versão do servidor e instala o cliente da mesma major (repositório PGDG da imagem). Majors das actions conferidas (v7) | `docs/arquitetura/scaffold.md`, seções 5.13 e 5.14 |
 | G5 | `ip_hash` em `consents` e retenção de 24 meses dependem do advogado (pergunta B3) | `docs/arquitetura/modelo-de-dados.md`, seção 3.6 |
 | G6 | Login com senha ou link mágico (pergunta D2); o scaffold usa senha | `docs/arquitetura/ADR-001-stack.md`, seção 4 |
 | G7 | Criar `docs/arquitetura/ADR-002-defaults-simulador.md` repetindo as decisões D1 e D2 com data e responsável | `docs/site/simulador-spec.md`, seção 13.1 |

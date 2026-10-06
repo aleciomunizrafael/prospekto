@@ -609,7 +609,7 @@ jobs:
           retention-days: 90
 ```
 
-Ativar só depois do deploy (o segredo `DATABASE_URL_UNPOOLED` vem do Neon). A versão major do `pg_dump` deve coincidir com a do Postgres do projeto Neon (17) [verificar] (a versão instalada pelo `ubuntu-latest`; se for inferior, adicionar o repositório PGDG). `actions/upload-artifact@v7` [verificar] (mesma situação das actions da seção 5.13: confirmar a major em https://github.com/actions/upload-artifact/releases/latest antes de ativar o workflow).
+Ativar só depois do deploy (o segredo `DATABASE_URL_UNPOOLED` vem do Neon). A versão major do `pg_dump` deve coincidir com a do Postgres do projeto Neon (18, criado em 05/10/2026): o `ubuntu-latest` instala o cliente 16 por padrão e o `pg_dump` aborta com "server version mismatch", por isso o workflow lê `server_version_num` com o `psql` e instala `postgresql-client-<major>` do repositório PGDG já presente na imagem. `actions/upload-artifact@v7` [verificar] (mesma situação das actions da seção 5.13: confirmar a major em https://github.com/actions/upload-artifact/releases/latest antes de ativar o workflow).
 
 Atualização de 04/10/2026 (revisão de segurança): o workflow commitado cifra o dump com `gpg --symmetric` (AES-256) usando o secret `BACKUP_PASSPHRASE`, destrói o dump em claro e retém o artefato por 14 dias; sem os dois secrets (`DATABASE_URL_UNPOOLED`, `BACKUP_PASSPHRASE`) o job é pulado. Custódia da senha: guardar no gerenciador de senhas da Prospekto com acesso de Rafael e do sócio; para restaurar, `gpg --decrypt prospekto.dump.gpg > prospekto.dump` e `pg_restore -d <url> prospekto.dump`.
 
@@ -789,7 +789,7 @@ Com `casing: "snake_case"` no `drizzle.config.ts` e no `drizzle()`, `stageEntere
 ## 10. Deploy (depois do scaffold, quando houver conta)
 
 1. Importar `aleciomunizrafael/prospekto` no Vercel (Hobby); framework detectado; Node 22.x; `vercel.json` já define o build.
-2. Storage: Neon pelo Marketplace, plano Free, região São Paulo, Postgres 17; a integração cria `DATABASE_URL` (pooled) e `DATABASE_URL_UNPOOLED` e um branch por preview (https://neon.com/docs/guides/vercel-managed-integration).
+2. Storage: Neon pelo Marketplace, plano Free, região São Paulo, Postgres 18; a integração cria `DATABASE_URL` (pooled) e `DATABASE_URL_UNPOOLED` e um branch por preview (https://neon.com/docs/guides/vercel-managed-integration).
 3. Definir as demais variáveis da seção 9 no projeto.
 4. `npm run db:seed` uma vez com `DATABASE_URL` de produção no terminal local (`SEED_USERS` só ali).
 5. Resend: verificar domínio de envio (SPF, DKIM); depende de quem administra o DNS de `prospekto.com.br` (pergunta 4 de `docs/visao.md`); até lá, `onboarding@resend.dev` só para testes.

@@ -18,10 +18,16 @@ jobs:
       # (leads, telefones, CNPJs, consentimentos; R-17) sobe cifrado e o arquivo em claro é destruído.
       # Restaurar: gpg --decrypt prospekto.dump.gpg | pg_restore -d "$DATABASE_URL" (pede a
       # passphrase de BACKUP_PASSPHRASE, guardada pela Prospekto fora do GitHub).
+      # pg_dump recusa servidor mais novo que ele ("server version mismatch", visto em 06/10/2026 com o
+      # Neon em Postgres 18 e o cliente 16 do runner). Descobre a versão do servidor com o psql do
+      # runner e instala o cliente da mesma major, do repositório PGDG já configurado na imagem.
       - if: env.HAS_SECRETS == 'true'
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
-          pg_dump -Fc -d "$DATABASE_URL_UNPOOLED" -f prospekto.dump
+          major=$(psql "$DATABASE_URL_UNPOOLED" -Atc "show server_version_num" | cut -c1-2)
+          echo "servidor Postgres major $major"
+          sudo apt-get install -y -qq "postgresql-client-$major"
+          "/usr/lib/postgresql/$major/bin/pg_dump" -Fc -d "$DATABASE_URL_UNPOOLED" -f prospekto.dump
           printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --symmetric --cipher-algo AES256 \
             --pinentry-mode loopback --passphrase-fd 0 -o prospekto.dump.gpg prospekto.dump
           shred -u prospekto.dump
