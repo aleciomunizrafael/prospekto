@@ -92,6 +92,34 @@ beforeAll(async () => {
   project = await newProject();
 });
 
+describe("createContribution com organização informada", () => {
+  // Regressão: a checagem da organização rodava em `db` dentro da transação e, no PGlite (uma
+  // conexão), a chamada nunca voltava. O timeout do Vitest pega a regressão.
+  it("grava o aporte com a empresa patrocinadora dentro da mesma transação", async () => {
+    const sponsor = await createOrganization(ctx, { type: "empresa", name: "Patrocinadora SA" });
+    const lead = await newPjLead();
+    const c = await createContribution(ctx, {
+      projectId: project.id,
+      leadId: lead.id,
+      orgId: sponsor.id,
+      type: "patrocinio",
+      mechanism: "rouanet_art18",
+      proposedAmount: 10_000,
+    });
+    expect(c.orgId).toBe(sponsor.id);
+    await expect(
+      createContribution(ctx, {
+        projectId: project.id,
+        leadId: lead.id,
+        orgId: "00000000-0000-4000-8000-000000000000",
+        type: "patrocinio",
+        mechanism: "rouanet_art18",
+        proposedAmount: 10_000,
+      }),
+    ).rejects.toThrow();
+  });
+});
+
 describe("projects (R-3, R-5, R-11)", () => {
   it("exige organização do tipo proponente", async () => {
     const empresa = await createOrganization(ctx, { type: "empresa", name: "Empresa" });

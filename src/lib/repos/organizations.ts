@@ -1,6 +1,6 @@
 import "server-only";
 import { and, asc, desc, eq, getTableColumns, ilike, or, sql, type SQL } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { db, type Db } from "@/lib/db";
 import { contacts, leads, organizations } from "@/lib/db/schema";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import {
@@ -15,16 +15,26 @@ import type { Ctx } from "./ctx";
 
 export type Organization = typeof organizations.$inferSelect;
 
-export async function getOrganization(ctx: Ctx, orgId: string): Promise<Organization | null> {
-  const [row] = await db
+// `dbx`: dentro de uma transação, passe o `tx`. Com PGlite (uma conexão só), uma consulta em `db`
+// enquanto a transação está aberta espera para sempre (visto em 06/10/2026 em createContribution).
+export async function getOrganization(
+  ctx: Ctx,
+  orgId: string,
+  dbx: Db = db,
+): Promise<Organization | null> {
+  const [row] = await dbx
     .select()
     .from(organizations)
     .where(and(eq(organizations.tenantId, ctx.tenantId), eq(organizations.id, orgId)));
   return row ?? null;
 }
 
-export async function requireOrganization(ctx: Ctx, orgId: string): Promise<Organization> {
-  const row = await getOrganization(ctx, orgId);
+export async function requireOrganization(
+  ctx: Ctx,
+  orgId: string,
+  dbx: Db = db,
+): Promise<Organization> {
+  const row = await getOrganization(ctx, orgId, dbx);
   if (!row) throw new NotFoundError("Organização", orgId);
   return row;
 }

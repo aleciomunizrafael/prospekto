@@ -125,7 +125,7 @@ export async function createContribution(
     if (lead.segment !== "PJ" && lead.segment !== "PF") {
       throw new ValidationError("Só leads PJ ou PF podem ter aporte.");
     }
-    if (data.orgId) await requireOrganization(ctx, data.orgId);
+    if (data.orgId) await requireOrganization(ctx, data.orgId, tx);
     // Regra R-9
     const check = checkContributionMechanism(project.mechanism, data.mechanism, data.type);
     if (!check.ok) throw new DomainError("mechanism_incompatible", check.reason);
