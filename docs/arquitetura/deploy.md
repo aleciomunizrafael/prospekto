@@ -2,9 +2,9 @@
 
 > Guia operacional para colocar a Fase 1 no ar. Complementa `scaffold.md` (seções 9 e 10) e `ADR-001-stack.md`. Telas e nomes de menu dos painéis mudam com o tempo; quando divergirem, siga o painel. Validação feita em 04/10/2026: migração, seed, `vercel-build`, login, CRM e cron rodaram de ponta a ponta contra um PostgreSQL 16 real com o driver `pg` (mesmo caminho que o Neon usa).
 
-## Estado em 05/10/2026
+## Estado em 06/10/2026
 
-Projeto `prospekto` criado no Vercel (branch de produção `main`), Neon conectado pelo Marketplace, variáveis cadastradas e primeiro deploy verde em `https://prospekto-sistema.vercel.app`. Smoke, 15 páginas públicas, cabeçalhos de segurança, cron (401 sem segredo) e webhook (503 sem segredo) conferidos de fora. Pendentes: seed do primeiro acesso (etapa 4), domínio no Resend e webhook (etapa 3), domínio próprio (etapa 5), plano Pro e backup (etapa 6).
+Projeto `prospekto` criado no Vercel (branch de produção `main`), Neon conectado pelo Marketplace, variáveis cadastradas e deploy verde em `https://prospekto-sistema.vercel.app`. Smoke, 15 páginas públicas, cabeçalhos de segurança, cron (401 sem segredo) e webhook (503 sem segredo) conferidos de fora. Seed do primeiro acesso feito pelo workflow `seed` (etapa 4) e login no CRM funcionando; um lead criado por `/contato` apareceu no CRM. Pendentes: aviso de lead por e-mail não chegou no teste (ver "Verificação final"); domínio próprio adicionado no Vercel, aguardando os registros DNS na Hostinger (etapa 5); domínio no Resend e webhook (etapa 3); plano Pro e backup (etapa 6).
 
 ## 0. Antes de começar (5 minutos)
 
@@ -74,10 +74,11 @@ O script cria o tenant `prospekto` e os usuários (a primeira pessoa é `owner`)
 
 ## 5. Domínio e URLs finais
 
-1. Settings, Domains: adicione `prospekto.com.br` e `www.prospekto.com.br`; cadastre no DNS os registros que o painel indicar (A para o raiz, CNAME para `www`).
-2. Troque `BETTER_AUTH_URL` e `NEXT_PUBLIC_APP_URL` para `https://prospekto.com.br` (Production) e faça "Redeploy". O login só funciona quando o endereço acessado é igual a `BETTER_AUTH_URL`.
-3. Cron: com `vercel.json` o Vercel cria o job diário sozinho (Settings, Cron Jobs) e chama `/api/cron/daily` com `Authorization: Bearer CRON_SECRET`. No plano Hobby a precisão é de uma hora.
-4. Analytics: aba "Analytics", "Enable" (Vercel Web Analytics, sem cookies).
+1. Settings, Domains: adicione `prospekto.com.br` e `www.prospekto.com.br` (aceite o redirecionamento de `www` para o raiz); o painel mostra os registros a cadastrar (A `@` com o IP indicado, hoje `216.198.79.1`, e um CNAME para `www`). O domínio fica em "Invalid Configuration" até o DNS responder com esses valores; "Refresh" reconsulta.
+2. O DNS de `prospekto.com.br` é administrado na Hostinger, na conta da Daniela (registrador HSTDOMAINS; servidores `ns1/ns2.dns-parking.com`); o domínio está só estacionado (sem site), e o e-mail do domínio roda na Hostinger. No hPanel: Domínios, `prospekto.com.br`, DNS / Nameservers. Apague os dois registros A de nome `@` da página estacionada, adicione A `@` com o IP indicado pelo Vercel, e edite o CNAME `www` (hoje `connect.hostinger.com`) para o valor indicado pelo Vercel. Não mexa em MX nem nos TXT de SPF: são o e-mail da Daniela. Quem não tem a senha da conta pede à Daniela um compartilhamento de acesso no hPanel (perfil, "Compartilhamento de acesso", permissão de domínio) ou faz a alteração com ela numa chamada.
+3. Troque `BETTER_AUTH_URL` e `NEXT_PUBLIC_APP_URL` para `https://prospekto.com.br` (Production) e faça "Redeploy". O login só funciona quando o endereço acessado é igual a `BETTER_AUTH_URL`.
+4. Cron: com `vercel.json` o Vercel cria o job diário sozinho (Settings, Cron Jobs) e chama `/api/cron/daily` com `Authorization: Bearer CRON_SECRET`. No plano Hobby a precisão é de uma hora.
+5. Analytics: aba "Analytics", "Enable" (Vercel Web Analytics, sem cookies).
 
 ## 6. No dia em que o primeiro formulário público entrar no ar
 
