@@ -1,19 +1,45 @@
+import { ChevronRight, Mail, Shield, ShieldCheck, ShieldX } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ActivityTimeline } from "@/components/crm/activity-timeline";
-import { StageBadge, TemperatureBadge } from "@/components/crm/badges";
-import { ActivityForm } from "@/components/crm/forms/activity-form";
-import { LeadEditDialog } from "@/components/crm/forms/lead-edit-dialog";
+import type { ReactNode } from "react";
+import { NewContributionDialog } from "@/components/crm/contribution-dialogs";
+import { ContributionTable } from "@/components/crm/contribution-table";
+import { ActivityForm, FoldsOpenOnDesktop } from "@/components/crm/forms/activity-form";
+import { LeadEditDialog, type LeadEditValues } from "@/components/crm/forms/lead-edit-dialog";
 import { OwnerForm } from "@/components/crm/forms/owner-form";
-import { StageMoveDialog } from "@/components/crm/forms/stage-move-dialog";
+import {
+  LeadActionBar,
+  LeadMoreMenu,
+  StageMoveDialog,
+  type LeadStageProps,
+} from "@/components/crm/forms/stage-move-dialog";
+import { TaskCompleteButton } from "@/components/crm/forms/task-complete-button";
+import { Callout } from "@/components/crm/ui/callout";
+import { DetailLayout } from "@/components/crm/ui/detail-layout";
+import { FormSection } from "@/components/crm/ui/form-section";
+import { KeyValueList, type KeyValueItem } from "@/components/crm/ui/key-value-list";
+import { NextStepCard } from "@/components/crm/ui/next-step-card";
+import { PageHeader } from "@/components/crm/ui/page-header";
+import { SlaIndicator } from "@/components/crm/ui/sla-indicator";
+import { StatusBadge } from "@/components/crm/ui/status-badge";
+import { Timeline } from "@/components/crm/ui/timeline";
 import { LeadWhatsappButton } from "@/components/crm/whatsapp-button";
 import { SimulatorDetail } from "@/components/simulator/detail";
 import type { SimulatorDetailData } from "@/components/simulator/state";
+import { Avatar } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ATTRIBUTE_FIELDS } from "@/lib/crm/attributes";
-import { describeOverdue } from "@/lib/crm/dates";
-import { formatBRL, formatDate, formatDateTime, formatPhoneBR } from "@/lib/crm/format";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ATTRIBUTE_FIELDS, type AttributeField } from "@/lib/crm/attributes";
+import {
+  formatCalendarDate,
+  formatCnpj,
+  formatDate,
+  formatDateTime,
+  formatPhoneBR,
+} from "@/lib/crm/format";
 import {
   CONSENT_CHANNEL_LABELS,
   CONSENT_PURPOSE_LABELS,
@@ -26,14 +52,18 @@ import {
   tagLabel,
 } from "@/lib/crm/labels";
 import { leadCompany, stageInfo } from "@/lib/crm/lead-view";
+import { nextStepForLead, type NextStep } from "@/lib/crm/next-step";
 import { isTerminal, stageMovePlans, terminalStageOf } from "@/lib/crm/stage-moves";
-import { CONSENT_PURPOSES } from "@/lib/domain/enums";
+import { whatsappHrefFor } from "@/lib/crm/whatsapp-messages";
+import { CONSENT_PURPOSES, type LeadSegment } from "@/lib/domain/enums";
+import { allowedContributionMechanisms } from "@/lib/domain/mechanisms";
 import { isInitialStage, type Pipeline } from "@/lib/domain/pipelines";
 import { slaDeadline } from "@/lib/domain/sla";
 import { listActivities } from "@/lib/repos/activities";
 import { listConsents } from "@/lib/repos/consents";
-import { listContributions } from "@/lib/repos/contributions";
+import { listContributionSummaries } from "@/lib/repos/contributions";
 import { getLeadDetail } from "@/lib/repos/leads";
+import { listOrganizations } from "@/lib/repos/organizations";
 import { listProjects } from "@/lib/repos/projects";
 import { listSimulations } from "@/lib/repos/simulations";
 import { listTenantUsers } from "@/lib/repos/users";
@@ -54,66 +84,129 @@ function looksLikeResult(value: unknown): value is SimulatorResult {
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+// Título do bloco de campos do segmento (crm-design-system.md, seção 7.5, mesmas palavras do
+// "Novo lead").
+const SEGMENT_BLOCK_TITLE: Record<LeadSegment, string> = {
+  PJ: "Empresa",
+  PF: "Pessoa",
+  CONT: "Escritório",
+  MUN: "Município",
+  PROP: "Proponente",
+  ALUNO: "Aluno",
+};
+
+function attributeValue(field: AttributeField, raw: unknown): ReactNode {
+  if (raw === undefined || raw === null || raw === "") return null;
+  if (field.type === "date" && typeof raw === "string") return formatCalendarDate(raw);
+  if (field.type === "text" || field.type === "number") return String(raw);
+  return enumLabel(raw);
+}
+
+// Bloco de leitura dobrável da lateral (seção 7.4: fechado no celular, aberto no desktop pelo
+// FoldsOpenOnDesktop). Mesmo recorte do FormSection collapsible, sem a classe `group`: o
+// "Mostrar todos os campos" do KeyValueList usa `group-open` e reagiria ao <details> de fora.
+function Fold({
+  title,
+  className,
+  children,
+}: {
+  title: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="grid grid-cols-[10rem_1fr] gap-2 py-1 text-sm">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-words">{children}</dd>
-    </div>
+    <details
+      className={cn(
+        "crm-fold flex flex-col gap-4 rounded-xl border border-border bg-card p-4 md:p-5",
+        className,
+      )}
+    >
+      <summary className="crm-h2 flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
+        <ChevronRight
+          className="size-4 shrink-0 text-muted-foreground transition-transform duration-120 in-[[open]]:rotate-90"
+          aria-hidden="true"
+        />
+        <span className="min-w-0 flex-1">{title}</span>
+      </summary>
+      {children}
+    </details>
   );
 }
 
-function Section({
-  title,
-  action,
-  children,
-}: {
-  title: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-3 rounded-lg border p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">{title}</h2>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
+function daysInStageText(days: number): string {
+  if (days <= 0) return "desde hoje";
+  return days === 1 ? "há 1 dia" : `há ${days} dias`;
 }
 
 export default async function LeadPage({ params, searchParams }: PageProps<"/app/leads/[id]">) {
   const ctx = await requireSession();
   const { id } = await params;
-  const { existente } = await searchParams;
+  const { existente, registrar } = await searchParams;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const lead = await getLeadDetail(ctx, id);
   if (!lead) notFound();
 
   const now = new Date();
   const pipeline = lead.pipeline as Pipeline;
-  const [consents, simulations, activities, users, contributions, projects] = await Promise.all([
-    listConsents(ctx, lead.id),
-    listSimulations(ctx, { leadId: lead.id, limit: 10 }),
-    listActivities(ctx, { leadId: lead.id, limit: 300 }),
-    listTenantUsers(ctx),
-    pipeline === "patrocinadores"
-      ? listContributions(ctx, { leadId: lead.id })
-      : Promise.resolve([]),
-    pipeline === "patrocinadores" ? listProjects(ctx, { limit: 500 }) : Promise.resolve([]),
-  ]);
+  const sponsors = pipeline === "patrocinadores";
+  const [consents, simulations, activities, users, contributions, projects, sponsorOrgs] =
+    await Promise.all([
+      listConsents(ctx, lead.id),
+      listSimulations(ctx, { leadId: lead.id, limit: 10 }),
+      listActivities(ctx, { leadId: lead.id, limit: 300 }),
+      listTenantUsers(ctx),
+      sponsors ? listContributionSummaries(ctx, { leadId: lead.id }) : Promise.resolve([]),
+      sponsors ? listProjects(ctx, { limit: 500 }) : Promise.resolve([]),
+      sponsors ? listOrganizations(ctx, { type: "empresa", limit: 500 }) : Promise.resolve([]),
+    ]);
   const projectNames = new Map(projects.map((p) => [p.id, p.name]));
   const userNames = new Map(users.map((u) => [u.id, u.name]));
   const info = stageInfo(lead, now);
   const company = leadCompany(lead);
   const plans = stageMovePlans(pipeline, lead.stage, now);
   const suggestedNext = slaDeadline(pipeline, lead.stage, now);
+  const terminal = isTerminal(pipeline, lead.stage);
+  const art27Done = lead.attributes.vinculo_art27_checado === true;
+  const openContribution = contributions.find((c) => c.status !== "cancelado") ?? null;
+  const tasks = activities.filter((a) => a.type === "tarefa");
+  const nextStep = nextStepForLead(lead, tasks, plans, now);
+  const whatsappHref = whatsappHrefFor({ ...lead, company });
+  const userOptions = users.map((u) => ({ id: u.id, name: u.name }));
+
+  const stageProps: LeadStageProps = {
+    leadId: lead.id,
+    leadName: lead.name,
+    pipeline,
+    currentStage: lead.stage,
+    daysInStage: info.daysInStage,
+    isPj: lead.segment === "PJ",
+    plans,
+    terminalStage: terminalStageOf(pipeline),
+    ownerUserId: lead.ownerUserId,
+    users: userOptions,
+    currentIsInitial: isInitialStage(pipeline, lead.stage),
+    art27Done,
+    nextActionAt: lead.nextActionAt ? lead.nextActionAt.toISOString() : null,
+    orgId: lead.orgId,
+    orgCnpj: lead.orgCnpj,
+    openContributionProjectId: openContribution?.projectId ?? null,
+  };
+  const editValues: LeadEditValues = {
+    leadId: lead.id,
+    segment: lead.segment,
+    name: lead.name,
+    phone: lead.phone ?? "",
+    city: lead.city ?? "",
+    uf: lead.uf ?? "",
+    interest: lead.interest,
+    tags: lead.tags,
+    attributes: lead.attributes,
+  };
+
   const currentConsents = CONSENT_PURPOSES.map((purpose) => ({
     purpose,
     current: consents.find((c) => c.purpose === purpose) ?? null,
   }));
-  const art27Done = lead.attributes.vinculo_art27_checado === true;
   const simulationCards: SimulatorDetailData[] = [];
   for (const sim of simulations) {
     const parsed = parseSimulatorInput(sim.inputs);
@@ -129,309 +222,460 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
     });
   }
 
-  return (
-    <div className="flex flex-col gap-6">
-      <nav className="text-muted-foreground text-sm">
-        <Link href="/app/leads" className="underline-offset-4 hover:underline">
-          Leads
-        </Link>{" "}
-        / {lead.name}
-      </nav>
-      {existente === "1" ? (
-        <p
-          role="status"
-          className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-        >
-          Já existia um lead com este e-mail no mesmo segmento: os dados foram atualizados em vez de
-          criar outro.
-        </p>
-      ) : null}
+  const cityUf = [lead.city, lead.uf].filter(Boolean).join("/");
+  const emailLink = (
+    <a
+      href={`mailto:${lead.email}`}
+      className="text-primary underline-offset-2 hover:underline break-all"
+    >
+      {lead.email}
+    </a>
+  );
+  const registerLink = (
+    <Button variant="outline" nativeButton={false} render={<a href="#registrar" />}>
+      Registrar contato
+    </Button>
+  );
+  const whatsapp = <LeadWhatsappButton lead={{ ...lead, company }} size="default" />;
 
-      <header className="flex flex-col gap-3 rounded-lg border p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-2xl font-semibold">{lead.name}</h1>
-            <p className="text-muted-foreground text-sm">
-              {SEGMENT_LABELS[lead.segment]}
-              {company ? ` · ${company}` : ""} · {pipelineLabel(lead.pipeline)}
-            </p>
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <StageBadge stage={lead.stage} />
-              <span
-                className={cn(
-                  "text-xs",
-                  info.slaOverdue ? "text-destructive font-medium" : "text-muted-foreground",
-                )}
-              >
-                {info.daysInStage === 0 ? "entrou hoje" : `${info.daysInStage} dias no estágio`} ·{" "}
-                {info.slaText}
-              </span>
-              <TemperatureBadge temperature={lead.temperature} />
-              <span className="text-muted-foreground text-xs">score {lead.score}</span>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <StageMoveDialog
-              leadId={lead.id}
-              currentStage={lead.stage}
-              isPj={lead.segment === "PJ"}
-              plans={plans}
-              terminalStage={terminalStageOf(pipeline)}
-              ownerUserId={lead.ownerUserId}
-              users={users.map((u) => ({ id: u.id, name: u.name }))}
-              currentIsInitial={isInitialStage(pipeline, lead.stage)}
-              art27Done={art27Done}
-            />
-            <LeadEditDialog
-              lead={{
-                leadId: lead.id,
-                segment: lead.segment,
-                name: lead.name,
-                phone: lead.phone ?? "",
-                city: lead.city ?? "",
-                uf: lead.uf ?? "",
-                interest: lead.interest,
-                tags: lead.tags,
-                attributes: lead.attributes,
-              }}
-            />
-          </div>
-        </div>
-        <dl className="grid gap-x-8 sm:grid-cols-2">
-          <Row label="Próxima ação">
-            <span className={cn(info.nextActionOverdue && "text-destructive font-medium")}>
-              {lead.nextActionAt ? describeOverdue(lead.nextActionAt, now) : "não definida"}
-              {lead.nextActionAt && info.nextActionOverdue
-                ? ` (${formatDateTime(lead.nextActionAt)})`
-                : ""}
-            </span>
-          </Row>
-          <Row label="Último contato">
-            {lead.lastContactAt ? formatDateTime(lead.lastContactAt) : "nenhum ainda"}
-          </Row>
-          <Row label="Responsável">
-            {lead.ownerName ?? <span className="text-muted-foreground">sem dono</span>}
-          </Row>
-          <Row label="Interesse">{INTEREST_LABELS[lead.interest]}</Row>
-          {isTerminal(pipeline, lead.stage) && lead.lostReason ? (
-            <Row label="Motivo de perda">
-              {LOST_REASON_LABELS[lead.lostReason]}
-              {lead.lostReasonDetail ? ` · ${lead.lostReasonDetail}` : ""}
-            </Row>
-          ) : null}
-          {lead.tags.length ? (
-            <Row label="Tags">{lead.tags.map((t) => tagLabel(t)).join(", ")}</Row>
-          ) : null}
-        </dl>
-      </header>
+  // Botão do passo (next-step.ts, `kind`): concluir tarefa, registrar contato, mover ou reativar.
+  function stepAction(step: NextStep): ReactNode {
+    switch (step.kind) {
+      case "complete_task":
+        return step.taskId ? <TaskCompleteButton activityId={step.taskId} /> : null;
+      case "register_contact":
+        return (
+          <>
+            {registerLink}
+            {whatsapp}
+          </>
+        );
+      case "first_contact":
+        return (
+          <>
+            {whatsapp}
+            {registerLink}
+          </>
+        );
+      case "move_stage":
+        return step.targetStage ? (
+          <StageMoveDialog
+            {...stageProps}
+            defaultTarget={step.targetStage}
+            trigger={
+              <Button type="button" variant="outline">
+                Mover para {stageLabelOf(step.targetStage)}
+              </Button>
+            }
+          />
+        ) : null;
+      case "reactivate":
+        return step.targetStage ? (
+          <StageMoveDialog
+            {...stageProps}
+            defaultTarget={step.targetStage}
+            trigger={
+              <Button type="button" variant="outline">
+                Reativar
+              </Button>
+            }
+          />
+        ) : null;
+      default:
+        return null;
+    }
+  }
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
-        <Section title="Contato">
-          <dl>
-            <Row label="E-mail">
-              <a href={`mailto:${lead.email}`} className="underline underline-offset-4">
-                {lead.email}
-              </a>
-              {lead.emailStatus !== "ok" ? (
-                <span className="text-destructive ml-2 text-xs">
-                  ({lead.emailStatus === "bounced" ? "e-mail devolvido" : "reclamou de spam"})
-                </span>
-              ) : null}
-            </Row>
-            <Row label="Telefone">
-              {lead.phone ? (
-                formatPhoneBR(lead.phone)
+  function stageLabelOf(stage: string): string {
+    return plans.find((p) => p.target.stage === stage)?.target.label ?? stage;
+  }
+
+  const summaryItems: KeyValueItem[] = [
+    {
+      label: "Próxima ação",
+      value: (
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          {lead.nextActionAt ? <span>{formatDateTime(lead.nextActionAt)}</span> : null}
+          <SlaIndicator
+            info={info}
+            nextActionAt={lead.nextActionAt}
+            now={now}
+            stage={lead}
+            variant="block"
+          />
+        </span>
+      ),
+    },
+    {
+      label: "Último contato",
+      value: lead.lastContactAt ? formatDateTime(lead.lastContactAt) : "nenhum ainda",
+    },
+    {
+      label: "Neste estágio",
+      value: `${daysInStageText(info.daysInStage)} · desde ${formatDate(lead.stageEnteredAt)}`,
+    },
+    {
+      label: "Responsável",
+      value: <OwnerForm leadId={lead.id} ownerUserId={lead.ownerUserId} users={userOptions} />,
+    },
+    { label: "Interesse", value: INTEREST_LABELS[lead.interest] },
+    ...(terminal && lead.lostReason
+      ? [
+          {
+            label: "Motivo de perda",
+            value: `${LOST_REASON_LABELS[lead.lostReason]}${lead.lostReasonDetail ? ` · ${lead.lostReasonDetail}` : ""}`,
+          },
+        ]
+      : []),
+    ...(lead.tags.length
+      ? [{ label: "Tags", value: lead.tags.map((t) => tagLabel(t)).join(", ") }]
+      : []),
+  ];
+
+  const contactItems: KeyValueItem[] = [
+    {
+      label: "E-mail",
+      value: (
+        <span className="flex flex-wrap items-center gap-2">
+          {emailLink}
+          {lead.emailStatus !== "ok" ? (
+            <Badge variant="danger">
+              {lead.emailStatus === "bounced" ? "e-mail devolvido" : "reclamou de spam"}
+            </Badge>
+          ) : null}
+        </span>
+      ),
+    },
+    {
+      label: "Telefone",
+      value: lead.phone ? (
+        <a href={`tel:${lead.phone}`} className="text-primary underline-offset-2 hover:underline">
+          {formatPhoneBR(lead.phone)}
+        </a>
+      ) : (
+        <span className="flex flex-wrap items-center gap-1 text-muted-foreground">
+          não informado ·
+          <LeadEditDialog
+            lead={editValues}
+            trigger={
+              <Button type="button" variant="link" size="xs" className="h-auto px-0">
+                Editar
+              </Button>
+            }
+          />
+        </span>
+      ),
+    },
+    { label: "Cidade", value: cityUf || null },
+    ...(lead.message
+      ? [{ label: "Mensagem", value: <span className="whitespace-pre-line">{lead.message}</span> }]
+      : []),
+  ];
+
+  const originItems: KeyValueItem[] = [
+    {
+      label: "Origem",
+      value: `${SOURCE_LABELS[lead.source]}${lead.sourceDetail ? ` · ${lead.sourceDetail}` : ""}`,
+    },
+    {
+      label: "UTM",
+      value: [lead.utmSource, lead.utmMedium, lead.utmCampaign].filter(Boolean).join(" / ") || null,
+    },
+    { label: "Referência", value: lead.referrer },
+    { label: "Página de entrada", value: lead.landingPath, code: true },
+    { label: "Versão do guia", value: lead.guideVersion },
+    { label: "Indicado por", value: lead.referredByOrgName },
+    {
+      label: "Projeto de interesse",
+      value: lead.projectInterestName,
+      href: lead.projectInterestId ? `/app/projetos/${lead.projectInterestId}` : undefined,
+    },
+    { label: "Criado em", value: formatDateTime(lead.createdAt) },
+  ];
+
+  const segmentItems: KeyValueItem[] = [
+    ...(lead.orgName
+      ? [
+          {
+            label: "Organização",
+            value: lead.orgName,
+            href: lead.orgId ? `/app/organizacoes/${lead.orgId}` : undefined,
+          },
+          { label: "CNPJ (organização)", value: formatCnpj(lead.orgCnpj) || null, code: true },
+        ]
+      : []),
+    ...ATTRIBUTE_FIELDS[lead.segment].map((f) => ({
+      label: f.label,
+      value: attributeValue(f, lead.attributes[f.key]),
+      code: f.key === "cnpj",
+      href:
+        f.key === "link_material" && typeof lead.attributes[f.key] === "string"
+          ? String(lead.attributes[f.key])
+          : undefined,
+    })),
+  ];
+
+  const header = (
+    <>
+      <PageHeader
+        eyebrow={`${pipelineLabel(lead.pipeline)} · ${SEGMENT_LABELS[lead.segment]}`}
+        title={lead.name}
+        backHref="/app/leads"
+        backLabel="Leads"
+        description={
+          company || cityUf ? (
+            <>
+              {lead.orgId && lead.orgName ? (
+                <Link
+                  href={`/app/organizacoes/${lead.orgId}`}
+                  className="text-primary underline-offset-2 hover:underline"
+                >
+                  {lead.orgName} ›
+                </Link>
               ) : (
-                <span className="text-muted-foreground">não informado</span>
+                company
               )}
-            </Row>
-            <Row label="Cidade">
-              {[lead.city, lead.uf].filter(Boolean).join(" / ") || (
-                <span className="text-muted-foreground">não informada</span>
-              )}
-            </Row>
-            {lead.message ? <Row label="Mensagem">{lead.message}</Row> : null}
-          </dl>
-          <div className="flex flex-wrap gap-2">
-            <LeadWhatsappButton lead={{ ...lead, company }} />
-            <Button
-              variant="outline"
-              size="sm"
-              nativeButton={false}
-              render={<a href={`mailto:${lead.email}`} />}
-            >
-              Enviar e-mail
-            </Button>
-          </div>
-          <div className="border-t pt-3">
-            <p className="mb-2 text-sm font-medium">Atribuir dono</p>
-            <OwnerForm
-              leadId={lead.id}
-              ownerUserId={lead.ownerUserId}
-              users={users.map((u) => ({ id: u.id, name: u.name }))}
+              {company && cityUf ? " · " : ""}
+              {cityUf}
+            </>
+          ) : undefined
+        }
+        meta={
+          <>
+            <StatusBadge kind="stage" value={lead.stage} pipeline={pipeline} size="md" />
+            <SlaIndicator
+              info={info}
+              nextActionAt={lead.nextActionAt}
+              now={now}
+              stage={lead}
+              variant="block"
             />
-          </div>
-        </Section>
-
-        <Section title="Origem">
-          <dl>
-            <Row label="Origem">
-              {SOURCE_LABELS[lead.source]}
-              {lead.sourceDetail ? ` · ${lead.sourceDetail}` : ""}
-            </Row>
-            {lead.utmSource || lead.utmMedium || lead.utmCampaign ? (
-              <Row label="UTM">
-                {[lead.utmSource, lead.utmMedium, lead.utmCampaign].filter(Boolean).join(" / ")}
-              </Row>
-            ) : null}
-            {lead.referrer ? <Row label="Referência">{lead.referrer}</Row> : null}
-            {lead.landingPath ? <Row label="Página de entrada">{lead.landingPath}</Row> : null}
-            {lead.guideVersion ? <Row label="Versão do guia">{lead.guideVersion}</Row> : null}
-            {lead.referredByOrgName ? (
-              <Row label="Indicado por">{lead.referredByOrgName}</Row>
-            ) : null}
-            {lead.projectInterestName ? (
-              <Row label="Projeto de interesse">{lead.projectInterestName}</Row>
-            ) : null}
-            <Row label="Criado em">{formatDateTime(lead.createdAt)}</Row>
-          </dl>
-        </Section>
-      </div>
-
-      <Section title="Campos do segmento">
-        <dl className="grid gap-x-8 sm:grid-cols-2">
-          {ATTRIBUTE_FIELDS[lead.segment].map((f) => (
-            <Row key={f.key} label={f.label}>
-              <span className={cn(lead.attributes[f.key] === undefined && "text-muted-foreground")}>
-                {f.key === "cnpj" ||
-                f.key === "link_material" ||
-                f.type === "text" ||
-                f.type === "number" ||
-                f.type === "date"
-                  ? lead.attributes[f.key] === undefined || lead.attributes[f.key] === ""
-                    ? "não informado"
-                    : String(lead.attributes[f.key])
-                  : enumLabel(lead.attributes[f.key])}
+            <span className="inline-flex items-center gap-1.5">
+              <StatusBadge kind="temperature" value={lead.temperature} size="md" />
+              <span className="crm-meta">score {lead.score}</span>
+            </span>
+            {lead.ownerName ? (
+              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Avatar name={lead.ownerName} size="sm" />
+                {lead.ownerName}
               </span>
-            </Row>
-          ))}
-        </dl>
-        {lead.orgName ? (
-          <p className="text-muted-foreground text-sm">
-            Organização vinculada: {lead.orgName}
-            {lead.orgCnpj ? ` (CNPJ ${lead.orgCnpj})` : " (sem CNPJ)"}.
-          </p>
-        ) : lead.segment === "PJ" ? (
-          <p className="text-muted-foreground text-sm">
-            Nenhuma organização vinculada. Para chegar a Termo, cadastre a empresa com CNPJ em{" "}
-            <Link href="/app/organizacoes" className="underline underline-offset-4">
-              Organizações
-            </Link>
-            .
-          </p>
-        ) : null}
-      </Section>
-
-      {pipeline === "patrocinadores" ? (
-        <Section
-          title="Aportes"
-          action={
-            <Link href="/app/projetos" className="text-sm underline underline-offset-4">
-              registrar em Projetos
-            </Link>
-          }
-        >
-          {contributions.length === 0 ? (
-            <p className="text-muted-foreground text-sm">Nenhum aporte proposto ainda.</p>
-          ) : (
-            <ul className="divide-y text-sm">
-              {contributions.map((c) => (
-                <li key={c.id} className="flex flex-wrap gap-x-3 gap-y-1 py-2">
-                  <span className="font-medium">{projectNames.get(c.projectId) ?? "projeto"}</span>
-                  <span>{formatBRL(c.proposedAmount)}</span>
-                  <span className="text-muted-foreground">{c.status.replace("_", " ")}</span>
-                  {c.expectedCloseAt ? (
-                    <span className="text-muted-foreground">
-                      previsto {formatDate(c.expectedCloseAt)}
-                    </span>
-                  ) : null}
-                  {c.depositedAt ? (
-                    <span className="text-muted-foreground">
-                      depositado {formatDate(c.depositedAt)} ({formatBRL(c.depositedAmount)})
-                    </span>
-                  ) : null}
-                  {c.receiptNumber ? (
-                    <span className="text-muted-foreground">recibo {c.receiptNumber}</span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Section>
+            ) : (
+              <span className="text-xs text-muted-foreground">sem responsável</span>
+            )}
+          </>
+        }
+        secondary={[
+          whatsapp,
+          <Tooltip key="email">
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="icon"
+                  nativeButton={false}
+                  render={<a href={`mailto:${lead.email}`} aria-label="Enviar e-mail" />}
+                />
+              }
+            >
+              <Mail aria-hidden="true" />
+            </TooltipTrigger>
+            <TooltipContent>Enviar e-mail</TooltipContent>
+          </Tooltip>,
+          <LeadEditDialog key="editar" lead={editValues} />,
+        ]}
+        primary={
+          <>
+            <StageMoveDialog {...stageProps} />
+            <LeadMoreMenu {...stageProps} />
+          </>
+        }
+      />
+      {existente === "1" ? (
+        <Callout tone="info" role="status">
+          Esse e-mail já existia neste segmento: os dados foram atualizados em vez de criar outro
+          lead.
+        </Callout>
       ) : null}
+    </>
+  );
 
-      <Section title="Consentimentos">
-        <ul className="flex flex-col gap-2 text-sm">
-          {currentConsents.map(({ purpose, current }) => (
-            <li key={purpose} className="flex flex-col gap-0.5">
-              <span>
-                <span className="font-medium">{CONSENT_PURPOSE_LABELS[purpose]}: </span>
-                {current ? (
-                  <span className={current.granted ? "text-emerald-700" : "text-destructive"}>
-                    {current.granted ? "autorizado" : "revogado"} em{" "}
-                    {formatDateTime(current.createdAt)}
-                    {current.granted && current.channels.length
-                      ? ` por ${current.channels.map((c) => CONSENT_CHANNEL_LABELS[c] ?? c).join(", ")}`
-                      : ""}{" "}
-                    (origem {current.sourcePage}, política {current.policyVersion})
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">nunca registrado</span>
-                )}
-              </span>
-              {current ? (
-                <details className="text-muted-foreground text-xs">
-                  <summary className="cursor-pointer">texto do consentimento</summary>
-                  <p className="mt-1 whitespace-pre-line">{current.consentText}</p>
-                </details>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-        {consents.length > 2 ? (
-          <p className="text-muted-foreground text-xs">
-            {consents.length} registros no histórico (nada é apagado).
-          </p>
-        ) : null}
-      </Section>
-
-      {simulationCards.length > 0 ? (
-        <Section title={`Simulações (${simulationCards.length})`}>
-          <div className="flex flex-col gap-6">
-            {simulationCards.map((data) => (
-              <details key={data.simulationId} className="rounded-lg border p-3">
-                <summary className="cursor-pointer text-sm font-medium">
-                  {data.subject} · {formatDateTime(data.createdAt)}
-                </summary>
-                <div className="pt-4">
-                  <SimulatorDetail data={data} />
-                </div>
-              </details>
-            ))}
-          </div>
-        </Section>
-      ) : null}
-
-      <Section title="Registrar atividade">
+  const main = (
+    <>
+      <NextStepCard step={nextStep} action={stepAction(nextStep)} className="max-lg:order-1" />
+      <FormSection
+        id="registrar"
+        title="Registrar atividade"
+        collapsible
+        className="crm-fold max-lg:order-4"
+      >
         <ActivityForm
           leadId={lead.id}
           suggestedNextActionAt={suggestedNext ? suggestedNext.toISOString() : null}
+          autoFocus={registrar === "1"}
         />
-      </Section>
+      </FormSection>
+      <Card className="max-lg:order-9">
+        <CardHeader>
+          <CardTitle>Linha do tempo ({activities.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Timeline activities={activities} users={userNames} projects={projectNames} now={now} />
+        </CardContent>
+      </Card>
+    </>
+  );
 
-      <Section title={`Linha do tempo (${activities.length})`}>
-        <ActivityTimeline activities={activities} users={userNames} now={now} />
-      </Section>
-    </div>
+  const aside = (
+    <>
+      <Card className="max-lg:order-2">
+        <CardHeader>
+          <CardTitle>Resumo</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <KeyValueList items={summaryItems} columns={1} />
+        </CardContent>
+      </Card>
+      <Card className="max-lg:order-3">
+        <CardHeader>
+          <CardTitle>Contato</CardTitle>
+          {whatsappHref ? (
+            <CardAction>
+              <LeadWhatsappButton lead={{ ...lead, company }} variant="icon" />
+            </CardAction>
+          ) : null}
+        </CardHeader>
+        <CardContent>
+          <KeyValueList items={contactItems} columns={1} />
+        </CardContent>
+      </Card>
+      {sponsors ? (
+        <Card className="max-lg:order-5">
+          <CardHeader>
+            <CardTitle>
+              Aportes ({contributions.filter((c) => c.status !== "cancelado").length})
+            </CardTitle>
+            <CardAction>
+              <NewContributionDialog
+                projects={projects
+                  .filter((p) => p.stage !== "arquivado")
+                  .map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                    mechanism: p.mechanism,
+                    allowedMechanisms: allowedContributionMechanisms(p.mechanism),
+                  }))}
+                sponsorOrgs={sponsorOrgs.map((o) => ({ value: o.id, label: o.name }))}
+              />
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            <ContributionTable ctx={ctx} rows={contributions} layout="cards" now={now} />
+          </CardContent>
+        </Card>
+      ) : null}
+      <Fold title={SEGMENT_BLOCK_TITLE[lead.segment]} className="max-lg:order-6">
+        {lead.segment === "PJ" && !lead.orgName ? (
+          <Callout tone="warning">
+            Para chegar a Termo, cadastre a empresa com CNPJ em{" "}
+            <Link href="/app/organizacoes">Organizações ›</Link>
+          </Callout>
+        ) : null}
+        <KeyValueList items={segmentItems} columns={1} />
+      </Fold>
+      <Fold title="Origem" className="max-lg:order-7">
+        <KeyValueList items={originItems} columns={1} />
+      </Fold>
+      <Fold title="Consentimentos" className="max-lg:order-8">
+        <ul className="flex flex-col gap-3 text-sm">
+          {currentConsents.map(({ purpose, current }) => {
+            const Icon = current ? (current.granted ? ShieldCheck : ShieldX) : Shield;
+            return (
+              <li key={purpose} className="flex flex-col gap-1">
+                <div className="flex items-start gap-2">
+                  <Icon
+                    aria-hidden="true"
+                    className={
+                      current
+                        ? current.granted
+                          ? "mt-0.5 size-4 shrink-0 text-success"
+                          : "mt-0.5 size-4 shrink-0 text-destructive"
+                        : "mt-0.5 size-4 shrink-0 text-muted-foreground"
+                    }
+                  />
+                  {current ? (
+                    <span>
+                      <span className="font-medium">{CONSENT_PURPOSE_LABELS[purpose]}</span>{" "}
+                      {current.granted ? "autorizado" : "revogado"} em{" "}
+                      {formatDate(current.createdAt)}
+                      {current.granted && current.channels.length
+                        ? ` por ${current.channels.map((c) => CONSENT_CHANNEL_LABELS[c] ?? c).join(", ")}`
+                        : ""}{" "}
+                      (política {current.policyVersion})
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      <span className="font-medium">{CONSENT_PURPOSE_LABELS[purpose]}:</span> nunca
+                      registrado
+                    </span>
+                  )}
+                </div>
+                {current ? (
+                  <details className="crm-meta pl-6">
+                    <summary className="cursor-pointer underline-offset-2 hover:underline">
+                      texto integral
+                    </summary>
+                    <p className="mt-1 whitespace-pre-line">{current.consentText}</p>
+                    <p className="mt-1">
+                      Registrado em {formatDateTime(current.createdAt)} a partir de{" "}
+                      {current.sourcePage}.
+                    </p>
+                  </details>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+        {consents.length > 2 ? (
+          <p className="crm-meta">{consents.length} registros no histórico (nada é apagado).</p>
+        ) : null}
+      </Fold>
+      {simulationCards.length > 0 ? (
+        <Fold title={`Simulações (${simulationCards.length})`} className="max-lg:order-8">
+          {simulationCards.map((data) => (
+            <details key={data.simulationId} className="rounded-lg border border-border p-3">
+              <summary className="cursor-pointer text-sm font-medium">
+                {data.subject} · {formatDateTime(data.createdAt)}
+              </summary>
+              <div className="pt-4">
+                <SimulatorDetail data={data} />
+              </div>
+            </details>
+          ))}
+        </Fold>
+      ) : null}
+    </>
+  );
+
+  return (
+    <>
+      <DetailLayout
+        header={header}
+        main={main}
+        aside={aside}
+        asideLabel="Dados do lead"
+        // No celular os blocos das duas colunas se intercalam (seção 7.4): os contêineres viram
+        // `display: contents` e cada bloco traz a sua ordem em `max-lg:order-*`.
+        className="max-lg:[&>div.grid>*]:contents"
+        actionsMobile={
+          <LeadActionBar
+            stage={stageProps}
+            edit={editValues}
+            whatsappHref={whatsappHref}
+            email={lead.email}
+          />
+        }
+      />
+      <FoldsOpenOnDesktop />
+    </>
   );
 }

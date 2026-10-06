@@ -1,55 +1,144 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { registerActivityAction } from "@/actions/crm-leads";
-import { initialCrmActionState } from "@/lib/crm/action-state";
-import { toDateTimeLocal } from "@/lib/crm/format";
+import { initialCrmActionState, type CrmActionState } from "@/lib/crm/action-state";
+import { formatShortDay } from "@/lib/crm/describe-sla";
+import { fromDateTimeLocal, toDateTimeLocal } from "@/lib/crm/format";
 import { ACTIVITY_TYPE_LABELS, MEETING_KINDS } from "@/lib/crm/labels";
-import { FormMessage, SelectField, TextField, TextareaField } from "./fields";
+import { ACTIVITY_ICONS } from "@/lib/crm/status-tones";
+import { SegmentedControl } from "../ui/segmented-control";
+import { FormMessage, SelectField, TextField, TextareaField, ids } from "./fields";
 import { SubmitButton } from "./submit-button";
 
 const TYPES = ["ligacao", "reuniao", "email", "whatsapp", "visita", "nota", "tarefa"] as const;
+type ActivityKind = (typeof TYPES)[number];
+const CONTACT_TYPES: ReadonlySet<string> = new Set([
+  "ligacao",
+  "reuniao",
+  "email",
+  "whatsapp",
+  "visita",
+]);
 
-// "Registrar atividade" (proposta-c, seção 9.1): contato atualiza last_contact_at; a nova próxima
-// ação é sugerida pelo SLA do estágio e pode ser alterada; tarefa pede vencimento.
+// Evento que abre e foca o formulário de qualquer lugar da página (ActionBarMobile "Registrar").
+const OPEN_EVENT = "prospekto:registrar";
+
+export function openActivityForm() {
+  window.dispatchEvent(new Event(OPEN_EVENT));
+}
+
+// Mensagem do toast (crm-design-system.md, seção 8): "Contato registrado. Próxima ação: qui., 9 de out."
+function successMessage(type: ActivityKind, formData: FormData): string {
+  const dateOf = (key: string) => {
+    const value = formData.get(key);
+    return typeof value === "string" && value ? fromDateTimeLocal(value) : null;
+  };
+  if (type === "tarefa") {
+    const due = dateOf("dueAt");
+    return due ? `Tarefa criada. Vence ${formatShortDay(due)}` : "Tarefa criada.";
+  }
+  if (type === "nota") return "Nota registrada.";
+  const next = dateOf("nextActionAt");
+  return next ? `Contato registrado. Próxima ação: ${formatShortDay(next)}` : "Contato registrado.";
+}
+
+// "Registrar atividade" (crm-design-system.md, seção 7.4): tipo em SegmentedControl, "O que
+// aconteceu" primeiro, datas com DateHint. Contato atualiza last_contact_at; a próxima ação é
+// sugerida pelo prazo do estágio e pode ser alterada; tarefa pede vencimento. `autoFocus` vem de
+// `?registrar=1`; `#registrar` na URL e o evento da ActionBarMobile também abrem a seção dobrada
+// (<details> do FormSection no celular) e focam o campo.
 export function ActivityForm({
   leadId,
   suggestedNextActionAt,
+  autoFocus = false,
 }: {
   leadId: string;
   suggestedNextActionAt: string | null;
+  autoFocus?: boolean;
 }) {
-  const [state, action] = useActionState(registerActivityAction, initialCrmActionState);
-  const [type, setType] = useState<(typeof TYPES)[number]>("ligacao");
+  const [state, action] = useActionState(async (prev: CrmActionState, formData: FormData) => {
+    const kind = String(formData.get("type") ?? "ligacao") as ActivityKind;
+    const result = await registerActivityAction(prev, formData);
+    if (result.status === "ok") toast.success(successMessage(kind, formData));
+    return result;
+  }, initialCrmActionState);
+  const [type, setType] = useState<ActivityKind>("ligacao");
+  // Calculado uma vez: um defaultValue que muda a cada render faz o base-ui avisar e não ajuda.
+  const [nowLocal] = useState(() => toDateTimeLocal(new Date()));
   const formRef = useRef<HTMLFormElement>(null);
   const e = state.fieldErrors ?? {};
 
   useEffect(() => {
-    if (state.status === "ok") {
-      toast.success(state.message ?? "Atividade registrada.");
-      formRef.current?.reset();
-    }
+    if (state.status !== "ok") return;
+    const form = formRef.current;
+    if (!form) return;
+    form.reset();
+    // Depois do reset, "Data e hora" volta para agora (sem trocar o defaultValue no React).
+    const occurred = form.elements.namedItem("occurredAt");
+    if (occurred instanceof HTMLInputElement) occurred.value = toDateTimeLocal(new Date());
+    // O reset não dispara `input`: avisa os DateHint para refletirem os valores padrão.
+    form.querySelectorAll<HTMLInputElement>('input[type="datetime-local"]').forEach((input) => {
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
   }, [state]);
 
-  const isContact = ["ligacao", "reuniao", "email", "whatsapp", "visita"].includes(type);
+  const focusBody = useCallback(() => {
+    const field = document.getElementById(ids("body").id);
+    if (!(field instanceof HTMLTextAreaElement)) return;
+    // No celular a seção vem dobrada: abre todos os <details> acima do campo antes de focar.
+    let fold = field.closest("details");
+    while (fold) {
+      fold.open = true;
+      fold = fold.parentElement?.closest("details") ?? null;
+    }
+    field.focus();
+    field.scrollIntoView({ block: "center" });
+  }, []);
+
+  useEffect(() => {
+    if (autoFocus || window.location.hash === "#registrar") focusBody();
+    const onHash = () => {
+      if (window.location.hash === "#registrar") focusBody();
+    };
+    window.addEventListener("hashchange", onHash);
+    window.addEventListener(OPEN_EVENT, focusBody);
+    return () => {
+      window.removeEventListener("hashchange", onHash);
+      window.removeEventListener(OPEN_EVENT, focusBody);
+    };
+  }, [autoFocus, focusBody]);
+
+  const isContact = CONTACT_TYPES.has(type);
+  const isTask = type === "tarefa";
   const suggested = suggestedNextActionAt ? toDateTimeLocal(new Date(suggestedNextActionAt)) : "";
 
   return (
     <form ref={formRef} action={action} className="flex flex-col gap-4" noValidate>
       <input type="hidden" name="leadId" value={leadId} />
-      <FormMessage status={state.status} message={state.message} />
+      <FormMessage status={state.status === "error" ? "error" : "idle"} message={state.message} />
+      <SegmentedControl
+        name="type"
+        label="Tipo de atividade"
+        value={type}
+        onChange={(value) => setType(value as ActivityKind)}
+        options={TYPES.map((t) => ({
+          value: t,
+          label: ACTIVITY_TYPE_LABELS[t],
+          icon: ACTIVITY_ICONS[t],
+        }))}
+      />
+      <TextareaField
+        name="body"
+        label={isTask ? "Detalhes" : "O que aconteceu"}
+        error={e.body}
+        rows={3}
+        placeholder={
+          isTask ? "Contexto da tarefa (opcional)" : "Resumo da conversa, combinados, objeções…"
+        }
+      />
       <div className="grid gap-4 sm:grid-cols-2">
-        <SelectField
-          name="type"
-          label="Tipo"
-          required
-          placeholder={null}
-          error={e.type}
-          options={TYPES.map((t) => ({ value: t, label: ACTIVITY_TYPE_LABELS[t] }))}
-          value={type}
-          onChange={(ev) => setType(ev.target.value as (typeof TYPES)[number])}
-        />
         {type === "reuniao" ? (
           <SelectField
             name="meetingKind"
@@ -63,33 +152,38 @@ export function ActivityForm({
           <TextField
             name="subject"
             label="Assunto"
-            required={type === "tarefa"}
+            required={isTask}
             error={e.subject}
-            placeholder={
-              type === "tarefa" ? "O que precisa ser feito" : "Resumo em poucas palavras"
-            }
+            placeholder={isTask ? "O que precisa ser feito" : "Resumo em poucas palavras"}
           />
         )}
+        {type === "reuniao" ? (
+          <TextField name="subject" label="Assunto" error={e.subject} placeholder="Opcional" />
+        ) : null}
         <TextField
           name="occurredAt"
-          label={type === "tarefa" ? "Criada em" : "Data e hora"}
+          label={isTask ? "Criada em" : "Data e hora"}
           type="datetime-local"
+          dateHint
           error={e.occurredAt}
-          defaultValue={toDateTimeLocal(new Date())}
+          defaultValue={nowLocal}
         />
-        {type === "tarefa" ? (
+        {isTask ? (
           <TextField
             name="dueAt"
             label="Vencimento"
             type="datetime-local"
+            dateHint
             required
             error={e.dueAt}
           />
         ) : (
           <TextField
+            key={`${isContact ? "contato" : "outro"}-${suggested}`}
             name="nextActionAt"
-            label="Nova próxima ação"
+            label="Próxima ação"
             type="datetime-local"
+            dateHint
             error={e.nextActionAt}
             defaultValue={isContact ? suggested : ""}
             help={
@@ -100,15 +194,30 @@ export function ActivityForm({
           />
         )}
       </div>
-      {type === "reuniao" ? (
-        <TextField name="subject" label="Assunto" error={e.subject} placeholder="Opcional" />
-      ) : null}
-      <TextareaField name="body" label="O que aconteceu" error={e.body} rows={3} />
-      <div>
-        <SubmitButton pendingLabel="Registrando...">
-          {type === "tarefa" ? "Criar tarefa" : "Registrar"}
+      <div className="flex justify-end">
+        <SubmitButton size="touch" className="md:h-9" pendingLabel="Registrando…">
+          {isTask ? "Criar tarefa" : "Registrar"}
         </SubmitButton>
       </div>
     </form>
   );
+}
+
+// Abre no desktop (≥ lg) os blocos dobrados da página (`details.crm-fold`): no celular eles
+// nascem fechados para não empurrar a linha do tempo; no desktop ficam abertos. O HTML chega
+// fechado nos dois tamanhos; este efeito roda antes da pintura nas navegações no cliente.
+export function FoldsOpenOnDesktop() {
+  useLayoutEffect(() => {
+    const query = window.matchMedia("(min-width: 64rem)");
+    const apply = () => {
+      if (!query.matches) return;
+      document.querySelectorAll<HTMLDetailsElement>("details.crm-fold").forEach((fold) => {
+        fold.open = true;
+      });
+    };
+    apply();
+    query.addEventListener("change", apply);
+    return () => query.removeEventListener("change", apply);
+  }, []);
+  return null;
 }
