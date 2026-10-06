@@ -378,4 +378,10 @@
     position: absolute;
     inset: 0;
   }
+  /* O documento rola no CRM (seção 4.2): o header sticky e a barra inferior fixa não cobrem o
+     elemento focado (WCAG 2.4.11). O html é o contêiner de rolagem, por isso :has. */
+  html:has([data-crm]) {
+    scroll-padding-top: 4rem;
+    scroll-padding-bottom: 8rem;
+  }
 }
