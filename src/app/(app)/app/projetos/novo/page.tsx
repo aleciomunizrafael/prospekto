@@ -23,7 +23,6 @@ export default async function NewProjectPage() {
   return (
     <section className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHeader
-        breadcrumb={[{ label: "Projetos", href: "/app/projetos" }]}
         title="Novo projeto"
         description="O projeto nasce em Prospecção. Os demais campos passam a ser exigidos conforme o estágio."
       />
