@@ -169,7 +169,7 @@ Lista única das perguntas levantadas pelos documentos do kickoff, deduplicada e
 | G1 | TypeScript fixado em 5.9.3 porque a tag `latest` já é 7.0.2; subir só quando o Next 16 declarar suporte | `docs/arquitetura/scaffold.md`, passo 2.5 |
 | G2 | Zod 4.6.5: confirmar na compilação o nome `z.treeifyError` usado em `src/env.ts` (alternativa: `parsed.error.issues`) | `docs/arquitetura/scaffold.md`, seção 5.2 |
 | G3 | Better Auth 1.7.7: forma recomendada de criar usuário no seed com `disableSignUp` (API interna ou inserção com hash de `better-auth/crypto`) | `docs/arquitetura/scaffold.md`, seção 5.6 |
-| G4 | Resolvida em 06/10/2026: o Neon criou o projeto em Postgres 18 (não 17) e o `pg_dump` 16 do runner recusou o servidor; o workflow `backup` agora lê a versão do servidor e instala o cliente da mesma major (repositório PGDG da imagem). Majors das actions conferidas (v7) | `docs/arquitetura/scaffold.md`, seções 5.13 e 5.14 |
+| G4 | Resolvida em 06/10/2026: o Neon criou o projeto em Postgres 18 (não 17) e o `pg_dump` 16 do runner recusou o servidor; o workflow `backup` agora lê a versão do servidor e instala o cliente da mesma major pelo repositório PGDG, adicionado no job. Majors das actions conferidas (v7) | `docs/arquitetura/scaffold.md`, seções 5.13 e 5.14 |
 | G5 | `ip_hash` em `consents` e retenção de 24 meses dependem do advogado (pergunta B3) | `docs/arquitetura/modelo-de-dados.md`, seção 3.6 |
 | G6 | Login com senha ou link mágico (pergunta D2); o scaffold usa senha | `docs/arquitetura/ADR-001-stack.md`, seção 4 |
 | G7 | Criar `docs/arquitetura/ADR-002-defaults-simulador.md` repetindo as decisões D1 e D2 com data e responsável | `docs/site/simulador-spec.md`, seção 13.1 |
