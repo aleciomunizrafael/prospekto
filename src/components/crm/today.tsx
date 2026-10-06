@@ -9,19 +9,21 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { claimLeadAction } from "@/actions/crm-leads";
 import { Button } from "@/components/ui/button";
 import { daysBetween } from "@/lib/crm/dates";
 import { formatShortDay } from "@/lib/crm/describe-sla";
 import { CRM_TIME_ZONE, calendarDateInSaoPaulo, formatBRL, formatDate } from "@/lib/crm/format";
 import { SEGMENT_LABELS } from "@/lib/crm/labels";
 import { leadCompany, stageInfo } from "@/lib/crm/lead-view";
+import { plural } from "@/lib/crm/text";
 import type { TaskRow } from "@/lib/repos/activities";
 import type { ContributionSummary } from "@/lib/repos/contributions";
 import type { LeadListRow } from "@/lib/repos/leads";
 import type { ProjectSummary } from "@/lib/repos/projects";
 import { cn } from "@/lib/utils";
+import { ClaimButton } from "./forms/claim-button";
 import { TaskCompleteButton } from "./forms/task-complete-button";
+import { DetailsCloseButton } from "./ui/details-close-button";
 import { Meter } from "./ui/meter";
 import { SlaIndicator } from "./ui/sla-indicator";
 import { StatusBadge } from "./ui/status-badge";
@@ -48,7 +50,7 @@ export const QUEUE_VISIBLE_ROWS_MOBILE = 5;
 const ROW_BUTTON_CLASS = "h-11 px-4 text-sm md:h-7 md:px-2.5 md:text-[0.8rem]";
 
 const ROW_CLASS =
-  "grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-1 md:grid-cols-[minmax(0,1fr)_16rem_auto]";
+  "grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-1.5 md:grid-cols-[minmax(0,1fr)_16rem_auto] md:py-1";
 // "Próximos 7 dias": uma linha só no celular (nome · empresa | badge · hora).
 const UPCOMING_ROW_CLASS =
   "grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-0.5 md:grid-cols-[minmax(0,1fr)_16rem_auto]";
@@ -58,10 +60,6 @@ const TIME_FORMAT = new Intl.DateTimeFormat("pt-BR", {
   minute: "2-digit",
   timeZone: CRM_TIME_ZONE,
 });
-
-function plural(n: number, singular: string, pluralForm: string): string {
-  return `${n} ${n === 1 ? singular : pluralForm}`;
-}
 
 // --- Casca comum dos blocos -------------------------------------------------------------------
 
@@ -118,23 +116,27 @@ function BlockEmpty({ children }: { children: ReactNode }) {
 
 // Nome (link) e empresa/segmento numa linha que trunca no fim (o nome fica inteiro; a empresa é o
 // que se corta). `metaOnMobile=false` esconde a empresa no celular (ela vai para o segundo andar).
+// `wrapOnMobile` deixa o texto quebrar em mais de uma linha abaixo de md (fila "Precisa de ação
+// agora": o assunto da tarefa precisa ser lido inteiro, seção 7.2).
 function Who({
   icon: Icon,
   href,
   title,
   meta,
   metaOnMobile = true,
+  wrapOnMobile = false,
 }: {
   icon: LucideIcon;
   href: string | null;
   title: string;
   meta?: string | null;
   metaOnMobile?: boolean;
+  wrapOnMobile?: boolean;
 }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
       <Icon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 truncate text-sm">
+      <span className={cn("min-w-0 text-sm", wrapOnMobile ? "md:truncate" : "truncate")}>
         {href ? (
           <Link href={href} className="font-medium hover:underline">
             {title}
@@ -191,17 +193,6 @@ function TaskDue({ dueAt, now }: { dueAt: Date | null; now: Date }) {
   );
 }
 
-function ClaimButton({ leadId }: { leadId: string }) {
-  return (
-    <form action={claimLeadAction} className="inline-flex">
-      <input type="hidden" name="leadId" value={leadId} />
-      <Button type="submit" variant="outline" size="sm" className={ROW_BUTTON_CLASS}>
-        Assumir
-      </Button>
-    </form>
-  );
-}
-
 function RegisterContactLink({ leadId, name }: { leadId: string; name: string }) {
   return (
     <Button
@@ -235,10 +226,11 @@ function QueueRow({ item, now, className }: { item: QueueItem; now: Date; classN
           title={task.subject}
           meta={task.leadName}
           metaOnMobile={false}
+          wrapOnMobile
         />
-        <div className={STATE_CLASS}>
+        <div className={cn(STATE_CLASS, "flex-wrap gap-y-0.5")}>
           {task.leadName ? (
-            <span className="crm-meta min-w-0 truncate md:hidden">{task.leadName} ·</span>
+            <span className="crm-meta min-w-0 md:hidden">{task.leadName} ·</span>
           ) : null}
           <TaskDue dueAt={task.dueAt} now={now} />
         </div>
@@ -257,8 +249,10 @@ function QueueRow({ item, now, className }: { item: QueueItem; now: Date; classN
         href={`/app/leads/${lead.id}`}
         title={lead.name}
         meta={leadCompany(lead) ?? SEGMENT_LABELS[lead.segment]}
+        wrapOnMobile
       />
-      <div className={STATE_CLASS}>
+      {/* A frase do prazo quebra em duas linhas quando não cabe (nada de cortar "prazo: 1 dia…"). */}
+      <div className={cn(STATE_CLASS, "flex-wrap gap-y-0.5")}>
         <StatusBadge
           kind="stage"
           value={lead.stage}
@@ -270,7 +264,6 @@ function QueueRow({ item, now, className }: { item: QueueItem; now: Date; classN
           nextActionAt={reason === "new" ? null : lead.nextActionAt}
           now={now}
           stage={lead}
-          truncate
         />
       </div>
       <div className={ACTION_CLASS}>
@@ -282,7 +275,7 @@ function QueueRow({ item, now, className }: { item: QueueItem; now: Date; classN
         {lead.ownerUserId ? (
           <RegisterContactLink leadId={lead.id} name={lead.name} />
         ) : (
-          <ClaimButton leadId={lead.id} />
+          <ClaimButton leadId={lead.id} className={ROW_BUTTON_CLASS} />
         )}
       </div>
     </li>
@@ -329,12 +322,13 @@ export function ActionQueue({
         ))}
       </ul>
       {hasDetails ? (
+        // O <summary> "ver todos" precisa vir antes das linhas extras; aberto, ele some e o
+        // "mostrar menos" aparece depois da última linha (DetailsCloseButton fecha o <details>).
         <details className={cn("group border-t border-divider", rest.length === 0 && "md:hidden")}>
-          <summary className="flex min-h-11 cursor-pointer list-none items-center px-4 text-sm font-medium text-primary hover:underline [&::-webkit-details-marker]:hidden">
-            <span className="group-open:hidden">ver todos os {items.length} ›</span>
-            <span className="hidden group-open:inline">mostrar menos</span>
+          <summary className="flex min-h-11 cursor-pointer list-none items-center px-4 text-sm font-medium text-primary group-open:hidden hover:underline [&::-webkit-details-marker]:hidden">
+            ver todos os {items.length} ›
           </summary>
-          <ul className="divide-y divide-divider border-t border-divider">
+          <ul className="divide-y divide-divider">
             {mobileOverflow.map((item) => (
               <QueueRow key={queueItemKey(item)} item={item} now={now} className="md:hidden" />
             ))}
@@ -342,6 +336,9 @@ export function ActionQueue({
               <QueueRow key={queueItemKey(item)} item={item} now={now} />
             ))}
           </ul>
+          <DetailsCloseButton className="flex min-h-11 w-full cursor-pointer items-center border-t border-divider px-4 text-sm font-medium text-primary hover:underline">
+            mostrar menos
+          </DetailsCloseButton>
         </details>
       ) : null}
     </Block>
@@ -475,26 +472,24 @@ export function ContributionsPreview({
       ) : (
         <ul className="divide-y divide-divider">
           {rows.map((c) => (
+            // Dois andares: patrocinador | valor; "→ projeto · data · status" embaixo, quebrando
+            // quando não cabe (o nome do projeto nunca é cortado).
             <li
               key={c.id}
-              className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-1 md:grid-cols-[minmax(0,1fr)_auto_auto]"
+              className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-1.5"
             >
               <span className="min-w-0 truncate text-sm">
                 <Link href={`/app/aportes/${c.id}`} className="font-medium hover:underline">
                   {c.leadName}
                 </Link>
-                <span className="crm-meta tabular-nums md:hidden">
-                  {" "}
-                  · {formatDate(c.expectedCloseAt)}
-                </span>
-                <span className="crm-meta"> → {c.projectName}</span>
               </span>
-              <span className="hidden items-center gap-2 md:flex">
-                <span className="crm-meta tabular-nums">{formatDate(c.expectedCloseAt)}</span>
-                <StatusBadge kind="contribution" value={c.status} />
-              </span>
-              <span className="text-right text-sm font-medium tabular-nums">
+              <span className="row-span-2 self-center text-right text-sm font-medium tabular-nums">
                 {formatBRL(c.proposedAmount)}
+              </span>
+              <span className="crm-meta col-start-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="min-w-0 break-words">→ {c.projectName}</span>
+                <span className="tabular-nums">{formatDate(c.expectedCloseAt)}</span>
+                <StatusBadge kind="contribution" value={c.status} />
               </span>
             </li>
           ))}

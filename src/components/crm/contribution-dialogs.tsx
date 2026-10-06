@@ -119,6 +119,7 @@ export function NewContributionDialog({
       action={createContributionAction}
       submitLabel="Criar proposta"
       pendingLabel="Criando…"
+      successMessage="Proposta criada."
       variant={variant}
       size={size}
       wide
@@ -211,6 +212,7 @@ export function SignTermDialog({
       action={signTermAction}
       submitLabel="Registrar termo"
       pendingLabel="Registrando…"
+      successMessage="Termo registrado."
       variant="default"
       disabled={blockers.length > 0 && !onlyOrgMissing}
     >
@@ -255,6 +257,7 @@ export function ConfirmDepositDialog({
       action={confirmDepositAction}
       submitLabel="Confirmar depósito"
       pendingLabel="Confirmando…"
+      successMessage="Depósito confirmado."
       variant="default"
       disabled={blockers.length > 0}
     >
@@ -288,6 +291,7 @@ export function IssueReceiptDialog({ contributionId, blockers }: ContributionSte
       action={issueReceiptAction}
       submitLabel="Registrar recibo"
       pendingLabel="Registrando…"
+      successMessage="Recibo registrado."
       variant="default"
       disabled={blockers.length > 0}
     >
@@ -314,6 +318,7 @@ export function SendToAccountantDialog({ contributionId, blockers }: Contributio
       action={sendReceiptToAccountantAction}
       submitLabel="Registrar envio"
       pendingLabel="Registrando…"
+      successMessage="Envio ao contador registrado."
       disabled={blockers.length > 0}
     >
       <HiddenField name="contributionId" value={contributionId} />
@@ -352,6 +357,7 @@ export function RecordCommissionDialog({
       action={recordCommissionAction}
       submitLabel="Registrar comissão"
       pendingLabel="Registrando…"
+      successMessage="Comissão registrada."
       disabled={blockers.length > 0}
       size={size}
       stayOpenOnSuccess
@@ -428,6 +434,7 @@ export function CancelContributionDialog({
       action={cancelContributionAction}
       submitLabel="Cancelar aporte"
       pendingLabel="Cancelando…"
+      successMessage="Aporte cancelado."
       submitVariant="destructive"
       variant="ghost"
       alert

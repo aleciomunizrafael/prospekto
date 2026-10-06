@@ -89,7 +89,7 @@ function DropdownMenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "group/dropdown-menu-item relative flex h-9 cursor-default items-center gap-2 rounded-md px-2 text-sm outline-hidden select-none data-highlighted:bg-surface-2 focus:bg-surface-2 data-inset:pl-7 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-[variant=destructive]:*:[svg]:text-destructive",
+        "group/dropdown-menu-item relative flex h-11 cursor-default md:h-9 items-center gap-2 rounded-md px-2 text-sm outline-hidden select-none data-highlighted:bg-primary-soft data-highlighted:text-primary data-highlighted:ring-2 data-highlighted:ring-ring data-highlighted:ring-inset focus:bg-primary-soft focus:text-primary focus:ring-2 focus:ring-ring focus:ring-inset data-inset:pl-7 data-[variant=destructive]:text-destructive data-[variant=destructive]:data-highlighted:bg-destructive/10 data-[variant=destructive]:data-highlighted:text-destructive data-[variant=destructive]:data-highlighted:ring-destructive data-[variant=destructive]:focus:bg-destructive/10 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:focus:ring-destructive dark:data-[variant=destructive]:focus:bg-destructive/20 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-[variant=destructive]:*:[svg]:text-destructive",
         className
       )}
       {...props}
@@ -114,7 +114,7 @@ function DropdownMenuSubTrigger({
       data-slot="dropdown-menu-sub-trigger"
       data-inset={inset}
       className={cn(
-        "flex h-9 cursor-default items-center gap-2 rounded-md px-2 text-sm outline-hidden select-none data-highlighted:bg-surface-2 focus:bg-surface-2 data-inset:pl-7 data-popup-open:bg-surface-2 data-open:bg-surface-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "flex h-11 cursor-default md:h-9 items-center gap-2 rounded-md px-2 text-sm outline-hidden select-none data-highlighted:bg-primary-soft data-highlighted:text-primary data-highlighted:ring-2 data-highlighted:ring-ring data-highlighted:ring-inset focus:bg-primary-soft focus:text-primary focus:ring-2 focus:ring-ring focus:ring-inset data-inset:pl-7 data-popup-open:bg-surface-2 data-open:bg-surface-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
@@ -160,7 +160,7 @@ function DropdownMenuCheckboxItem({
       data-slot="dropdown-menu-checkbox-item"
       data-inset={inset}
       className={cn(
-        "relative flex h-9 cursor-default items-center gap-2 rounded-md pr-8 pl-2 text-sm outline-hidden select-none data-highlighted:bg-surface-2 focus:bg-surface-2 data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "relative flex h-11 cursor-default md:h-9 items-center gap-2 rounded-md pr-8 pl-2 text-sm outline-hidden select-none data-highlighted:bg-primary-soft data-highlighted:text-primary data-highlighted:ring-2 data-highlighted:ring-ring data-highlighted:ring-inset focus:bg-primary-soft focus:text-primary focus:ring-2 focus:ring-ring focus:ring-inset data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       checked={checked}
@@ -202,7 +202,7 @@ function DropdownMenuRadioItem({
       data-slot="dropdown-menu-radio-item"
       data-inset={inset}
       className={cn(
-        "relative flex h-9 cursor-default items-center gap-2 rounded-md pr-8 pl-2 text-sm outline-hidden select-none data-highlighted:bg-surface-2 focus:bg-surface-2 data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "relative flex h-11 cursor-default md:h-9 items-center gap-2 rounded-md pr-8 pl-2 text-sm outline-hidden select-none data-highlighted:bg-primary-soft data-highlighted:text-primary data-highlighted:ring-2 data-highlighted:ring-ring data-highlighted:ring-inset focus:bg-primary-soft focus:text-primary focus:ring-2 focus:ring-ring focus:ring-inset data-inset:pl-7 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}

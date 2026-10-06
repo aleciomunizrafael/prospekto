@@ -3,7 +3,7 @@
 // seções (crm-design-system.md, seção 7.8): Identificação, Aprovação (exigida em Autorizado),
 // Captação e texto público, Links e responsável. "R$" e "%" ficam fixos dentro da caixa; a prévia
 // do endereço público acompanha o que se digita.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UFS } from "@/lib/domain/enums";
 import { MECHANISM_LABELS, optionsFrom } from "@/lib/crm/enum-labels";
 import { slugify } from "@/lib/crm/format";
@@ -17,6 +17,7 @@ import {
   TextareaField,
   type Option,
 } from "./project-forms/action-form";
+import { FoldsOpenOnDesktop } from "./ui/folds-open-on-desktop";
 import { FormSection } from "./ui/form-section";
 
 export type ProjectFormValues = {
@@ -77,18 +78,8 @@ function SlugPreview({ name, slug }: { name: string; slug: string }) {
 }
 
 // Seções dobráveis fechadas no celular e abertas no desktop (seção 7.8): o HTML sai fechado e,
-// antes da primeira pintura após a hidratação, abre acima de 960 px.
+// antes da primeira pintura após a hidratação, abre a partir de md (FoldsOpenOnDesktop).
 const FOLD_CLASS = "project-fold";
-
-function FoldsOpenOnDesktop() {
-  useLayoutEffect(() => {
-    if (!window.matchMedia("(min-width: 60rem)").matches) return;
-    document.querySelectorAll<HTMLDetailsElement>(`details.${FOLD_CLASS}`).forEach((fold) => {
-      fold.open = true;
-    });
-  }, []);
-  return null;
-}
 
 export function ProjectFields({
   project,
@@ -114,7 +105,7 @@ export function ProjectFields({
   return (
     <>
       {project?.id ? <HiddenField name="projectId" value={project.id} /> : null}
-      {edit ? null : <FoldsOpenOnDesktop />}
+      {edit ? null : <FoldsOpenOnDesktop selector={`details.${FOLD_CLASS}`} minWidth="48rem" />}
 
       <FormSection title="Identificação" contentClassName={grid}>
         <SelectField

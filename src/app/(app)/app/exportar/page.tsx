@@ -56,7 +56,7 @@ export default async function ExportPage() {
                 variant="outline"
                 size="sm"
                 nativeButton={false}
-                className="shrink-0"
+                className="h-11 shrink-0 md:h-7"
                 render={
                   <a
                     href={`/app/exportar/${table}`}

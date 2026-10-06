@@ -10,6 +10,8 @@ import {
   useContext,
   useEffect,
   useId,
+  useImperativeHandle,
+  useState,
   type ComponentProps,
   type FormEventHandler,
   type ReactNode,
@@ -46,8 +48,9 @@ type ActionFormProps = {
   onChange?: FormEventHandler<HTMLFormElement>;
   // Botão secundário (ex.: "Cancelar" que fecha o diálogo) à esquerda do envio.
   secondaryAction?: ReactNode;
-  // "dialog": rodapé fixo em surface-2 (DialogFooter); "plain": só a linha de botões.
-  footer?: "plain" | "dialog";
+  // "dialog": rodapé fixo em surface-2 (DialogFooter); "plain": só a linha de botões; "none": sem
+  // rodapé (o chamador põe o próprio botão de envio, ex.: FormActions do "Novo projeto").
+  footer?: "plain" | "dialog" | "none";
   formRef?: Ref<HTMLFormElement>;
   id?: string;
 };
@@ -70,11 +73,26 @@ export function ActionForm({
   id,
 }: ActionFormProps) {
   const [state, formAction, pending] = useActionState(action, idleState);
+  // O <form> montado, em estado (não em ref) para poder ser lido na renderização; `formRef` do
+  // chamador recebe o mesmo elemento.
+  const [formEl, setFormEl] = useState<HTMLFormElement | null>(null);
+  useImperativeHandle(formRef, () => formEl as HTMLFormElement, [formEl]);
   useEffect(() => {
     if (state.status === "ok") onSuccess?.(state);
     // onSuccess é estável o bastante para o uso aqui (fechar diálogo); o estado muda a cada envio.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
+  // O resumo de erros não repete o que já aparece sob um campo: só entram as chaves sem controle
+  // com aquele `name` no formulário (o estado de erro só existe depois do envio, com o <form> já
+  // montado).
+  const summaryErrors =
+    state.status === "error" && state.fieldErrors
+      ? Object.fromEntries(
+          Object.entries(state.fieldErrors).filter(
+            ([key]) => !formEl || !formEl.elements.namedItem(key),
+          ),
+        )
+      : undefined;
   const submit = (
     <Button
       type="submit"
@@ -99,25 +117,25 @@ export function ActionForm({
     <FormStateContext.Provider value={state}>
       <form
         id={id}
-        ref={formRef}
+        ref={setFormEl}
         action={formAction}
         onChange={onChange}
         className={cn("flex flex-col gap-4", className)}
         noValidate
       >
         {children}
-        <ActionMessage state={state} showSuccess={showSuccess} />
+        <ActionMessage state={state} showSuccess={showSuccess} summaryErrors={summaryErrors} />
         {footer === "dialog" ? (
           <DialogFooter>
             {secondaryAction}
             {submit}
           </DialogFooter>
-        ) : (
+        ) : footer === "plain" ? (
           <div className="flex items-center justify-end gap-2">
             {secondaryAction}
             {submit}
           </div>
-        )}
+        ) : null}
       </form>
     </FormStateContext.Provider>
   );
@@ -126,15 +144,19 @@ export function ActionForm({
 export function ActionMessage({
   state,
   showSuccess = true,
+  summaryErrors,
 }: {
   state: ActionState;
   showSuccess?: boolean;
+  // Erros de campo a listar no resumo (padrão: todos); o ActionForm passa só os sem campo.
+  summaryErrors?: Record<string, string>;
 }) {
   if (state.status === "error") {
+    const listed = summaryErrors ?? state.fieldErrors;
     return (
       <div
         role="alert"
-        className="rounded-lg border border-destructive/30 bg-error-soft px-3 py-2 text-sm text-destructive"
+        className="min-w-0 rounded-lg border border-destructive/30 bg-error-soft px-3 py-2 text-sm break-words text-destructive"
       >
         <p className="font-medium">{state.message}</p>
         {state.missing?.length ? (
@@ -144,9 +166,9 @@ export function ActionMessage({
             ))}
           </ul>
         ) : null}
-        {state.fieldErrors && !state.missing?.length ? (
+        {listed && Object.keys(listed).length > 0 && !state.missing?.length ? (
           <ul className="mt-1 list-disc pl-5">
-            {Object.entries(state.fieldErrors).map(([k, v]) => (
+            {Object.entries(listed).map(([k, v]) => (
               <li key={k}>{v}</li>
             ))}
           </ul>
@@ -193,7 +215,7 @@ type ShellProps = {
 
 function Shell({ label, required, help, error, id, className, children, after }: ShellProps) {
   return (
-    <div className={cn("flex flex-col gap-1.5", className)}>
+    <div className={cn("flex min-w-0 flex-col gap-1.5", className)}>
       <label htmlFor={id} className="text-sm font-medium">
         {label}
         {required ? (
@@ -211,7 +233,11 @@ function Shell({ label, required, help, error, id, className, children, after }:
       {children}
       {after}
       {error ? (
-        <p id={`${id}-erro`} role="alert" className="text-destructive text-sm font-medium">
+        <p
+          id={`${id}-erro`}
+          role="alert"
+          className="text-destructive text-sm font-medium break-words"
+        >
           {error}
         </p>
       ) : null}

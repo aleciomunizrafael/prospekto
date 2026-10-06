@@ -115,8 +115,7 @@ describe("tokens do CRM: contraste (WCAG 2.x)", () => {
     expect(light.input).toBe("#d9d6cf");
   });
 
-  it("bloco do CRM está presente (variante scripting, classes crm-*, row-link)", () => {
-    expect(css).toMatch(/@custom-variant scripting \(@media \(scripting: enabled\)\);/);
+  it("bloco do CRM está presente (classes crm-*, row-link)", () => {
     for (const cls of [
       ".crm-h1",
       ".crm-h2",

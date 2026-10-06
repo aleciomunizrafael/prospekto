@@ -36,10 +36,12 @@ function hrefFor(params: { q?: string; tipo?: string }): string {
   return qs ? `${BASE}?${qs}` : BASE;
 }
 
+// Traço com o motivo só para leitor de tela (aria-label não vale em <span> sem papel).
 function Dash({ label }: { label: string }) {
   return (
-    <span className="text-muted-foreground" aria-label={label}>
-      —
+    <span className="text-muted-foreground">
+      <span aria-hidden="true">—</span>
+      <span className="sr-only">{label}</span>
     </span>
   );
 }

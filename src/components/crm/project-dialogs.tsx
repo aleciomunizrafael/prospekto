@@ -4,7 +4,7 @@
 // destrutiva com motivo), "Publicar no site" (aviso da regra de publicação), "Despublicar"
 // (confirmação) e "Editar" (folha lateral). Também as ações do cabeçalho no desktop e a barra
 // de ações do celular, que montam os mesmos diálogos sem gatilho e os abrem pelos menus.
-import { Ellipsis, ExternalLink } from "lucide-react";
+import { Circle, Ellipsis, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isValidElement, useId, useState, type ReactNode } from "react";
@@ -39,11 +39,11 @@ import {
   optionsFrom,
   stageLabel,
 } from "@/lib/crm/enum-labels";
+import { daysInStageText } from "@/lib/crm/text";
 import { SubmitButton } from "./forms/submit-button";
 import { ActionDialog } from "./project-forms/action-dialog";
 import {
   ActionForm,
-  Blockers,
   DateField,
   HiddenField,
   MoneyField,
@@ -57,6 +57,7 @@ import { ActionBarMobile, type ActionBarMoreItem } from "./ui/action-bar-mobile"
 import { Callout } from "./ui/callout";
 import { ConfirmDialog } from "./ui/confirm-dialog";
 import { FormActions } from "./ui/form-actions";
+import { StatusBadge } from "./ui/status-badge";
 
 export type MoveDestination = {
   to: string;
@@ -74,7 +75,10 @@ type Openable = {
 
 type MoveProps = {
   projectId: string;
+  projectName: string;
   stage: string;
+  // Dias desde a entrada no estágio atual ("Hoje em ▣ Captando (há 3 dias)").
+  daysInStage: number;
   destinations: MoveDestination[];
   users: Option[];
   // Destino já selecionado ao abrir (o NextStepCard passa o próximo estágio).
@@ -86,6 +90,13 @@ const DESTINATION_SUFFIX: Record<MoveDestination["kind"], string> = {
   next: "próximo",
   back: "voltar",
   return: "retorno previsto",
+};
+
+// Ajuda do destino, igual ao "Mover para" do lead (seção 7.12).
+const DESTINATION_HELP: Record<MoveDestination["kind"], string> = {
+  next: "Próximo estágio na ordem do pipeline.",
+  back: "Volta um estágio, só para corrigir um registro errado.",
+  return: "Retorno previsto no pipeline.",
 };
 
 // Campo editável para cada item de "o que falta" devolvido por collectProjectMissing.
@@ -128,9 +139,14 @@ function MissingFieldInput({ item, users }: { item: string; users: Option[] }) {
   }
 }
 
+// "Mover para" do projeto, no mesmo padrão do lead (seção 7.12): título com o nome, "Hoje em" com
+// o estágio e o tempo nele, ajuda do destino e o que falta como checklist, com os campos logo
+// abaixo para preencher ali mesmo.
 export function MoveProjectStageDialog({
   projectId,
+  projectName,
   stage,
+  daysInStage,
   destinations,
   users,
   defaultTarget,
@@ -140,15 +156,21 @@ export function MoveProjectStageDialog({
   const [to, setTo] = useState(initial);
   const dest = destinations.find((d) => d.to === to);
   if (destinations.length === 0) return null;
-  const blockedId = `mover-falta-${projectId}`;
   return (
     <ActionDialog
       triggerLabel="Mover para"
-      title={`Mover de ${stageLabel(stage)}`}
-      description="Só o próximo estágio, os retornos previstos e voltar um estágio (para corrigir registro)."
+      title={`Mover ${projectName} para outro estágio`}
+      description={
+        <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+          <span>Hoje em</span>
+          <StatusBadge kind="stage" value={stage} pipeline="projetos" />
+          <span>({daysInStageText(daysInStage)})</span>
+        </span>
+      }
       action={moveProjectStageAction}
       submitLabel={dest ? `Mover para ${stageLabel(dest.to)}` : "Mover"}
       pendingLabel="Movendo…"
+      successMessage={dest ? `Projeto movido para ${stageLabel(dest.to)}.` : "Estágio atualizado."}
       variant="default"
       trigger={trigger}
     >
@@ -158,6 +180,7 @@ export function MoveProjectStageDialog({
         label="Destino"
         required
         placeholder="Escolha o destino"
+        help={dest ? DESTINATION_HELP[dest.kind] : undefined}
         options={destinations.map((d) => ({
           value: d.to,
           label: `${stageLabel(d.to)} · ${DESTINATION_SUFFIX[d.kind]}`,
@@ -167,11 +190,23 @@ export function MoveProjectStageDialog({
       />
       {dest?.missing.length ? (
         <>
-          <Blockers
-            id={blockedId}
-            intro={`Para entrar em ${stageLabel(dest.to)} o projeto precisa de:`}
-            items={dest.missing}
-          />
+          <div className="rounded-lg border border-border bg-surface-2 p-3 text-sm">
+            <p className="font-medium">Para entrar em {stageLabel(dest.to)} o projeto precisa de</p>
+            <ul className="mt-2 flex flex-col gap-1">
+              {dest.missing.map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <Circle
+                    className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <span>
+                    <span className="sr-only">falta: </span>
+                    {item}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
           {dest.missing.map((item) => (
             <MissingFieldInput key={item} item={item} users={users} />
           ))}
@@ -226,6 +261,7 @@ export function ArchiveProjectDialog({
       tone="danger"
       action={moveProjectStageAction}
       requireField="lostReason"
+      onSuccess={() => toast.success("Projeto arquivado.")}
     >
       <HiddenField name="projectId" value={projectId} />
       <HiddenField name="to" value="arquivado" />
@@ -292,6 +328,7 @@ export function PublishProjectDialog({
       action={publishProjectAction}
       submitLabel="Publicar"
       pendingLabel="Publicando…"
+      successMessage="Projeto publicado no site."
       variant="outline"
       trigger={trigger}
       open={open}
@@ -334,14 +371,12 @@ export function UnpublishProjectDialog({
       confirmLabel="Despublicar"
       pendingLabel="Retirando…"
       action={unpublishProjectAction}
+      onSuccess={() => toast.success("Projeto retirado do site.")}
     >
       <HiddenField name="projectId" value={projectId} />
     </ConfirmDialog>
   );
 }
-
-// Mantido para quem ainda importa o nome antigo (a página usa o diálogo acima).
-export const UnpublishProjectForm = UnpublishProjectDialog;
 
 export function NewProjectForm({ proponents, users }: { proponents: Option[]; users: Option[] }) {
   return (
@@ -349,7 +384,8 @@ export function NewProjectForm({ proponents, users }: { proponents: Option[]; us
       action={createProjectAction}
       submitLabel="Criar projeto"
       pendingLabel="Criando…"
-      className="gap-6 [&>div:last-child]:hidden"
+      className="gap-6"
+      footer="none"
     >
       <ProjectFields proponents={proponents} users={users} />
       <FormActions
@@ -361,7 +397,9 @@ export function NewProjectForm({ proponents, users }: { proponents: Option[]; us
         }
         className="mx-0 rounded-xl border border-border md:mx-0"
       >
-        <SubmitButton pendingLabel="Criando…">Criar projeto</SubmitButton>
+        <SubmitButton size="touch" className="md:h-9" pendingLabel="Criando…">
+          Criar projeto
+        </SubmitButton>
       </FormActions>
     </ActionForm>
   );
@@ -431,13 +469,11 @@ export function EditProjectSheet({
   );
 }
 
-// Compatibilidade com o nome antigo: o formulário de edição dentro da folha.
-export const EditProjectForm = EditProjectSheet;
-
 export type ProjectActionsProps = EditProps & {
   projectId: string;
   slug: string;
   stage: string;
+  daysInStage: number;
   publishedOnSite: boolean;
   destinations: MoveDestination[];
   // Campos que faltam para arquivar (missingForProjectMove(project, "arquivado")).
@@ -515,6 +551,7 @@ export function ProjectActionBar({
   projectId,
   slug,
   stage,
+  daysInStage,
   publishedOnSite,
   destinations,
   archiveMissing,
@@ -542,7 +579,9 @@ export function ProjectActionBar({
     destinations.length > 0 ? (
       <MoveProjectStageDialog
         projectId={projectId}
+        projectName={project.name ?? "o projeto"}
         stage={stage}
+        daysInStage={daysInStage}
         destinations={destinations}
         users={users}
         trigger={

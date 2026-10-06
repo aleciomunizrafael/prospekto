@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 
 // Rodapé fixo de formulário longo (crm-design-system.md, seção 5.2): fica acima da barra inferior
 // no celular (`bottom-20`) e no fim do card no desktop. `note` ("* obrigatório") à esquerda.
+// Alvos de 44 px no celular: "Cancelar" já vem assim; o botão de envio em `children` deve usar
+// `size="touch" className="md:h-9"` (SubmitButton).
 export function FormActions({
   children,
   cancelHref,
@@ -27,7 +29,13 @@ export function FormActions({
     >
       {note ? <span className="crm-meta mr-auto">{note}</span> : null}
       {cancelHref ? (
-        <Button variant="ghost" nativeButton={false} render={<Link href={cancelHref} />}>
+        <Button
+          variant="ghost"
+          size="touch"
+          className="md:h-8"
+          nativeButton={false}
+          render={<Link href={cancelHref} />}
+        >
           {cancelLabel}
         </Button>
       ) : null}

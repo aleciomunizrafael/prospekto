@@ -8,7 +8,6 @@ import { isInitialStage, isTerminalStage, stageSla, type Pipeline } from "@/lib/
 import type { ContributionStep } from "@/lib/repos/contributions";
 import { daysBetween } from "./dates";
 import { describeSla, formatShortDay, type SlaTone } from "./describe-sla";
-import { CONTRIBUTION_STATUS_LABELS } from "./enum-labels";
 import { calendarDateInSaoPaulo, diffCalendarDays, formatBRL, formatDate } from "./format";
 import { LOST_REASON_LABELS, stageLabel } from "./labels";
 import { stageInfo } from "./lead-view";
@@ -427,8 +426,4 @@ export function nextStepForProject(
     reason: note ? `Ritmo: ${note}` : "Sem passo pendente.",
     tone: "info",
   };
-}
-
-export function contributionStatusLabel(status: string): string {
-  return (CONTRIBUTION_STATUS_LABELS as Record<string, string>)[status] ?? status;
 }

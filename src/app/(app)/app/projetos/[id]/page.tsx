@@ -28,8 +28,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBRL, formatCalendarDate, formatDateTime } from "@/lib/crm/format";
 import { mechanismLabel, stageLabel } from "@/lib/crm/enum-labels";
+import { daysBetween } from "@/lib/crm/dates";
 import { nextStepForProject, type NextStep } from "@/lib/crm/next-step";
 import { PROJECT_ALERT_TONES } from "@/lib/crm/status-tones";
+import { daysRemainingText, formatKpiBRL } from "@/lib/crm/text";
 import { allowedContributionMechanisms } from "@/lib/domain/mechanisms";
 import { STAGES, isStageOf, isTerminalStage, stageIndex } from "@/lib/domain/pipelines";
 import { listActivities } from "@/lib/repos/activities";
@@ -44,11 +46,6 @@ export const metadata: Metadata = { title: "Projeto" };
 // Detalhe do projeto (crm-design-system.md, seção 7.7): cabeçalho com estágio e alertas, cinco
 // números, "o que eu faço agora?", aportes em uma linha cada, linha do tempo humanizada e a
 // lateral com dados, comissão e publicação.
-const KPI_BRL = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  maximumFractionDigits: 0,
-});
 const PERCENT = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
 
 // Destinos do "Mover para": próximo estágio, retorno previsto (encerrado -> elaboração,
@@ -64,13 +61,6 @@ function destinationsFor(stage: string): { to: string; kind: MoveDestination["ki
   if (stage === "arquivado") out.push({ to: "prospeccao", kind: "return" });
   if (i > 0 && stage !== "arquivado") out.push({ to: order[i - 1], kind: "back" });
   return out;
-}
-
-function daysText(days: number | null): string {
-  if (days == null) return "";
-  if (days < 0) return days === -1 ? "vencido há 1 dia" : `vencido há ${-days} dias`;
-  if (days === 0) return "vence hoje";
-  return days === 1 ? "1 dia restante" : `${days} dias restantes`;
 }
 
 function externalLink(href: string | null | undefined, label: string): ReactNode {
@@ -134,9 +124,12 @@ export default async function ProjectPage({ params }: PageProps<"/app/projetos/[
   const raisedAlert = project.alerts.includes("captacao");
   const canPublish = project.stage === "captando";
 
+  const daysInStage = Math.max(0, daysBetween(project.stageEnteredAt, now));
   const moveProps = {
     projectId: project.id,
+    projectName: project.name,
     stage: project.stage,
+    daysInStage,
     destinations,
     users: userOptions,
   };
@@ -166,6 +159,7 @@ export default async function ProjectPage({ params }: PageProps<"/app/projetos/[
     projectId: project.id,
     slug: project.slug,
     stage: project.stage,
+    daysInStage,
     publishedOnSite: project.publishedOnSite,
     destinations,
     archiveMissing:
@@ -264,11 +258,8 @@ export default async function ProjectPage({ params }: PageProps<"/app/projetos/[
   const header = (
     <>
       <PageHeader
-        breadcrumb={[{ label: "Projetos", href: "/app/projetos" }]}
         eyebrow={`${project.proponentName} · ${mechanismLabel(project.mechanism)}`}
         title={project.name}
-        backHref="/app/projetos"
-        backLabel="Projetos"
         meta={
           <>
             <StatusBadge kind="stage" pipeline="projetos" value={project.stage} size="md" />
@@ -295,12 +286,12 @@ export default async function ProjectPage({ params }: PageProps<"/app/projetos/[
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <StatCard
           label="Aprovado"
-          value={project.approvedAmount == null ? "—" : KPI_BRL.format(project.approvedAmount)}
+          value={project.approvedAmount == null ? "—" : formatKpiBRL(project.approvedAmount)}
           hint={project.approvedAmount == null ? "ainda sem valor aprovado" : undefined}
         />
         <StatCard
           label="Captado"
-          value={KPI_BRL.format(project.raisedAmount)}
+          value={formatKpiBRL(project.raisedAmount)}
           tone={raisedAlert ? "warning" : "neutral"}
           extra={
             project.approvedAmount ? (
@@ -318,22 +309,22 @@ export default async function ProjectPage({ params }: PageProps<"/app/projetos/[
         />
         <StatCard
           label="Saldo a captar"
-          value={project.balance == null ? "—" : KPI_BRL.format(project.balance)}
+          value={project.balance == null ? "—" : formatKpiBRL(project.balance)}
         />
         <StatCard
           label="Prazo de captação"
           value={formatCalendarDate(project.fundraisingDeadline) || "—"}
           hint={
             project.fundraisingDeadline
-              ? `${daysText(project.daysRemaining)}${deadlineAlert ? " · menos de 6 meses" : ""}`
+              ? `${daysRemainingText(project.daysRemaining)}${deadlineAlert ? " · menos de 6 meses" : ""}`
               : "sem prazo informado"
           }
           tone={deadlineOverdue ? "danger" : deadlineAlert ? "warning" : "neutral"}
         />
         <StatCard
           label="Comissão"
-          value={KPI_BRL.format(project.commissionTotal)}
-          hint={fee != null ? `de ${KPI_BRL.format(fee)} da rubrica` : "rubrica não informada"}
+          value={formatKpiBRL(project.commissionTotal)}
+          hint={fee != null ? `de ${formatKpiBRL(fee)} da rubrica` : "rubrica não informada"}
           tone={commissionOver ? "danger" : "neutral"}
           className="col-span-2 md:col-span-1"
         />

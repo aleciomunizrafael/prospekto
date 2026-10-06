@@ -247,8 +247,9 @@ const ORG_COLUMNS: Column<OrganizationSummary>[] = [
       o.cnpj ? (
         <span className="crm-code">{formatCnpj(o.cnpj)}</span>
       ) : (
-        <span className="text-muted-foreground" aria-label="sem CNPJ">
-          —
+        <span className="text-muted-foreground">
+          <span aria-hidden="true">—</span>
+          <span className="sr-only">sem CNPJ</span>
         </span>
       ),
   },

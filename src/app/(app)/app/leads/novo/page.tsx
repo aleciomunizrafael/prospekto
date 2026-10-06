@@ -13,8 +13,6 @@ export default async function NewLeadPage() {
       <PageHeader
         title="Novo lead"
         description="Para prospecção ativa, indicação ou evento. Se o e-mail já existir no mesmo segmento, o lead existente é atualizado."
-        backHref="/app/leads"
-        backLabel="Leads"
       />
       <LeadCreateForm />
     </div>

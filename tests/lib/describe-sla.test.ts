@@ -156,8 +156,10 @@ describe("describeSla: frases humanas de prazo", () => {
     expect(describeStageDeadline({ pipeline: "municipios", stage: "contrato" }, now)).toBe(
       "30 dias",
     );
-    expect(describeStageDeadline({ pipeline: "alunos", stage: "lista_espera" }, now)).toBe(
-      "automático",
+    // Prazo zero ("automático") não é um prazo a citar: a frase sai sem "(prazo: …)".
+    expect(describeStageDeadline({ pipeline: "alunos", stage: "lista_espera" }, now)).toBeNull();
+    expect(describeStageDeadline({ pipeline: "alunos", stage: "pesquisado" }, now)).toBe(
+      "quando abrir turma",
     );
     // Proposta cai para 2 dias úteis em novembro e dezembro.
     expect(

@@ -276,9 +276,6 @@
   --shadow-raise: var(--shadow-raise);
 }
 
-/* Variante para esconder o fallback sem JavaScript (botão "Filtrar" da Toolbar). */
-@custom-variant scripting (@media (scripting: enabled));
-
 :root {
   --canvas: #f4f1eb;
   --surface-2: #f8f6f2;
@@ -382,6 +379,7 @@
      elemento focado (WCAG 2.4.11). O html é o contêiner de rolagem, por isso :has. */
   html:has([data-crm]) {
     scroll-padding-top: 4rem;
-    scroll-padding-bottom: 8rem;
+    /* Barra inferior (65 px) + ActionBarMobile (69 px) nos detalhes. */
+    scroll-padding-bottom: 9.5rem;
   }
 }

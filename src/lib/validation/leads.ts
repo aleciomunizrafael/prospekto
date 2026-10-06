@@ -46,15 +46,15 @@ export function isFormSource(source: LeadSource): boolean {
 }
 
 export const createLeadBaseSchema = z.object({
-  segment: z.enum(LEAD_SEGMENTS),
-  interest: z.enum(LEAD_INTERESTS),
+  segment: z.enum(LEAD_SEGMENTS, { error: "Escolha o segmento." }),
+  interest: z.enum(LEAD_INTERESTS, { error: "Escolha o interesse." }),
   name: z.string().trim().min(2, { error: "Informe seu nome." }).max(120),
   email: emailSchema,
   phone: phoneSchema.optional(),
   city: z.string().trim().max(120).optional(),
   uf: ufSchema.optional(),
   message: z.string().trim().max(2000).optional(),
-  source: z.enum(LEAD_SOURCES),
+  source: z.enum(LEAD_SOURCES, { error: "Escolha a origem." }),
   sourceDetail: z.string().trim().max(200).optional(),
   utmSource: z.string().trim().max(200).optional(),
   utmMedium: z.string().trim().max(200).optional(),
@@ -89,10 +89,10 @@ export type CreateLeadInput = z.input<typeof createLeadSchema>;
 
 export const moveLeadStageSchema = z.object({
   leadId: uuidSchema,
-  to: z.enum(ALL_STAGES as [string, ...string[]]),
-  ownerUserId: z.string().trim().min(1).optional(),
+  to: z.enum(ALL_STAGES as [string, ...string[]], { error: "Escolha o destino." }),
+  ownerUserId: z.string().trim().min(1, { error: "Escolha o responsável." }).optional(),
   nextActionAt: timestampSchema.optional(),
-  lostReason: z.enum(LOST_REASONS).optional(),
+  lostReason: z.enum(LOST_REASONS, { error: "Escolha o motivo." }).optional(),
   lostReasonDetail: z.string().trim().max(500).optional(),
   reason: z.string().trim().max(500).optional(),
 });
@@ -111,11 +111,16 @@ export type ListLeadsInput = z.input<typeof listLeadsSchema>;
 
 export const updateLeadSchema = z.object({
   leadId: uuidSchema,
-  name: z.string().trim().min(2).max(120).optional(),
+  name: z
+    .string()
+    .trim()
+    .min(2, { error: "Informe o nome." })
+    .max(120, { error: "O nome pode ter no máximo 120 caracteres." })
+    .optional(),
   phone: phoneSchema.optional(),
   city: z.string().trim().max(120).optional(),
   uf: ufSchema.optional(),
-  interest: z.enum(LEAD_INTERESTS).optional(),
+  interest: z.enum(LEAD_INTERESTS, { error: "Escolha o interesse." }).optional(),
   ownerUserId: z.string().trim().min(1).nullable().optional(),
   orgId: uuidSchema.nullable().optional(),
   contactId: uuidSchema.nullable().optional(),

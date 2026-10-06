@@ -56,7 +56,8 @@ export function SegmentedControl({
             variant="outline"
             size="sm"
             className={cn(
-              "h-9 md:h-7",
+              // Alvo de toque de 44 px no celular (checklist, seção 9); compacto no desktop.
+              "h-11 md:h-7",
               active && "border-primary/40 bg-primary-soft text-primary hover:bg-primary-soft",
             )}
             onClick={() => onChange(option.value)}

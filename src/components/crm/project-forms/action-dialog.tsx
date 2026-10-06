@@ -17,6 +17,7 @@ import {
   type ComponentProps,
   type ReactNode,
 } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -65,6 +66,9 @@ type ActionDialogProps = {
   className?: string;
   // Mantém o diálogo aberto depois do sucesso (ex.: comissão com avisos a ler).
   stayOpenOnSuccess?: boolean;
+  // Toast ao concluir (crm-design-system.md, seção 8: "fecha + toast.success"), ex.: "Depósito
+  // confirmado."; `null` desliga. Com `stayOpenOnSuccess` a mensagem já aparece no formulário.
+  successMessage?: string | null;
   // Elemento que abre o diálogo no lugar do botão padrão; `null` não renderiza gatilho
   // (uso com `open`/`onOpenChange`).
   trigger?: ReactNode;
@@ -90,6 +94,7 @@ export function ActionDialog({
   size,
   className,
   stayOpenOnSuccess,
+  successMessage = "Salvo.",
   trigger,
   alert,
   requireField,
@@ -106,11 +111,15 @@ export function ActionDialog({
     else setOwnOpen(value);
   };
   const router = useRouter();
+  const notify = () => {
+    if (successMessage && !stayOpenOnSuccess) toast.success(successMessage);
+  };
 
   const triggerVariant = menu?.primaryProps?.variant ?? variant;
   const triggerSize = menu?.primaryProps?.size ?? size;
+  // Alvo de toque de 44 px no celular também para os botões compactos das tabelas e cards.
   const triggerClass = cn(
-    triggerSize ? undefined : "h-11 md:h-9",
+    triggerSize ? (triggerSize === "sm" ? "h-11 md:h-7" : undefined) : "h-11 md:h-9",
     "relative z-10",
     menu?.primaryProps?.className,
     className,
@@ -153,6 +162,7 @@ export function ActionDialog({
         requireField={requireField}
         open={open}
         onOpenChange={setOpen}
+        onSuccess={notify}
         stayOpenOnSuccess={stayOpenOnSuccess}
         wide={wide}
       >
@@ -182,6 +192,7 @@ export function ActionDialog({
             </DialogClose>
           }
           onSuccess={() => {
+            notify();
             router.refresh();
             if (!stayOpenOnSuccess) setOpen(false);
           }}
@@ -230,7 +241,7 @@ export function ActionDialogMenu({
                   variant="outline"
                   size={size === "touch" ? "touch" : "icon-sm"}
                   aria-label={menuLabel}
-                  className={cn("relative z-10", size === "touch" && "px-3")}
+                  className={cn("relative z-10", size === "touch" ? "px-3" : "size-11 md:size-7")}
                 />
               }
             >

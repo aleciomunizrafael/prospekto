@@ -23,10 +23,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { initialCrmActionState, type CrmActionState } from "@/lib/crm/action-state";
-import { toDateTimeLocal } from "@/lib/crm/format";
+import { calendarDateInSaoPaulo, toDateTimeLocal } from "@/lib/crm/format";
 import type { ActionState } from "@/lib/crm/form-state";
 import { LOST_REASON_LABELS, stageLabel } from "@/lib/crm/labels";
 import type { RequirementLabel, StageMovePlan } from "@/lib/crm/stage-moves";
+import { daysInStageText } from "@/lib/crm/text";
 import { LOST_REASONS } from "@/lib/domain/enums";
 import { cn } from "@/lib/utils";
 import {
@@ -81,11 +82,6 @@ const KIND_SUFFIX: Record<StageMovePlan["target"]["kind"], string> = {
 
 function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] || name;
-}
-
-function daysText(days: number): string {
-  if (days <= 0) return "desde hoje";
-  return days === 1 ? "há 1 dia" : `há ${days} dias`;
 }
 
 // O ActionForm usa o ActionState de form-state.ts; a action do lead devolve CrmActionState.
@@ -244,7 +240,7 @@ export function StageMoveDialog({
           <DialogDescription className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
             <span>Hoje em</span>
             <StatusBadge kind="stage" value={props.currentStage} pipeline={props.pipeline} />
-            <span>({daysText(props.daysInStage)})</span>
+            <span>({daysInStageText(props.daysInStage)})</span>
           </DialogDescription>
         </DialogHeader>
         <ActionForm
@@ -366,7 +362,8 @@ export function StageMoveDialog({
                 <DateField
                   name="art27At"
                   label="Checado em"
-                  defaultValue={new Date().toISOString().slice(0, 10)}
+                  // Dia do calendário de São Paulo (o ISO em UTC já é amanhã depois das 21 h).
+                  defaultValue={calendarDateInSaoPaulo(new Date())}
                 />
                 <TextField name="art27By" label="Checado por" placeholder="Seu nome" />
               </div>

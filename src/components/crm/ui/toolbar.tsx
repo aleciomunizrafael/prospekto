@@ -15,9 +15,10 @@ import { cn } from "@/lib/utils";
 import { ToolbarForm } from "./toolbar-autosubmit";
 
 // Barra de filtros das listas (crm-design-system.md, seção 5.2, decisões D17 e D19). Desktop: um
-// formulário GET em linha, selects aplicam no `change`; o botão "Filtrar" só aparece sem
-// JavaScript (`scripting:hidden`). Celular: busca + "Filtrar (N)" que abre uma folha inferior com
-// os mesmos selects em coluna e um botão "Aplicar". Chips dos filtros ativos nos dois tamanhos.
+// formulário GET em linha, selects aplicam no `change` e a busca envia com Enter (o CRM exige
+// JavaScript: as páginas chegam por streaming, decisão D19). Celular: busca + "Filtrar (N)" que
+// abre uma folha inferior com os mesmos selects em coluna e um botão "Aplicar". Chips dos filtros
+// ativos nos dois tamanhos.
 export type FilterOption = { value: string; label: string };
 
 export type FilterDef = {
@@ -129,7 +130,8 @@ function SearchInput({
   );
 }
 
-function Chips({ chips, clearHref }: { chips: ToolbarChip[]; clearHref?: string }) {
+// Chips dos filtros ativos (também usados pela barra de Leads, que tem a própria folha).
+export function Chips({ chips, clearHref }: { chips: ToolbarChip[]; clearHref?: string }) {
   if (chips.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -183,9 +185,6 @@ export function Toolbar({
         ))}
         {sort ? <FilterSelect filter={sort} size="sm" isSort /> : null}
         {extra}
-        <Button type="submit" variant="outline" size="sm" className="scripting:hidden">
-          Filtrar
-        </Button>
       </ToolbarForm>
 
       {/* Celular: busca + folha inferior com os filtros. */}

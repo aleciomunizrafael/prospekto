@@ -31,7 +31,6 @@ import {
   FileText,
   Flag,
   Flame,
-  Globe,
   GraduationCap,
   HandCoins,
   Handshake,
@@ -170,12 +169,6 @@ export const DECISION_MAKER_TONE: ToneAndIcon & { label: string } = {
   label: "decisor",
 };
 
-export const PUBLISHED_TONE: ToneAndIcon & { label: string } = {
-  tone: "success",
-  icon: Globe,
-  label: "Publicado no site",
-};
-
 // Ícone por tipo de atividade na Timeline; o rótulo vem de ACTIVITY_TYPE_LABELS.
 export const ACTIVITY_ICONS: Record<ActivityType, LucideIcon> = {
   ligacao: Phone,
@@ -189,7 +182,3 @@ export const ACTIVITY_ICONS: Record<ActivityType, LucideIcon> = {
   download: Download,
   sistema: Settings2,
 };
-
-export function activityIcon(type: string): LucideIcon {
-  return (ACTIVITY_ICONS as Record<string, LucideIcon>)[type] ?? Settings2;
-}

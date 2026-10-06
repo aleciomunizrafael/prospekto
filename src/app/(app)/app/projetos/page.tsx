@@ -23,6 +23,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { formatBRL, formatCalendarDate } from "@/lib/crm/format";
 import { MECHANISM_LABELS, mechanismLabel, optionsFrom, stageLabel } from "@/lib/crm/enum-labels";
 import { PROJECT_ALERT_TONES } from "@/lib/crm/status-tones";
+import { daysRemainingText, formatKpiBRL } from "@/lib/crm/text";
 import { INCENTIVE_MECHANISMS } from "@/lib/domain/enums";
 import { STAGES } from "@/lib/domain/pipelines";
 import { listProjectSummaries, type ProjectSummary } from "@/lib/repos/projects";
@@ -53,31 +54,20 @@ function hrefFor(f: Filters): string {
   return query ? `/app/projetos?${query}` : "/app/projetos";
 }
 
-// Valores em reais sem centavos nos números grandes ("R$ 1.170.000").
-const KPI_BRL = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  maximumFractionDigits: 0,
-});
 // Nas colunas de valor o "R$" fica só no cabeçalho.
 const AMOUNT = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
 
+// Traço com o motivo só para leitor de tela (aria-label não vale em <span> sem papel).
 function Dash({ label }: { label?: string }) {
   return (
-    <span className="text-muted-foreground" aria-label={label}>
-      —
+    <span className="text-muted-foreground">
+      <span aria-hidden="true">—</span>
+      {label ? <span className="sr-only">{label}</span> : null}
     </span>
   );
-}
-
-function daysText(days: number | null): string {
-  if (days == null) return "";
-  if (days < 0) return days === -1 ? "vencido há 1 dia" : `vencido há ${-days} dias`;
-  if (days === 0) return "vence hoje";
-  return days === 1 ? "1 dia restante" : `${days} dias restantes`;
 }
 
 // Alerta da regra R-13 como ícone: texto sempre presente para leitores de tela e Tooltip ao
@@ -142,7 +132,7 @@ function Deadline({ p, compact }: { p: ProjectSummary; compact?: boolean }) {
       {p.daysRemaining != null ? (
         <span className={cn("crm-meta whitespace-nowrap", overdue && "text-destructive")}>
           {compact ? "· " : ""}
-          {daysText(p.daysRemaining)}
+          {daysRemainingText(p.daysRemaining)}
         </span>
       ) : null}
     </span>
@@ -352,15 +342,15 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/app/pro
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard
           label="Aprovado"
-          value={KPI_BRL.format(totals.approved)}
+          value={formatKpiBRL(totals.approved)}
           hint={rows.length === 1 ? "1 projeto" : `${rows.length} projetos`}
         />
         <StatCard
           label="Captado"
-          value={KPI_BRL.format(totals.raised)}
+          value={formatKpiBRL(totals.raised)}
           hint={raisedPct == null ? "sem valor aprovado" : `${raisedPct} % do aprovado`}
         />
-        <StatCard label="Saldo a captar" value={KPI_BRL.format(totals.balance)} />
+        <StatCard label="Saldo a captar" value={formatKpiBRL(totals.balance)} />
         <StatCard
           label="Com alerta"
           value={String(totals.alerts)}

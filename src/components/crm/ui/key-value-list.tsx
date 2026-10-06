@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { plural } from "@/lib/crm/text";
 import { cn } from "@/lib/utils";
 
 // Lista rótulo/valor (crm-design-system.md, seção 5.2, princípio 4): mostra o que existe e
@@ -25,20 +26,10 @@ function isEmpty(value: ReactNode | null | undefined): boolean {
   );
 }
 
-function plural(n: number, singular: string, pluralForm: string): string {
-  return `${n} ${n === 1 ? singular : pluralForm}`;
-}
-
 const COLUMNS: Record<1 | 2 | 3, string> = {
   1: "grid-cols-1",
   2: "sm:grid-cols-2",
   3: "sm:grid-cols-2 lg:grid-cols-3",
-};
-
-const SPAN: Record<1 | 2 | 3, string> = {
-  1: "",
-  2: "sm:col-span-2",
-  3: "sm:col-span-2 lg:col-span-3",
 };
 
 function Pair({ item, emptyLabel }: { item: KeyValueItem; emptyLabel: string }) {
@@ -78,29 +69,36 @@ export function KeyValueList({
 }) {
   const filled = hideEmpty ? items.filter((i) => !isEmpty(i.value)) : items;
   const empties = hideEmpty ? items.filter((i) => isEmpty(i.value)) : [];
+  const grid = cn("grid gap-x-6 gap-y-3", COLUMNS[columns]);
+  // Um <dl> só aceita dt/dd (ou div agrupando os dois): o aviso de vazio e o <details> dos campos
+  // sem valor ficam fora dele, como irmãos, com um segundo <dl> dentro do <details>.
   return (
-    <dl className={cn("grid gap-x-6 gap-y-3", COLUMNS[columns], className)}>
-      {filled.map((item, i) => (
-        <Pair key={i} item={item} emptyLabel={emptyLabel} />
-      ))}
+    <div className={cn("flex flex-col gap-3", className)}>
+      {filled.length > 0 ? (
+        <dl className={grid}>
+          {filled.map((item, i) => (
+            <Pair key={i} item={item} emptyLabel={emptyLabel} />
+          ))}
+        </dl>
+      ) : null}
       {filled.length === 0 && empties.length === 0 ? (
-        <div className={cn("text-sm text-muted-foreground", SPAN[columns])}>Nada registrado.</div>
+        <p className="text-sm text-muted-foreground">Nada registrado.</p>
       ) : null}
       {empties.length > 0 ? (
-        <details className={cn("group/kv", SPAN[columns])}>
+        <details className="group/kv">
           <summary className="cursor-pointer list-none text-sm text-muted-foreground underline-offset-2 hover:underline">
             <span className="group-open/kv:hidden">
               Mostrar todos os campos ({plural(empties.length, "sem valor", "sem valor")})
             </span>
             <span className="hidden group-open/kv:inline">Esconder os campos sem valor</span>
           </summary>
-          <div className={cn("mt-3 grid gap-x-6 gap-y-3", COLUMNS[columns])}>
+          <dl className={cn("mt-3", grid)}>
             {empties.map((item, i) => (
               <Pair key={i} item={item} emptyLabel={emptyLabel} />
             ))}
-          </div>
+          </dl>
         </details>
       ) : null}
-    </dl>
+    </div>
   );
 }

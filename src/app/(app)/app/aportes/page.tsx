@@ -27,6 +27,7 @@ import {
 } from "@/lib/repos/contributions";
 import { listOrganizations } from "@/lib/repos/organizations";
 import { listProjects } from "@/lib/repos/projects";
+import { formatKpiBRL, plural } from "@/lib/crm/text";
 import { requireSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
@@ -66,21 +67,10 @@ function hrefWith(filters: Filters, patch: Partial<Filters> = {}): string {
   return query ? `/app/aportes?${query}` : "/app/aportes";
 }
 
-function plural(n: number, singular: string, pluralForm: string): string {
-  return `${n} ${n === 1 ? singular : pluralForm}`;
-}
-
 // Valores dos StatCards sem centavos ("R$ 350.000", seção 7.9): os centavos não cabem em dois
 // cards por linha a 390 px. Abaixo de md o número fica em 24 px (o `.crm-kpi` de 32 px não cabe em
 // "R$ 1.120.000" num card de 141 px de largura útil).
-const WHOLE_BRL = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  maximumFractionDigits: 0,
-});
-function formatWhole(value: number): string {
-  return WHOLE_BRL.format(value);
-}
+const formatWhole = formatKpiBRL;
 
 export default async function ContributionsPage({ searchParams }: PageProps<"/app/aportes">) {
   const ctx = await requireSession();

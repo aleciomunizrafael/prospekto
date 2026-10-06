@@ -1,6 +1,5 @@
-import { ChevronLeft, ChevronRight, Ellipsis, Search, SlidersHorizontal, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Ellipsis, Search, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Sheet,
@@ -10,7 +9,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Toolbar, type FilterDef, type ToolbarChip } from "@/components/crm/ui/toolbar";
+import { DismissableDetails } from "@/components/crm/ui/dismissable-details";
+import { Chips, Toolbar, type FilterDef, type ToolbarChip } from "@/components/crm/ui/toolbar";
 import { leadFiltersToQuery, type LeadFilters } from "@/lib/crm/filters";
 import {
   PIPELINE_LABELS,
@@ -118,8 +118,18 @@ function filterDefs(f: LeadFilters, users: User[]) {
   return { main, temperature, sort };
 }
 
-function chipsFor(f: LeadFilters): ToolbarChip[] {
+// Chips dos filtros ativos. No desktop os selects visíveis já mostram estágio, segmento, origem e
+// dono, então só temperatura e perdidos (que ficam no menu "Mais filtros") viram chip; no celular
+// os selects ficam dentro da folha e todos os filtros ativos precisam aparecer como chip.
+function chipsFor(f: LeadFilters, selects: FilterDef[] = []): ToolbarChip[] {
   const chips: ToolbarChip[] = [];
+  for (const d of selects) {
+    if (!d.value) continue;
+    const label = d.options.find((o) => o.value === d.value)?.label ?? d.value;
+    const without: Partial<LeadFilters> = { ...f, page: 1 };
+    delete without[(d.name === "owner" ? "ownerUserId" : d.name) as keyof LeadFilters];
+    chips.push({ label: `${d.label}: ${label}`, removeHref: leadsHref(without) });
+  }
   if (f.temperature) {
     chips.push({
       label: `Temperatura: ${TEMPERATURE_LABELS[f.temperature]}`,
@@ -177,36 +187,11 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function Chips({ chips, clearHref }: { chips: ToolbarChip[]; clearHref: string }) {
-  if (chips.length === 0) return null;
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {chips.map((chip) => (
-        <Badge
-          key={chip.label}
-          variant="outline"
-          render={<Link href={chip.removeHref} aria-label={`Remover filtro ${chip.label}`} />}
-          className="hover:bg-surface-2"
-        >
-          {chip.label}
-          <X aria-hidden="true" />
-        </Badge>
-      ))}
-      <Link
-        href={clearHref}
-        className="text-sm text-muted-foreground underline-offset-2 hover:underline"
-      >
-        Limpar
-      </Link>
-    </div>
-  );
-}
-
 // Barra de filtros. Desktop: a `Toolbar` compartilhada (busca, quatro selects, ordenação) com o
-// menu "⋯ Mais filtros" (temperatura e perdidos) dentro do mesmo <form>, num <details> para
-// funcionar sem JavaScript e sem sair do formulário. Celular: busca + "Filtrar (N)" abrindo uma
-// folha com todos os filtros; N conta os filtros ativos, inclusive temperatura e perdidos, sem
-// contar pipeline nem a ordenação padrão.
+// menu "⋯ Mais filtros" (temperatura e perdidos) dentro do mesmo <form>, num <details> que fecha
+// com Esc e clique fora (DismissableDetails) sem sair do formulário. Celular: busca + "Filtrar (N)"
+// abrindo uma folha com todos os filtros; N conta os filtros ativos, inclusive temperatura e
+// perdidos, sem contar pipeline nem a ordenação padrão.
 export function LeadToolbar({ filters, users }: { filters: LeadFilters; users: User[] }) {
   const f = filters;
   const { main, temperature, sort } = filterDefs(f, users);
@@ -218,6 +203,7 @@ export function LeadToolbar({ filters, users }: { filters: LeadFilters; users: U
     allLabel: "ocultar perdidos",
   };
   const chips = chipsFor(f);
+  const mobileChips = chipsFor(f, main);
   const clearHref = leadsHref({ pipeline: f.pipeline });
   const moreCount = (f.temperature ? 1 : 0) + (f.includeLost ? 1 : 0);
   const activeCount = main.filter((d) => d.value !== "").length + moreCount;
@@ -225,7 +211,7 @@ export function LeadToolbar({ filters, users }: { filters: LeadFilters; users: U
   const sortIsDefault = f.sort === "next_action";
 
   const moreFilters = (
-    <details className="relative">
+    <DismissableDetails className="relative">
       <summary
         className={cn(
           buttonVariants({ variant: "outline", size: "sm" }),
@@ -239,7 +225,7 @@ export function LeadToolbar({ filters, users }: { filters: LeadFilters; users: U
         <LabeledSelect filter={temperature} prefix="mais" size="sm" />
         <LabeledSelect filter={lost} prefix="mais" size="sm" />
       </div>
-    </details>
+    </DismissableDetails>
   );
 
   return (
@@ -327,7 +313,7 @@ export function LeadToolbar({ filters, users }: { filters: LeadFilters; users: U
             </SheetContent>
           </Sheet>
         </div>
-        <Chips chips={chips} clearHref={clearHref} />
+        <Chips chips={mobileChips} clearHref={clearHref} />
       </div>
     </div>
   );

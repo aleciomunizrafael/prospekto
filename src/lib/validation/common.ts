@@ -54,7 +54,8 @@ export const positiveMoneySchema = moneySchema.refine((v) => v > 0, {
 });
 
 // Data de calendário (YYYY-MM-DD), como o Postgres `date`.
-export const calendarDateSchema = z.iso.date({ error: "Informe uma data no formato AAAA-MM-DD." });
+// O campo é um calendário (input type="date"): a mensagem não fala de formato.
+export const calendarDateSchema = z.iso.date({ error: "Informe a data." });
 
 export const timestampSchema = z.coerce.date({ error: "Informe uma data e hora válidas." });
 

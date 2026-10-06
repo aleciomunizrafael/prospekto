@@ -31,6 +31,13 @@ function segmentLabel(segment: string): string {
   return (SEGMENT_LABELS as Record<string, string>)[segment] ?? segment;
 }
 
+// A Server Action de aporte devolve "Escolha um lead PJ ou PF." para o campo; aqui a frase vira a
+// instrução de uso do campo (só apresentação; a action não muda).
+function humanError(error: string | undefined): string | undefined {
+  if (!error) return undefined;
+  return /^Escolha um lead/i.test(error) ? "Busque e escolha o patrocinador na lista." : error;
+}
+
 export function LeadPicker({
   search,
   label = "Patrocinador (lead)",
@@ -42,7 +49,7 @@ export function LeadPicker({
   const [results, setResults] = useState<LeadPick[] | null>(null);
   const [picked, setPicked] = useState<LeadPick | null>(null);
   const [pending, startTransition] = useTransition();
-  const error = useFieldError("leadId");
+  const error = humanError(useFieldError("leadId"));
   const id = useId();
 
   function runSearch() {

@@ -6,8 +6,9 @@ import { cn } from "@/lib/utils";
 // Prazo em frase humana (crm-design-system.md, seção 5.2, decisão D3): "Ação atrasada há 3 dias",
 // "Sem contato há 6 dias (prazo: 1 dia útil)", "Próxima ação sex., 9 de out.". Vencido em vermelho
 // com ícone; menos de 24 h em âmbar com relógio; o resto em cinza. `stage` (o lead inteiro serve)
-// deixa a frase citar o prazo do estágio. `truncate` corta a frase em uma linha (filas e tabelas
-// estreitas); `aria-label` e `title` continuam com a frase inteira.
+// deixa a frase citar o prazo do estágio. `truncate` corta a frase visível em uma linha (tabelas
+// estreitas) e mantém a frase inteira em `title` e numa cópia `sr-only` (sem `aria-label`: ele é
+// proibido em <span> sem papel e os leitores de tela o ignoram).
 export function SlaIndicator({
   info,
   nextActionAt,
@@ -29,7 +30,6 @@ export function SlaIndicator({
   const Icon = sla.tone === "danger" ? CircleAlert : sla.tone === "warning" ? Clock : Circle;
   return (
     <span
-      aria-label={sla.text}
       title={sla.text}
       className={cn(
         "inline-flex items-center gap-1",
@@ -47,7 +47,10 @@ export function SlaIndicator({
         aria-hidden="true"
         className={cn("shrink-0", sla.tone === "neutral" ? "size-2.5" : "size-3.5")}
       />
-      <span className={cn("min-w-0", truncate && "truncate")}>{sla.text}</span>
+      <span className={cn("min-w-0", truncate && "truncate")} aria-hidden={truncate || undefined}>
+        {sla.text}
+      </span>
+      {truncate ? <span className="sr-only">{sla.text}</span> : null}
     </span>
   );
 }

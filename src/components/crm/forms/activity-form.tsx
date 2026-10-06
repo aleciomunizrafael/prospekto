@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useActionState, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { registerActivityAction } from "@/actions/crm-leads";
 import { initialCrmActionState, type CrmActionState } from "@/lib/crm/action-state";
@@ -191,9 +191,11 @@ export function ActivityForm({
             error={e.nextActionAt}
             defaultValue={isContact ? suggested : ""}
             help={
-              isContact
-                ? "Sugerida pelo prazo do estágio. Deixe em branco para manter a atual."
-                : "Opcional."
+              !isContact
+                ? "Opcional."
+                : suggested
+                  ? "Sugerida pelo prazo do estágio. Deixe em branco para manter a atual."
+                  : "Este estágio não tem prazo fixo. Deixe em branco para manter a atual."
             }
           />
         )}
@@ -205,23 +207,4 @@ export function ActivityForm({
       </div>
     </form>
   );
-}
-
-// Abre no desktop (≥ lg) os blocos dobrados da página (`details.crm-fold`): no celular eles
-// nascem fechados para não empurrar a linha do tempo; no desktop ficam abertos. O HTML chega
-// fechado nos dois tamanhos; este efeito roda antes da pintura nas navegações no cliente.
-export function FoldsOpenOnDesktop() {
-  useLayoutEffect(() => {
-    const query = window.matchMedia("(min-width: 64rem)");
-    const apply = () => {
-      if (!query.matches) return;
-      document.querySelectorAll<HTMLDetailsElement>("details.crm-fold").forEach((fold) => {
-        fold.open = true;
-      });
-    };
-    apply();
-    query.addEventListener("change", apply);
-    return () => query.removeEventListener("change", apply);
-  }, []);
-  return null;
 }

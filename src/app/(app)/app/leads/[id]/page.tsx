@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { NewContributionDialog } from "@/components/crm/contribution-dialogs";
 import { ContributionTable } from "@/components/crm/contribution-table";
-import { ActivityForm, FoldsOpenOnDesktop } from "@/components/crm/forms/activity-form";
+import { ActivityForm } from "@/components/crm/forms/activity-form";
 import { LeadEditDialog, type LeadEditValues } from "@/components/crm/forms/lead-edit-dialog";
 import { OwnerForm } from "@/components/crm/forms/owner-form";
 import {
@@ -17,6 +17,7 @@ import {
 import { TaskCompleteButton } from "@/components/crm/forms/task-complete-button";
 import { Callout } from "@/components/crm/ui/callout";
 import { DetailLayout } from "@/components/crm/ui/detail-layout";
+import { FoldsOpenOnDesktop } from "@/components/crm/ui/folds-open-on-desktop";
 import { FormSection } from "@/components/crm/ui/form-section";
 import { KeyValueList, type KeyValueItem } from "@/components/crm/ui/key-value-list";
 import { NextStepCard } from "@/components/crm/ui/next-step-card";
@@ -54,11 +55,12 @@ import {
 import { leadCompany, stageInfo } from "@/lib/crm/lead-view";
 import { nextStepForLead, type NextStep } from "@/lib/crm/next-step";
 import { isTerminal, stageMovePlans, terminalStageOf } from "@/lib/crm/stage-moves";
+import { daysInStageText } from "@/lib/crm/text";
 import { whatsappHrefFor } from "@/lib/crm/whatsapp-messages";
 import { CONSENT_PURPOSES, type LeadSegment } from "@/lib/domain/enums";
 import { allowedContributionMechanisms } from "@/lib/domain/mechanisms";
-import { isInitialStage, type Pipeline } from "@/lib/domain/pipelines";
-import { slaDeadline } from "@/lib/domain/sla";
+import { isInitialStage, stageSla, type Pipeline } from "@/lib/domain/pipelines";
+import { slaBusinessDays, slaDeadline } from "@/lib/domain/sla";
 import { listActivities } from "@/lib/repos/activities";
 import { listConsents } from "@/lib/repos/consents";
 import { listContributionSummaries } from "@/lib/repos/contributions";
@@ -106,9 +108,14 @@ function attributeValue(field: AttributeField, raw: unknown): ReactNode {
 // FoldsOpenOnDesktop): FormSection collapsible com a classe `crm-fold`.
 const FOLD = { collapsible: true, className: "crm-fold" } as const;
 
-function daysInStageText(days: number): string {
-  if (days <= 0) return "desde hoje";
-  return days === 1 ? "há 1 dia" : `há ${days} dias`;
+// Só estágios com prazo em dias (úteis ou corridos) sugerem uma próxima ação. Um prazo zero
+// ("automático", lista de espera) devolveria o instante atual e o lead voltaria na hora para a
+// fila "Precisa de ação agora" com "Ação vence hoje".
+function stageHasDeadline(pipeline: Pipeline, stage: string, now: Date): boolean {
+  const sla = stageSla(pipeline, stage);
+  if (!sla) return false;
+  if (sla.calendarDays != null) return sla.calendarDays > 0;
+  return (slaBusinessDays(pipeline, stage, now) ?? 0) > 0;
 }
 
 export default async function LeadPage({ params, searchParams }: PageProps<"/app/leads/[id]">) {
@@ -136,8 +143,14 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
   const userNames = new Map(users.map((u) => [u.id, u.name]));
   const info = stageInfo(lead, now);
   const company = leadCompany(lead);
-  const plans = stageMovePlans(pipeline, lead.stage, now);
-  const suggestedNext = slaDeadline(pipeline, lead.stage, now);
+  const plans = stageMovePlans(pipeline, lead.stage, now).map((plan) =>
+    stageHasDeadline(pipeline, plan.target.stage, now)
+      ? plan
+      : { ...plan, suggestedNextActionAt: null },
+  );
+  const suggestedNext = stageHasDeadline(pipeline, lead.stage, now)
+    ? slaDeadline(pipeline, lead.stage, now)
+    : null;
   const terminal = isTerminal(pipeline, lead.stage);
   const art27Done = lead.attributes.vinculo_art27_checado === true;
   const openContribution = contributions.find((c) => c.status !== "cancelado") ?? null;
@@ -285,7 +298,10 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
     },
     {
       label: "Neste estágio",
-      value: `${daysInStageText(info.daysInStage)} · desde ${formatDate(lead.stageEnteredAt)}`,
+      value:
+        info.daysInStage <= 0
+          ? `desde hoje (${formatDate(lead.stageEnteredAt)})`
+          : `${daysInStageText(info.daysInStage)} · desde ${formatDate(lead.stageEnteredAt)}`,
     },
     {
       label: "Responsável",
@@ -329,7 +345,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
         <LeadEditDialog
           lead={editValues}
           trigger={
-            <Button type="button" variant="link" size="xs" className="h-auto px-0">
+            <Button type="button" variant="outline" size="sm" className="h-11 md:h-7">
               Adicionar telefone
             </Button>
           }
@@ -388,11 +404,8 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
   const header = (
     <>
       <PageHeader
-        breadcrumb={[{ label: "Leads", href: "/app/leads" }]}
         eyebrow={`${pipelineLabel(lead.pipeline)} · ${SEGMENT_LABELS[lead.segment]}`}
         title={lead.name}
-        backHref="/app/leads"
-        backLabel="Leads"
         description={
           company || cityUf ? (
             <>
@@ -605,7 +618,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
                 </div>
                 {current ? (
                   <details className="crm-meta pl-6">
-                    <summary className="cursor-pointer underline-offset-2 hover:underline">
+                    <summary className="flex min-h-11 cursor-pointer items-center underline-offset-2 hover:underline md:min-h-0">
                       texto integral
                     </summary>
                     <p className="mt-1 whitespace-pre-line">{current.consentText}</p>
@@ -663,7 +676,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
           />
         }
       />
-      <FoldsOpenOnDesktop />
+      <FoldsOpenOnDesktop selector="details.crm-fold" minWidth="64rem" />
     </>
   );
 }

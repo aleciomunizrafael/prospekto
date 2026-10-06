@@ -14,21 +14,10 @@ import { CONTRIBUTION_TYPE_LABELS, mechanismLabel } from "@/lib/crm/enum-labels"
 import type { Ctx } from "@/lib/repos/ctx";
 import type { ContributionSummary } from "@/lib/repos/contributions";
 import { cn } from "@/lib/utils";
-import { ContributionSteps } from "./contribution-steps";
+import { ContributionSteps, loadContributionStepDataForRows } from "./contribution-steps";
 import { DataTable, RowLink, type Column } from "./ui/data-table";
 import { EmptyState } from "./ui/empty-state";
 import { StatusBadge } from "./ui/status-badge";
-
-// Reexport de compatibilidade: o badge de status vem de StatusBadge (seção 6.2).
-export function ContributionStatusBadge({
-  status,
-  size,
-}: {
-  status: ContributionSummary["status"];
-  size?: "sm" | "md";
-}) {
-  return <StatusBadge kind="contribution" value={status} size={size} />;
-}
 
 const SOON_DAYS = 15;
 
@@ -60,7 +49,9 @@ function cardMeta(c: ContributionSummary, showProject: boolean, showLead: boolea
   return c.orgName ?? CONTRIBUTION_TYPE_LABELS[c.type];
 }
 
-export function ContributionTable({
+// Server Component assíncrono: os dados do passo de cada linha são carregados uma vez aqui e
+// servem à célula do desktop e ao card do celular (a DataTable renderiza os dois no HTML).
+export async function ContributionTable({
   ctx,
   rows,
   showProject = true,
@@ -87,6 +78,7 @@ export function ContributionTable({
   if (rows.length === 0 && layout === "cards") {
     return <p className={cn("text-sm text-muted-foreground", className)}>Nenhum aporte ainda.</p>;
   }
+  const stepData = showSteps ? await loadContributionStepDataForRows(ctx, rows) : null;
 
   if (layout === "cards") {
     return (
@@ -120,7 +112,13 @@ export function ContributionTable({
               </span>
             </span>
             {showSteps ? (
-              <ContributionSteps ctx={ctx} contribution={c} variant="row" compact />
+              <ContributionSteps
+                ctx={ctx}
+                contribution={c}
+                data={stepData?.get(c.id)}
+                variant="row"
+                compact
+              />
             ) : null}
           </li>
         ))}
@@ -234,7 +232,15 @@ export function ContributionTable({
       key: "step",
       header: "Próximo passo",
       priority: 1,
-      cell: (c) => <ContributionSteps ctx={ctx} contribution={c} variant="row" compact />,
+      cell: (c) => (
+        <ContributionSteps
+          ctx={ctx}
+          contribution={c}
+          data={stepData?.get(c.id)}
+          variant="row"
+          compact
+        />
+      ),
     });
   }
 
@@ -246,7 +252,9 @@ export function ContributionTable({
       rows={rows}
       rowKey={(c) => c.id}
       rowHref={(c) => `/app/aportes/${c.id}`}
-      rowClassName={(c) => (c.status === "cancelado" ? "opacity-70" : undefined)}
+      // Cancelados em cinza (texto muted), sem opacidade na linha: o badge e a meta manteriam
+      // contraste abaixo do mínimo (WCAG 1.4.3).
+      rowClassName={(c) => (c.status === "cancelado" ? "text-muted-foreground" : undefined)}
       mobile={{
         primary: (c) => c.leadName,
         secondary: (c) => (
@@ -263,6 +271,7 @@ export function ContributionTable({
               <ContributionSteps
                 ctx={ctx}
                 contribution={c}
+                data={stepData?.get(c.id)}
                 variant="row"
                 size="touch"
                 compact

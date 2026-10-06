@@ -22,8 +22,9 @@ import { cn } from "@/lib/utils";
 // de `meta` (badges, SLA) e ações, sempre na mesma ordem: secundárias (outline) › `more` (o "⋯"
 // da página, com as ações raras ou destrutivas) › primária (azul, à direita). Uma ação primária
 // por tela (decisão D5); mais de três secundárias vão para um "⋯" automático. No celular as ações
-// somem (`hidden md:flex`) e a ActionBarMobile do DetailLayout assume; `backHref` alimenta o
-// "voltar" do header do shell.
+// somem (`hidden md:flex`) e a ActionBarMobile do DetailLayout assume. O "voltar" e o caminho do
+// header do shell vêm do pathname e do h1 desta página (shell/header-crumbs.tsx): os detalhes não
+// passam `breadcrumb`, para não repetir o caminho logo abaixo do header.
 export type PageHeaderCrumb = { label: string; href: string };
 
 const MAX_INLINE_SECONDARY = 3;
@@ -37,8 +38,6 @@ export function PageHeader({
   secondary = [],
   more,
   meta,
-  backHref,
-  backLabel,
   actionsOnMobile = false,
   className,
 }: {
@@ -51,8 +50,6 @@ export function PageHeader({
   // Menu "⋯" próprio da página (ex.: LeadMoreMenu), renderizado antes da primária.
   more?: ReactNode;
   meta?: ReactNode;
-  backHref?: string;
-  backLabel?: string;
   // Mantém as ações visíveis também no celular (listas sem ActionBarMobile).
   actionsOnMobile?: boolean;
   className?: string;
@@ -64,8 +61,6 @@ export function PageHeader({
   return (
     <header
       className={cn("flex flex-col gap-3 md:flex-row md:items-end md:justify-between", className)}
-      data-back-href={backHref}
-      data-back-label={backLabel}
     >
       <div className="flex min-w-0 flex-col gap-1">
         {breadcrumb && breadcrumb.length > 0 ? (

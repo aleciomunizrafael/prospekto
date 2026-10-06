@@ -26,8 +26,6 @@ export default async function NewProjectPage() {
         breadcrumb={[{ label: "Projetos", href: "/app/projetos" }]}
         title="Novo projeto"
         description="O projeto nasce em Prospecção. Os demais campos passam a ser exigidos conforme o estágio."
-        backHref="/app/projetos"
-        backLabel="Projetos"
       />
       {proponents.length === 0 ? (
         <div className="rounded-xl border border-border bg-card">

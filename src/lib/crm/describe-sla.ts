@@ -7,6 +7,7 @@ import { isInitialStage, stageSla, type Pipeline } from "@/lib/domain/pipelines"
 import { daysBetween, hoursBetween } from "./dates";
 import { CRM_TIME_ZONE } from "./format";
 import type { StageInfo } from "./lead-view";
+import { plural } from "./text";
 
 export type SlaTone = "danger" | "warning" | "neutral";
 export type SlaKind = "next_action" | "sla" | "none";
@@ -29,19 +30,17 @@ export function formatShortDay(date: Date): string {
   return DAY_FORMAT.format(date);
 }
 
-function plural(n: number, singular: string, pluralForm: string): string {
-  return `${n} ${n === 1 ? singular : pluralForm}`;
-}
-
 // "1 dia útil", "5 dias úteis", "30 dias" (corridos) ou a nota do estágio quando não há prazo em
-// dias ("automático", "quando abrir turma").
+// dias ("quando abrir turma", "trimestral"). Um estágio com prazo zero (ex.: lista de espera,
+// "automático") não tem prazo fixo a citar: devolve null e a frase sai sem o parêntese.
 export function describeStageDeadline(stage: SlaStage, at: Date): string | null {
   const pipeline = stage.pipeline as Pipeline;
   const sla = stageSla(pipeline, stage.stage);
   if (!sla) return null;
   if (sla.calendarDays != null) return plural(sla.calendarDays, "dia", "dias");
   const days = slaBusinessDays(pipeline, stage.stage, at);
-  if (days === null || days === 0) return sla.note ?? null;
+  if (days === 0) return null;
+  if (days === null) return sla.note ?? null;
   return plural(days, "dia útil", "dias úteis");
 }
 

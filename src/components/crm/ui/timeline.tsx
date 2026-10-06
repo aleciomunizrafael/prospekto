@@ -1,4 +1,4 @@
-import { Settings2 } from "lucide-react";
+import { Settings2, UserPlus } from "lucide-react";
 import type { ReactNode } from "react";
 import { formActivitySubject, formActivityText } from "@/lib/crm/activity-text";
 import { daysBetween } from "@/lib/crm/dates";
@@ -73,9 +73,24 @@ function runsOf(items: Activity[]): Run[] {
   );
 }
 
-function TypeIcon({ type }: { type: string }) {
-  const Icon = ACTIVITY_ICONS[type as ActivityType] ?? Settings2;
+function TypeIcon({ type, manual }: { type: string; manual?: boolean }) {
+  const Icon = manual ? UserPlus : (ACTIVITY_ICONS[type as ActivityType] ?? Settings2);
   return <Icon className="size-3.5" />;
+}
+
+// Origens que de fato chegam por formulário do site; as demais (evento, LinkedIn, indicação…) são
+// leads cadastrados à mão pelo "Novo lead", e o repositório grava a mesma atividade `formulario`
+// ("Formulário recebido (evento)"). Na tela a frase vira "Lead cadastrado: Evento".
+const FORM_SOURCES = new Set(["site", "guia", "simulador", "diagnostico"]);
+
+function manualFormSource(subject: string): boolean {
+  const m = /^Formulário recebido \((\w+)\)$/.exec(subject);
+  return !!m && !FORM_SOURCES.has(m[1]);
+}
+
+function formSubject(subject: string): string {
+  const text = formActivitySubject(subject);
+  return manualFormSource(subject) ? text.replace(/^Formulário recebido/, "Lead cadastrado") : text;
 }
 
 function taskStatus(a: Activity, now: Date): { text: string; overdue: boolean } | null {
@@ -102,6 +117,7 @@ function Item({
   now: Date;
 }) {
   const system = a.type === "sistema";
+  const manual = a.type === "formulario" && manualFormSource(a.subject);
   const who = a.createdByUserId ? users.get(a.createdByUserId) : null;
   const task = taskStatus(a, now);
   const open = a.type === "tarefa" && !a.doneAt;
@@ -123,12 +139,12 @@ function Item({
         )}
         aria-hidden="true"
       >
-        <TypeIcon type={a.type} />
+        <TypeIcon type={a.type} manual={manual} />
       </span>
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
         <div className="flex min-w-0 flex-col gap-0.5">
           <p className={cn("text-sm font-medium", system && "font-normal text-muted-foreground")}>
-            {a.type === "formulario" ? formActivitySubject(a.subject) : a.subject}
+            {a.type === "formulario" ? formSubject(a.subject) : a.subject}
           </p>
           {detail ? (
             <p className={cn("text-sm", system ? "text-muted-foreground" : "text-foreground")}>

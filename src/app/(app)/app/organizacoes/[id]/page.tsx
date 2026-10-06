@@ -150,7 +150,10 @@ export default async function OrganizationPage({
       value: org.cnpj ? (
         formatCnpj(org.cnpj)
       ) : needsCnpj ? (
-        <span aria-label="sem CNPJ">—</span>
+        <span>
+          <span aria-hidden="true">—</span>
+          <span className="sr-only">sem CNPJ</span>
+        </span>
       ) : null,
       code: true,
       hint: needsCnpj ? "necessário para o termo" : undefined,
@@ -182,9 +185,8 @@ export default async function OrganizationPage({
     },
   ];
 
-  // Contatos: não há página de contato; no celular o card abre o e-mail ou o telefone.
-  const contactHref = (c: Contact) =>
-    c.email ? `mailto:${c.email}` : c.phone ? telHref(c.phone) : "#contatos";
+  // Contatos: não há página de contato, então a linha não é um link; e-mail e telefone são links
+  // explícitos na tabela e no card.
   const contactColumns: Column<Contact>[] = [
     { key: "name", header: "Nome", cell: (c) => <ContactName contact={c} /> },
     {
@@ -260,18 +262,16 @@ export default async function OrganizationPage({
 
   const header = (
     <PageHeader
-      breadcrumb={[{ label: "Organizações", href: "/app/organizacoes" }]}
       title={org.name}
       description={org.tradeName ?? undefined}
-      backHref="/app/organizacoes"
-      backLabel="Organizações"
       meta={
         <>
           <StatusBadge kind="orgType" value={org.type} size="md" />
           {cityUf ? <span className="text-sm text-muted-foreground">{cityUf}</span> : null}
           {ownerName ? (
-            <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-              <span>· quem cuida:</span>
+            // Item próprio, sem separador: quando a linha quebra no celular nenhum "·" fica órfão.
+            <span className="inline-flex items-center gap-1.5 text-sm whitespace-nowrap text-muted-foreground">
+              <span>quem cuida:</span>
               <Avatar name={ownerName} size="sm" />
               <span className="text-foreground">{ownerName}</span>
             </span>
@@ -303,7 +303,6 @@ export default async function OrganizationPage({
           caption={`Contatos de ${org.name}`}
           columns={contactColumns}
           rows={contacts}
-          rowHref={contactHref}
           rowKey={(c) => c.id}
           mobile={{
             primary: (c) => <ContactName contact={c} />,

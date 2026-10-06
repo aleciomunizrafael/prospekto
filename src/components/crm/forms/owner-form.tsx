@@ -8,10 +8,9 @@ import { assignLeadOwnerAction } from "@/actions/crm-leads";
 import { initialCrmActionState } from "@/lib/crm/action-state";
 import { cn } from "@/lib/utils";
 import { FormMessage, selectClass } from "./fields";
-import { SubmitButton } from "./submit-button";
 
 // "Responsável" do Resumo do lead (crm-design-system.md, seção 7.4): um <select> que envia no
-// `change`; o botão "Atribuir" só aparece sem JavaScript (variante `scripting:hidden`).
+// `change` (o CRM exige JavaScript, decisão D19); "Salvando…" aparece ao lado enquanto envia.
 function Saving() {
   const { pending } = useFormStatus();
   return (
@@ -62,14 +61,6 @@ export function OwnerForm({
             </option>
           ))}
         </select>
-        <SubmitButton
-          variant="outline"
-          size="sm"
-          pendingLabel="Salvando…"
-          className="scripting:hidden"
-        >
-          Atribuir
-        </SubmitButton>
         <Saving />
       </div>
       <FormMessage status={state.status === "error" ? "error" : "idle"} message={state.message} />

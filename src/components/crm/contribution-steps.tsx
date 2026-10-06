@@ -1,6 +1,9 @@
 // Passos do aporte (servidor): calcula o que falta e monta os diálogos certos. `variant="row"`
 // mostra só o botão do passo atual (nextStepFor) e um "⋯" com Registrar comissão e Cancelar
 // aporte; `variant="flow"` é a StepFlow do detalhe, com o diálogo do passo sob o passo atual.
+// Os dados (bloqueios, projeto, aportes irmãos, empresas) podem vir carregados em `data`: a tabela
+// de aportes carrega uma vez por linha (desktop e cards usam o mesmo) e agrupa as consultas de
+// projeto por projeto distinto; o detalhe reaproveita o que a página já buscou.
 import { commissionLimitsFor, maxCommissionFor } from "@/lib/domain/commission";
 import type { IncentiveMechanism } from "@/lib/domain/enums";
 import { formatDate } from "@/lib/crm/format";
@@ -24,8 +27,6 @@ import {
 } from "./contribution-dialogs";
 import { ActionDialogMenu, type ActionMenuItem } from "./project-forms/action-dialog";
 import { StepFlow, type Step } from "./ui/step-flow";
-
-export { nextStepFor };
 
 // Rótulos dos gatilhos em contribution-dialogs.tsx (o menu "⋯" identifica cada diálogo por eles).
 const CANCEL_LABEL = "Cancelar aporte";
@@ -88,9 +89,71 @@ export function contributionFlowSteps(
   ];
 }
 
+export type ContributionStepData = {
+  blockers: Record<ContributionStep, string[]>;
+  project: Awaited<ReturnType<typeof getProject>>;
+  siblings: Awaited<ReturnType<typeof listContributions>>;
+  // Empresas para escolher no "Assinar termo"; vazio quando o aporte já passou da proposta.
+  sponsorOrgs: Awaited<ReturnType<typeof listOrganizations>>;
+};
+
+const SPONSOR_ORGS_LIMIT = 300;
+const SIBLINGS_LIMIT = 500;
+
+export async function loadContributionStepData(
+  ctx: Ctx,
+  contribution: ContributionSummary,
+): Promise<ContributionStepData> {
+  const [blockers, sponsorOrgs, project, siblings] = await Promise.all([
+    contributionStepBlockers(ctx, contribution),
+    contribution.status === "proposta"
+      ? listOrganizations(ctx, { type: "empresa", limit: SPONSOR_ORGS_LIMIT })
+      : [],
+    getProject(ctx, contribution.projectId),
+    listContributions(ctx, { projectId: contribution.projectId, limit: SIBLINGS_LIMIT }),
+  ]);
+  return { blockers, sponsorOrgs, project, siblings };
+}
+
+// Dados de várias linhas de uma vez: bloqueios por aporte (precisam do aporte), projeto e irmãos
+// uma vez por projeto distinto, empresas uma vez para todas as propostas. Cancelados ficam fora
+// (não têm passo).
+export async function loadContributionStepDataForRows(
+  ctx: Ctx,
+  rows: ContributionSummary[],
+): Promise<Map<string, ContributionStepData>> {
+  const active = rows.filter((c) => c.status !== "cancelado");
+  const projectIds = [...new Set(active.map((c) => c.projectId))];
+  const [blockersList, sponsorOrgs, projects, siblingsList] = await Promise.all([
+    Promise.all(active.map((c) => contributionStepBlockers(ctx, c))),
+    active.some((c) => c.status === "proposta")
+      ? listOrganizations(ctx, { type: "empresa", limit: SPONSOR_ORGS_LIMIT })
+      : [],
+    Promise.all(projectIds.map((id) => getProject(ctx, id))),
+    Promise.all(
+      projectIds.map((id) => listContributions(ctx, { projectId: id, limit: SIBLINGS_LIMIT })),
+    ),
+  ]);
+  const byProject = new Map(
+    projectIds.map((id, i) => [id, { project: projects[i], siblings: siblingsList[i] }]),
+  );
+  const out = new Map<string, ContributionStepData>();
+  active.forEach((c, i) => {
+    const p = byProject.get(c.projectId);
+    out.set(c.id, {
+      blockers: blockersList[i],
+      sponsorOrgs: c.status === "proposta" ? sponsorOrgs : [],
+      project: p?.project ?? null,
+      siblings: p?.siblings ?? [],
+    });
+  });
+  return out;
+}
+
 export async function ContributionSteps({
   ctx,
   contribution,
+  data,
   variant = "row",
   size = "sm",
   compact = false,
@@ -98,6 +161,8 @@ export async function ContributionSteps({
 }: {
   ctx: Ctx;
   contribution: ContributionSummary;
+  // Dados já carregados (loadContributionStepData); sem eles o componente consulta o banco.
+  data?: ContributionStepData;
   variant?: "row" | "flow";
   // Tamanho dos botões na linha ("touch" nos cards do celular).
   size?: "sm" | "touch";
@@ -113,17 +178,13 @@ export async function ContributionSteps({
     }
     return null;
   }
-  const blockers = await contributionStepBlockers(ctx, contribution);
+  const { blockers, sponsorOrgs, project, siblings } =
+    data ?? (await loadContributionStepData(ctx, contribution));
   const step = nextStepFor(
     status,
     contribution.receiptSentToAccountantAt,
     contribution.commissionDue,
   );
-  const [sponsorOrgs, project, siblings] = await Promise.all([
-    status === "proposta" ? listOrganizations(ctx, { type: "empresa", limit: 300 }) : [],
-    getProject(ctx, contribution.projectId),
-    listContributions(ctx, { projectId: contribution.projectId, limit: 500 }),
-  ]);
   const mechanism = (project?.mechanism ?? contribution.mechanism) as IncentiveMechanism;
   const projectCommissionSoFar = siblings
     .filter((s) => s.id !== contribution.id && s.status !== "cancelado")

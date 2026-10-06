@@ -115,7 +115,9 @@ export function ChangePasswordForm() {
               error={state.fieldErrors?.confirm}
             />
             <FormActions>
-              <SubmitButton pendingLabel="Trocando…">Trocar senha</SubmitButton>
+              <SubmitButton size="touch" className="md:h-9" pendingLabel="Trocando…">
+                Trocar senha
+              </SubmitButton>
             </FormActions>
           </>
         )}

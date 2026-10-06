@@ -21,6 +21,7 @@ import {
   formatBRL,
 } from "@/lib/crm/format";
 import { stageInfo } from "@/lib/crm/lead-view";
+import { plural } from "@/lib/crm/text";
 import { listOpenTasksWithLead } from "@/lib/repos/activities";
 import { listContributionSummaries } from "@/lib/repos/contributions";
 import {
@@ -48,10 +49,6 @@ function greetingFor(now: Date): string {
   if (hour < 12) return "Bom dia";
   if (hour < 18) return "Boa tarde";
   return "Boa noite";
-}
-
-function plural(n: number, singular: string, pluralForm: string): string {
-  return `${n} ${n === 1 ? singular : pluralForm}`;
 }
 
 export default async function TodayPage() {

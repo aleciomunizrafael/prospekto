@@ -3,7 +3,9 @@ import { cn } from "@/lib/utils";
 
 // Duas colunas dos detalhes (crm-design-system.md, seção 5.2): principal + lateral fixa de 20rem
 // no desktop; no celular a lateral vem depois (ou antes, com `mobileOrder="aside-first"`).
-// `actionsMobile` recebe a ActionBarMobile.
+// `actionsMobile` recebe a ActionBarMobile; com ela, um espaçador no fim garante que o último
+// bloco role para fora da barra (barra de ações + barra inferior somam 133 px; o `main` reserva
+// 112 px).
 export function DetailLayout({
   header,
   main,
@@ -43,6 +45,7 @@ export function DetailLayout({
           {aside}
         </aside>
       </div>
+      {actionsMobile ? <div aria-hidden="true" className="h-6 md:hidden" /> : null}
       {actionsMobile}
     </div>
   );

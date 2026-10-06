@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
-import { claimLeadAction } from "@/actions/crm-leads";
 import { Avatar } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
+import { ClaimButton } from "@/components/crm/forms/claim-button";
 import { DataTable, RowLink, type Column } from "@/components/crm/ui/data-table";
 import { SlaIndicator } from "@/components/crm/ui/sla-indicator";
 import { StatusBadge } from "@/components/crm/ui/status-badge";
@@ -14,8 +13,8 @@ import { cn } from "@/lib/utils";
 
 // Tabela de leads (crm-design-system.md, seção 7.3) sobre a DataTable: cinco colunas no desktop
 // (Nome com empresa · segmento, Estágio, Próxima ação ordenável, Origem, Dono) e cards no celular.
-// A linha inteira abre o lead pelo link do nome; "Assumir" (lead sem responsável) fica por cima do link
-// (`relative z-10`) e cai no detalhe com o dono atribuído (`claimLeadAction`).
+// A linha inteira abre o lead pelo link do nome; "Assumir" (lead sem responsável, ClaimButton) fica
+// por cima do link (`relative z-10`) e cai no detalhe com o dono atribuído.
 
 function CompanyLine({ lead, className }: { lead: LeadListRow; className?: string }) {
   const company = leadCompany(lead);
@@ -33,19 +32,6 @@ function NameCell({ lead }: { lead: LeadListRow }) {
       <span className="truncate">{lead.name}</span>
       <StatusBadge kind="temperature" value={lead.temperature} size="sm" />
     </span>
-  );
-}
-
-// "Assumir": o usuário da sessão vira dono e a navegação cai no detalhe (claimLeadAction já
-// redireciona). O form fica por cima do link da linha.
-function ClaimButton({ leadId, size }: { leadId: string; size: "sm" | "touch" }) {
-  return (
-    <form action={claimLeadAction} className="relative z-10 inline-flex">
-      <input type="hidden" name="leadId" value={leadId} />
-      <Button type="submit" variant="outline" size={size}>
-        Assumir
-      </Button>
-    </form>
   );
 }
 
@@ -139,9 +125,10 @@ export function LeadTable({
       rows={rows}
       rowHref={href}
       rowKey={(lead) => lead.id}
-      // Perdidos ficam esmaecidos.
+      // Perdidos ficam em cinza (texto em muted, 5,9:1), nunca com opacidade na linha inteira: a
+      // meta e o badge perderiam o contraste mínimo (WCAG 1.4.3).
       rowClassName={(lead) =>
-        isTerminalStage(lead.pipeline as Pipeline, lead.stage) ? "opacity-70" : undefined
+        isTerminalStage(lead.pipeline as Pipeline, lead.stage) ? "text-muted-foreground" : undefined
       }
       mobile={{
         primary: (lead) => <NameCell lead={lead} />,

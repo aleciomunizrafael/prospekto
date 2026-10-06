@@ -215,6 +215,11 @@ Critérios de aceite da Fase 3:
 - Zero ocorrências de `amber-`, `emerald-`, "Close", "SLA estourado há" e de ids hexadecimais nas telas do CRM.
 - `tests/auth-guard.test.ts`, `tests/lint.test.ts`, `tests/tokens-contrast.test.ts`, `tests/shell-nav.test.ts` e os de `tests/lib/` verdes.
 
+### Exceções registradas na Fase 3
+
+- `src/lib/crm/activity-text.ts` (regra 2) recebeu duas linhas de apresentação: `"source"` em `HIDDEN_KEYS` e `sourceDetail: "Detalhe da origem"` em `FORM_KEY_LABELS`, para a atividade "Lead cadastrado" do "Novo lead" não mostrar a chave da origem na linha do tempo. Nada de regra de negócio mudou; a função continua coberta por `tests/lib/activity-text.test.ts`.
+- Decisão D19 reescrita na revisão: o CRM exige JavaScript (as páginas chegam por streaming com `loading.tsx`); a variante `scripting` e os botões "Filtrar"/"Atribuir" só sem script foram removidos.
+
 ## Fase opcional (depois do uso real, não faz parte da entrega)
 
 - `?registrar=1` no `redirect` de `claimLeadAction` (uma linha em `src/actions/crm-leads.ts`) para "Assumir" já abrir o formulário focado.

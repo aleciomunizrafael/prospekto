@@ -6,6 +6,7 @@
 import { Pencil, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, type ReactElement } from "react";
+import { toast } from "sonner";
 import {
   createContactAction,
   createOrganizationAction,
@@ -94,6 +95,7 @@ export function NewOrganizationDialog({
         action={createOrganizationAction}
         submitLabel="Criar organização"
         pendingLabel="Criando..."
+        successMessage="Organização criada."
         wide
       >
         <OrganizationFields accountants={accountants} users={users} defaultType={defaultType} />
@@ -146,6 +148,7 @@ export function EditOrganizationSheet({
           submitLabel="Salvar alterações"
           showSuccess={false}
           onSuccess={() => {
+            toast.success("Organização salva.");
             router.refresh();
             onOpenChange(false);
           }}
@@ -255,6 +258,7 @@ export function NewContactDialog({
       description="Pessoa dentro da organização (decisor, contador, secretário)."
       action={createContactAction}
       submitLabel="Salvar contato"
+      successMessage="Contato salvo."
       variant={variant}
       size={size}
       className={className}
@@ -280,6 +284,7 @@ export function EditContactDialog({
       title={`Editar ${contact.name ?? "contato"}`}
       action={updateContactAction}
       submitLabel="Salvar contato"
+      successMessage="Contato salvo."
       size={size}
       wide
     >
@@ -302,6 +307,7 @@ export function LinkLeadDialog({
       action={linkLeadToOrganizationAction}
       submitLabel="Vincular"
       pendingLabel="Vinculando..."
+      successMessage="Lead vinculado."
       size={size}
       className={className}
       wide
@@ -347,6 +353,7 @@ export function UnlinkLeadMenu({
         action={unlinkLeadFromOrganizationAction}
         submitLabel="Desvincular"
         pendingLabel="Desvinculando..."
+        successMessage="Lead desvinculado."
         submitVariant="destructive"
         alert
       >

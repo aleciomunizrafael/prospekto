@@ -207,7 +207,6 @@ export function LeadCreateForm() {
         <SelectField
           name="interest"
           label="Interesse"
-          required
           error={e.interest}
           placeholder={null}
           options={LEAD_INTERESTS.map((i) => ({ value: i, label: INTEREST_LABELS[i] }))}

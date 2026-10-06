@@ -19,7 +19,8 @@ import { cn } from "@/lib/utils";
 // `relative`, então o ::after do link cobre a linha toda; botões e outros links da linha precisam
 // de `relative z-10` para ficar por cima.
 // No celular `primary` já é envolvido pelo `RowLink`; no desktop a página coloca o `RowLink` na
-// primeira coluna.
+// primeira coluna. Sem `rowHref` (ex.: contatos, que não têm página) a linha não é clicável e os
+// links ficam só nas células que os têm.
 export type Column<T> = {
   key: string;
   header: ReactNode;
@@ -77,7 +78,7 @@ export function DataTable<T>({
   caption: string;
   columns: Column<T>[];
   rows: T[];
-  rowHref: (row: T) => string;
+  rowHref?: (row: T) => string;
   rowKey: (row: T) => string;
   rowClassName?: (row: T) => string | undefined;
   mobile: DataTableMobile<T>;
@@ -178,9 +179,13 @@ export function DataTable<T>({
               )}
             >
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <RowLink href={rowHref(row)} className="text-sm">
-                  {mobile.primary(row)}
-                </RowLink>
+                {rowHref ? (
+                  <RowLink href={rowHref(row)} className="text-sm">
+                    {mobile.primary(row)}
+                  </RowLink>
+                ) : (
+                  <span className="text-sm font-medium">{mobile.primary(row)}</span>
+                )}
                 <div className="crm-meta flex flex-wrap items-center gap-x-2 gap-y-1">
                   {mobile.secondary(row)}
                 </div>

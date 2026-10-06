@@ -5,7 +5,11 @@ import {
   ContributionHeaderMenu,
   RecordCommissionDialog,
 } from "@/components/crm/contribution-dialogs";
-import { ContributionSteps, contributionFlowSteps } from "@/components/crm/contribution-steps";
+import {
+  ContributionSteps,
+  contributionFlowSteps,
+  type ContributionStepData,
+} from "@/components/crm/contribution-steps";
 import { ActionBarMobile } from "@/components/crm/ui/action-bar-mobile";
 import { Callout } from "@/components/crm/ui/callout";
 import { DetailLayout } from "@/components/crm/ui/detail-layout";
@@ -32,6 +36,7 @@ import {
   getContributionSummary,
   listContributions,
 } from "@/lib/repos/contributions";
+import { listOrganizations } from "@/lib/repos/organizations";
 import { getProject } from "@/lib/repos/projects";
 import { listTenantUsers } from "@/lib/repos/users";
 import { requireSession } from "@/lib/session";
@@ -46,13 +51,16 @@ export default async function ContributionPage({ params }: PageProps<"/app/aport
   const c = await getContributionSummary(ctx, id);
   if (!c) notFound();
   const now = new Date();
-  const [activities, users, blockers, project, siblings] = await Promise.all([
+  const [activities, users, blockers, project, siblings, sponsorOrgs] = await Promise.all([
     listActivities(ctx, { contributionId: c.id, limit: 100 }),
     listTenantUsers(ctx),
     contributionStepBlockers(ctx, c),
     getProject(ctx, c.projectId),
     listContributions(ctx, { projectId: c.projectId, limit: 500 }),
+    c.status === "proposta" ? listOrganizations(ctx, { type: "empresa", limit: 300 }) : [],
   ]);
+  // O mesmo carregamento serve ao NextStepCard e à barra do celular (nada é consultado de novo).
+  const stepData: ContributionStepData = { blockers, project, siblings, sponsorOrgs };
 
   const cancelled = c.status === "cancelado";
   const wasDeposited = c.status === "depositado" || c.status === "recibo_emitido";
@@ -171,9 +179,6 @@ export default async function ContributionPage({ params }: PageProps<"/app/aport
       header={
         <div className="flex flex-col gap-4">
           <PageHeader
-            breadcrumb={[{ label: "Aportes", href: "/app/aportes" }]}
-            backHref="/app/aportes"
-            backLabel="Voltar para Aportes"
             eyebrow={`Aporte em ${c.projectName} · ${CONTRIBUTION_TYPE_LABELS[c.type]} · ${mechanismLabel(c.mechanism)}`}
             title={title}
             meta={
@@ -224,7 +229,13 @@ export default async function ContributionPage({ params }: PageProps<"/app/aport
             action={
               // Só o botão do passo: "Cancelar aporte" já está no "⋯" do cabeçalho e da barra.
               cancelled ? null : (
-                <ContributionSteps ctx={ctx} contribution={c} variant="row" menu={false} />
+                <ContributionSteps
+                  ctx={ctx}
+                  contribution={c}
+                  data={stepData}
+                  variant="row"
+                  menu={false}
+                />
               )
             }
           />
@@ -272,7 +283,13 @@ export default async function ContributionPage({ params }: PageProps<"/app/aport
                 Ver projeto
               </Button>
             ) : (
-              <ContributionSteps ctx={ctx} contribution={c} variant="row" size="touch" />
+              <ContributionSteps
+                ctx={ctx}
+                contribution={c}
+                data={stepData}
+                variant="row"
+                size="touch"
+              />
             )
           }
           secondary={
