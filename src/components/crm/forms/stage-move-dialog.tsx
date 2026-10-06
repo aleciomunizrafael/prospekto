@@ -124,7 +124,7 @@ export function StageMoveDialog(props: Props) {
             {blocked.length > 0 ? (
               <div
                 role="alert"
-                className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+                className="rounded-lg border border-warning/30 bg-warning-soft p-3 text-sm text-warning"
               >
                 <p className="font-medium">Este movimento depende do aporte ou do projeto.</p>
                 <p className="mt-1">

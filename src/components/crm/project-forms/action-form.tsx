@@ -1,7 +1,9 @@
 "use client";
 // Formulário do CRM ligado a uma Server Action com useActionState: mostra a mensagem geral, os
 // campos faltantes ("Para mover ... falta: ...") e o erro de cada campo pelo `name`. Campos nativos
-// (input, select, textarea) com rótulo em português e alvo de toque de 44px. Sem dependência nova.
+// (input, select, textarea) com rótulo em português, asterisco + aria-required nos obrigatórios e
+// alvo de toque de 44px. Sem dependência nova.
+import { Circle, Loader2 } from "lucide-react";
 import {
   createContext,
   useActionState,
@@ -9,11 +11,15 @@ import {
   useEffect,
   useId,
   type ComponentProps,
+  type FormEventHandler,
   type ReactNode,
+  type Ref,
 } from "react";
 import { Button } from "@/components/ui/button";
+import { DialogFooter } from "@/components/ui/dialog";
 import { idleState, type ActionState } from "@/lib/crm/form-state";
 import { cn } from "@/lib/utils";
+import { DateHint } from "../ui/date-hint";
 
 export type FormAction = (prev: ActionState, formData: FormData) => Promise<ActionState>;
 
@@ -34,6 +40,16 @@ type ActionFormProps = {
   // Mostra a mensagem de sucesso no próprio formulário (padrão: sim).
   showSuccess?: boolean;
   variant?: ComponentProps<typeof Button>["variant"];
+  // Botão de envio desabilitado de verdade (bloqueio por regra), com o id do aviso que explica.
+  submitDisabled?: boolean;
+  submitDescribedBy?: string;
+  onChange?: FormEventHandler<HTMLFormElement>;
+  // Botão secundário (ex.: "Cancelar" que fecha o diálogo) à esquerda do envio.
+  secondaryAction?: ReactNode;
+  // "dialog": rodapé fixo em surface-2 (DialogFooter); "plain": só a linha de botões.
+  footer?: "plain" | "dialog";
+  formRef?: Ref<HTMLFormElement>;
+  id?: string;
 };
 
 export function ActionForm({
@@ -45,6 +61,13 @@ export function ActionForm({
   onSuccess,
   showSuccess = true,
   variant = "default",
+  submitDisabled,
+  submitDescribedBy,
+  onChange,
+  secondaryAction,
+  footer = "plain",
+  formRef,
+  id,
 }: ActionFormProps) {
   const [state, formAction, pending] = useActionState(action, idleState);
   useEffect(() => {
@@ -52,16 +75,49 @@ export function ActionForm({
     // onSuccess é estável o bastante para o uso aqui (fechar diálogo); o estado muda a cada envio.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
+  const submit = (
+    <Button
+      type="submit"
+      disabled={pending || submitDisabled}
+      aria-disabled={submitDisabled || undefined}
+      aria-describedby={submitDescribedBy}
+      variant={variant}
+      size="touch"
+      className="md:h-9"
+    >
+      {pending ? (
+        <>
+          <Loader2 className="animate-spin" aria-hidden="true" />
+          {pendingLabel}
+        </>
+      ) : (
+        submitLabel
+      )}
+    </Button>
+  );
   return (
     <FormStateContext.Provider value={state}>
-      <form action={formAction} className={cn("flex flex-col gap-4", className)} noValidate>
+      <form
+        id={id}
+        ref={formRef}
+        action={formAction}
+        onChange={onChange}
+        className={cn("flex flex-col gap-4", className)}
+        noValidate
+      >
         {children}
         <ActionMessage state={state} showSuccess={showSuccess} />
-        <div className="flex items-center gap-3">
-          <Button type="submit" disabled={pending} variant={variant} className="h-11 px-5">
-            {pending ? pendingLabel : submitLabel}
-          </Button>
-        </div>
+        {footer === "dialog" ? (
+          <DialogFooter>
+            {secondaryAction}
+            {submit}
+          </DialogFooter>
+        ) : (
+          <div className="flex items-center justify-end gap-2">
+            {secondaryAction}
+            {submit}
+          </div>
+        )}
       </form>
     </FormStateContext.Provider>
   );
@@ -78,7 +134,7 @@ export function ActionMessage({
     return (
       <div
         role="alert"
-        className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        className="rounded-lg border border-destructive/30 bg-error-soft px-3 py-2 text-sm text-destructive"
       >
         <p className="font-medium">{state.message}</p>
         {state.missing?.length ? (
@@ -102,7 +158,7 @@ export function ActionMessage({
     return (
       <div
         role="status"
-        className="rounded-lg border border-emerald-600/30 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
+        className="rounded-lg border border-success/30 bg-success-soft px-3 py-2 text-sm text-success"
       >
         {state.message ? <p className="font-medium">{state.message}</p> : null}
         {state.warnings?.length ? (
@@ -119,7 +175,10 @@ export function ActionMessage({
 }
 
 export const controlClass =
-  "border-input bg-background text-foreground min-h-11 w-full rounded-lg border px-3 py-2 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive md:text-sm";
+  "border-input bg-background text-foreground min-h-11 w-full rounded-lg border px-3 py-2 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive md:min-h-9 md:py-1.5 md:text-sm";
+
+// Opção vazia ("Selecione") em cinza de placeholder, com 4,5:1 (token --placeholder).
+const selectControlClass = `${controlClass} [&:has(option[value='']:checked)]:text-placeholder`;
 
 type ShellProps = {
   label: string;
@@ -129,15 +188,19 @@ type ShellProps = {
   id: string;
   className?: string;
   children: ReactNode;
+  after?: ReactNode;
 };
 
-function Shell({ label, required, help, error, id, className, children }: ShellProps) {
+function Shell({ label, required, help, error, id, className, children, after }: ShellProps) {
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       <label htmlFor={id} className="text-sm font-medium">
         {label}
         {required ? (
-          <span className="text-muted-foreground font-normal"> (obrigatório)</span>
+          <span aria-hidden="true" className="text-destructive">
+            {" "}
+            *
+          </span>
         ) : null}
       </label>
       {help ? (
@@ -146,13 +209,19 @@ function Shell({ label, required, help, error, id, className, children }: ShellP
         </p>
       ) : null}
       {children}
+      {after}
       {error ? (
-        <p id={`${id}-erro`} className="text-destructive text-sm font-medium">
+        <p id={`${id}-erro`} role="alert" className="text-destructive text-sm font-medium">
           {error}
         </p>
       ) : null}
     </div>
   );
+}
+
+function describedBy(id: string, help: unknown, error: unknown): string | undefined {
+  const list = [help ? `${id}-ajuda` : null, error ? `${id}-erro` : null].filter(Boolean);
+  return list.length ? list.join(" ") : undefined;
 }
 
 type BaseFieldProps = {
@@ -185,8 +254,9 @@ export function TextField({
       <input
         id={id}
         name={name}
+        aria-required={required || undefined}
         aria-invalid={error ? true : undefined}
-        aria-describedby={help ? `${id}-ajuda` : undefined}
+        aria-describedby={describedBy(id, help, error)}
         className={controlClass}
         {...props}
       />
@@ -194,13 +264,127 @@ export function TextField({
   );
 }
 
-// Valor em reais digitado em português (1.500.000,00).
-export function MoneyField(props: BaseFieldProps & Omit<ComponentProps<"input">, "name" | "id">) {
-  return <TextField inputMode="decimal" placeholder="0,00" {...props} />;
+// Campo com prefixo ("R$") ou sufixo ("%") fixo dentro da caixa.
+function AffixField({
+  name,
+  label,
+  required,
+  help,
+  className,
+  prefix,
+  suffix,
+  ...props
+}: BaseFieldProps & { prefix?: string; suffix?: string } & Omit<
+    ComponentProps<"input">,
+    "name" | "id"
+  >) {
+  const error = useFieldError(name);
+  const id = useId();
+  return (
+    <Shell
+      label={label}
+      required={required}
+      help={help}
+      error={error}
+      id={id}
+      className={className}
+    >
+      <div className="relative">
+        {prefix ? (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground"
+          >
+            {prefix}
+          </span>
+        ) : null}
+        <input
+          id={id}
+          name={name}
+          aria-required={required || undefined}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy(id, help, error)}
+          className={cn(controlClass, "tabular-nums", prefix && "pl-9", suffix && "pr-8")}
+          {...props}
+        />
+        {suffix ? (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground"
+          >
+            {suffix}
+          </span>
+        ) : null}
+      </div>
+    </Shell>
+  );
 }
 
-export function DateField(props: BaseFieldProps & Omit<ComponentProps<"input">, "name" | "id">) {
-  return <TextField type="date" {...props} />;
+// Valor em reais digitado em português (1.500.000,00), com "R$" fixo à esquerda.
+export function MoneyField(props: BaseFieldProps & Omit<ComponentProps<"input">, "name" | "id">) {
+  return <AffixField prefix="R$" inputMode="decimal" placeholder="0,00" {...props} />;
+}
+
+// Percentual com "%" fixo à direita.
+export function PercentField(props: BaseFieldProps & Omit<ComponentProps<"input">, "name" | "id">) {
+  return <AffixField suffix="%" inputMode="decimal" placeholder="0" {...props} />;
+}
+
+export function DateField({
+  dateHint = true,
+  ...props
+}: BaseFieldProps & { dateHint?: boolean } & Omit<ComponentProps<"input">, "name" | "id">) {
+  return <DateInputField type="date" dateHint={dateHint} {...props} />;
+}
+
+export function DateTimeField({
+  dateHint = true,
+  ...props
+}: BaseFieldProps & { dateHint?: boolean } & Omit<ComponentProps<"input">, "name" | "id">) {
+  return <DateInputField type="datetime-local" dateHint={dateHint} {...props} />;
+}
+
+function DateInputField({
+  name,
+  label,
+  required,
+  help,
+  className,
+  dateHint,
+  type,
+  ...props
+}: BaseFieldProps & { dateHint?: boolean } & Omit<ComponentProps<"input">, "name" | "id">) {
+  const error = useFieldError(name);
+  const id = useId();
+  const initial =
+    typeof props.defaultValue === "string"
+      ? props.defaultValue
+      : typeof props.value === "string"
+        ? props.value
+        : undefined;
+  return (
+    <Shell
+      label={label}
+      required={required}
+      help={help}
+      error={error}
+      id={id}
+      className={className}
+      after={dateHint ? <DateHint inputId={id} initial={initial} /> : null}
+    >
+      <input
+        id={id}
+        name={name}
+        type={type}
+        placeholder={type === "datetime-local" ? "dd/mm/aaaa hh:mm" : "dd/mm/aaaa"}
+        aria-required={required || undefined}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy(id, help, error)}
+        className={controlClass}
+        {...props}
+      />
+    </Shell>
+  );
 }
 
 export function TextareaField({
@@ -225,7 +409,9 @@ export function TextareaField({
       <textarea
         id={id}
         name={name}
+        aria-required={required || undefined}
         aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy(id, help, error)}
         className={cn(controlClass, "min-h-24")}
         rows={4}
         {...props}
@@ -263,8 +449,10 @@ export function SelectField({
       <select
         id={id}
         name={name}
+        aria-required={required || undefined}
         aria-invalid={error ? true : undefined}
-        className={controlClass}
+        aria-describedby={describedBy(id, help, error)}
+        className={selectControlClass}
         {...props}
       >
         <option value="">{placeholder}</option>
@@ -283,14 +471,31 @@ export function CheckboxField({
   label,
   help,
   className,
+  required,
   ...props
 }: BaseFieldProps & Omit<ComponentProps<"input">, "name" | "id" | "type">) {
   const id = useId();
   return (
     <div className={cn("flex items-start gap-3", className)}>
-      <input id={id} name={name} type="checkbox" className="mt-1 size-5" {...props} />
+      <input
+        id={id}
+        name={name}
+        type="checkbox"
+        required={required}
+        aria-required={required || undefined}
+        className="accent-primary mt-1 size-5"
+        {...props}
+      />
       <label htmlFor={id} className="text-sm">
-        <span className="font-medium">{label}</span>
+        <span className="font-medium">
+          {label}
+          {required ? (
+            <span aria-hidden="true" className="text-destructive">
+              {" "}
+              *
+            </span>
+          ) : null}
+        </span>
         {help ? <span className="text-muted-foreground block">{help}</span> : null}
       </label>
     </div>
@@ -301,15 +506,36 @@ export function HiddenField({ name, value }: { name: string; value: string | nul
   return <input type="hidden" name={name} value={value ?? ""} />;
 }
 
-// Lista "o que falta" exibida antes de um passo (botões que explicam o que falta).
-export function Blockers({ items, intro }: { items: string[]; intro: string }) {
+// "O que falta" antes de um passo, como checklist em âmbar (crm-design-system.md, seção 7.12):
+// cada item com um círculo vazio; `id` serve ao aria-describedby do botão bloqueado.
+export function Blockers({
+  items,
+  intro,
+  id,
+  className,
+}: {
+  items: string[];
+  intro: string;
+  id?: string;
+  className?: string;
+}) {
   if (!items.length) return null;
   return (
-    <div className="rounded-lg border border-amber-500/40 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+    <div
+      id={id}
+      role="alert"
+      className={cn(
+        "rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-warning",
+        className,
+      )}
+    >
       <p className="font-medium">{intro}</p>
-      <ul className="mt-1 list-disc pl-5">
+      <ul className="mt-1 flex flex-col gap-1">
         {items.map((m) => (
-          <li key={m}>{m}</li>
+          <li key={m} className="flex items-start gap-2">
+            <Circle className="mt-1 size-3 shrink-0" aria-hidden="true" />
+            <span>{m}</span>
+          </li>
         ))}
       </ul>
     </div>

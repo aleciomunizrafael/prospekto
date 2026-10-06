@@ -1,32 +1,52 @@
-// Tabela de aportes (bloco do projeto e lista /app/aportes), com as mesmas colunas e passos.
+// Tabela de aportes (lista /app/aportes) e lista de cards (bloco do projeto e do lead), com as
+// mesmas colunas e o botão do passo atual (crm-design-system.md, seção 5.2).
+import { CalendarClock, HandCoins } from "lucide-react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { formatBRL, formatCalendarDate } from "@/lib/crm/format";
-import {
-  CONTRIBUTION_STATUS_LABELS,
-  CONTRIBUTION_TYPE_LABELS,
-  mechanismLabel,
-} from "@/lib/crm/enum-labels";
+  formatBRL,
+  formatCalendarDate,
+  calendarDateInSaoPaulo,
+  diffCalendarDays,
+} from "@/lib/crm/format";
+import { CONTRIBUTION_TYPE_LABELS, mechanismLabel } from "@/lib/crm/enum-labels";
 import type { Ctx } from "@/lib/repos/ctx";
 import type { ContributionSummary } from "@/lib/repos/contributions";
+import { cn } from "@/lib/utils";
 import { ContributionSteps } from "./contribution-steps";
+import { DataTable, RowLink, type Column } from "./ui/data-table";
+import { EmptyState } from "./ui/empty-state";
+import { StatusBadge } from "./ui/status-badge";
 
-export function ContributionStatusBadge({ status }: { status: ContributionSummary["status"] }) {
-  const variant =
-    status === "cancelado"
-      ? "destructive"
-      : status === "recibo_emitido" || status === "depositado"
-        ? "default"
-        : "secondary";
-  return <Badge variant={variant}>{CONTRIBUTION_STATUS_LABELS[status]}</Badge>;
+// Reexport de compatibilidade: o badge de status vem de StatusBadge (seção 6.2).
+export function ContributionStatusBadge({
+  status,
+  size,
+}: {
+  status: ContributionSummary["status"];
+  size?: "sm" | "md";
+}) {
+  return <StatusBadge kind="contribution" value={status} size={size} />;
+}
+
+const SOON_DAYS = 15;
+
+function expectedSoon(c: ContributionSummary, now: Date): boolean {
+  if (!c.expectedCloseAt) return false;
+  if (c.status !== "proposta" && c.status !== "termo_assinado") return false;
+  const days = diffCalendarDays(calendarDateInSaoPaulo(now), c.expectedCloseAt);
+  return days >= 0 && days <= SOON_DAYS;
+}
+
+function Expected({ c, now }: { c: ContributionSummary; now: Date }) {
+  if (!c.expectedCloseAt) return <span className="text-muted-foreground">—</span>;
+  const soon = expectedSoon(c, now);
+  return (
+    <span className={cn("inline-flex items-center gap-1", soon && "font-medium text-warning")}>
+      {soon ? <CalendarClock className="size-3.5" aria-hidden="true" /> : null}
+      {formatCalendarDate(c.expectedCloseAt)}
+      {soon ? <span className="sr-only">, nos próximos 15 dias</span> : null}
+    </span>
+  );
 }
 
 export function ContributionTable({
@@ -34,94 +54,213 @@ export function ContributionTable({
   rows,
   showProject = true,
   showSteps = true,
+  layout = "table",
+  now = new Date(),
+  caption = "Aportes",
+  empty,
+  className,
 }: {
   ctx: Ctx;
   rows: ContributionSummary[];
   showProject?: boolean;
   showSteps?: boolean;
+  layout?: "table" | "cards";
+  now?: Date;
+  caption?: string;
+  empty?: React.ReactNode;
+  className?: string;
 }) {
-  if (rows.length === 0) return <p className="text-muted-foreground text-sm">Nenhum aporte.</p>;
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Patrocinador</TableHead>
-          {showProject ? <TableHead>Projeto</TableHead> : null}
-          <TableHead>Tipo / mecanismo</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className="text-right">Proposto</TableHead>
-          <TableHead className="text-right">Depositado</TableHead>
-          <TableHead>Previsão</TableHead>
-          <TableHead>Recibo</TableHead>
-          <TableHead className="text-right">Comissão</TableHead>
-          {showSteps ? <TableHead>Passos</TableHead> : null}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
+  if (rows.length === 0 && layout === "cards") {
+    return (
+      <p className={cn("text-sm text-muted-foreground", className)}>
+        Nenhum aporte proposto ainda.
+      </p>
+    );
+  }
+
+  if (layout === "cards") {
+    return (
+      <ul className={cn("flex flex-col gap-2", className)} aria-label={caption}>
         {rows.map((c) => (
-          <TableRow key={c.id}>
-            <TableCell>
-              <Link href={`/app/aportes/${c.id}`} className="font-medium underline">
-                {c.leadName}
-              </Link>
-              <span className="text-muted-foreground block text-xs">
-                {c.leadSegment}
-                {c.orgName ? ` · ${c.orgName}` : ""}
-              </span>
-            </TableCell>
-            {showProject ? (
-              <TableCell>
-                <Link href={`/app/projetos/${c.projectId}`} className="underline">
-                  {c.projectName}
-                </Link>
-              </TableCell>
-            ) : null}
-            <TableCell>
-              {CONTRIBUTION_TYPE_LABELS[c.type]}
-              <span className="text-muted-foreground block text-xs">
-                {mechanismLabel(c.mechanism)}
-              </span>
-            </TableCell>
-            <TableCell>
-              <ContributionStatusBadge status={c.status} />
-            </TableCell>
-            <TableCell className="text-right">{formatBRL(c.proposedAmount)}</TableCell>
-            <TableCell className="text-right">
-              {formatBRL(c.depositedAmount)}
-              {c.depositedAt ? (
-                <span className="text-muted-foreground block text-xs">
-                  {formatCalendarDate(c.depositedAt)}
-                </span>
-              ) : null}
-            </TableCell>
-            <TableCell>{formatCalendarDate(c.expectedCloseAt)}</TableCell>
-            <TableCell>
-              {c.receiptNumber ?? ""}
-              {c.receiptIssuedAt ? (
-                <span className="text-muted-foreground block text-xs">
-                  {formatCalendarDate(c.receiptIssuedAt)}
-                  {c.receiptSentToAccountantAt
-                    ? ` · contador ${formatCalendarDate(c.receiptSentToAccountantAt)}`
+          <li
+            key={c.id}
+            className="relative flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-card px-3 py-2 text-sm transition-colors duration-120 hover:bg-surface-2 focus-within:bg-primary-soft"
+          >
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <RowLink href={`/app/aportes/${c.id}`} className="text-sm">
+                {showProject ? c.projectName : c.leadName}
+              </RowLink>
+              <span className="crm-meta truncate">
+                {showProject ? c.leadName : null}
+                {showProject && c.orgName
+                  ? ` · ${c.orgName}`
+                  : !showProject && c.orgName
+                    ? c.orgName
                     : ""}
-                </span>
-              ) : null}
-            </TableCell>
-            <TableCell className="text-right">
-              {formatBRL(c.commissionDue)}
-              {c.commissionPaidAt ? (
-                <span className="text-muted-foreground block text-xs">
-                  paga {formatCalendarDate(c.commissionPaidAt)}
-                </span>
-              ) : null}
-            </TableCell>
+                {!showProject && !c.orgName ? CONTRIBUTION_TYPE_LABELS[c.type] : ""}
+              </span>
+            </div>
+            <StatusBadge kind="contribution" value={c.status} />
+            <span className="tabular-nums">
+              {c.depositedAmount != null
+                ? formatBRL(c.depositedAmount)
+                : formatBRL(c.proposedAmount)}
+              <span className="crm-meta">
+                {c.depositedAt
+                  ? ` em ${formatCalendarDate(c.depositedAt)}`
+                  : c.expectedCloseAt
+                    ? ` · prev. ${formatCalendarDate(c.expectedCloseAt)}`
+                    : ""}
+              </span>
+            </span>
             {showSteps ? (
-              <TableCell>
-                <ContributionSteps ctx={ctx} contribution={c} />
-              </TableCell>
+              <ContributionSteps ctx={ctx} contribution={c} variant="row" compact />
             ) : null}
-          </TableRow>
+          </li>
         ))}
-      </TableBody>
-    </Table>
+      </ul>
+    );
+  }
+
+  const columns: Column<ContributionSummary>[] = [
+    {
+      key: "sponsor",
+      header: showProject ? "Patrocinador / projeto" : "Patrocinador",
+      priority: 1,
+      cell: (c) => (
+        <div className="flex min-w-0 flex-col">
+          <RowLink href={`/app/aportes/${c.id}`}>{c.leadName}</RowLink>
+          <span className="crm-meta">
+            {c.orgName ? `${c.orgName} · ` : ""}
+            {CONTRIBUTION_TYPE_LABELS[c.type]} · {mechanismLabel(c.mechanism)}
+          </span>
+          {showProject ? (
+            <Link
+              href={`/app/projetos/${c.projectId}`}
+              className="relative z-10 w-fit text-sm text-primary underline-offset-2 hover:underline"
+            >
+              → {c.projectName}
+            </Link>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      priority: 1,
+      cell: (c) => <StatusBadge kind="contribution" value={c.status} />,
+    },
+    {
+      key: "proposed",
+      header: "Proposto",
+      align: "right",
+      priority: 1,
+      cell: (c) => formatBRL(c.proposedAmount),
+    },
+    {
+      key: "deposited",
+      header: "Depositado",
+      align: "right",
+      priority: 2,
+      cell: (c) =>
+        c.depositedAmount == null ? (
+          <span className="text-muted-foreground">—</span>
+        ) : (
+          <span className="flex flex-col items-end">
+            {formatBRL(c.depositedAmount)}
+            {c.depositedAt ? (
+              <span className="crm-meta">{formatCalendarDate(c.depositedAt)}</span>
+            ) : null}
+          </span>
+        ),
+    },
+    {
+      key: "expected",
+      header: "Previsão",
+      priority: 2,
+      cell: (c) => <Expected c={c} now={now} />,
+    },
+    {
+      key: "receipt",
+      header: "Recibo",
+      priority: 3,
+      cell: (c) =>
+        c.receiptNumber ? (
+          <span className="flex flex-col">
+            <span className="crm-code">{c.receiptNumber}</span>
+            {c.receiptIssuedAt ? (
+              <span className="crm-meta">
+                {formatCalendarDate(c.receiptIssuedAt)}
+                {c.receiptSentToAccountantAt
+                  ? ` · contador ${formatCalendarDate(c.receiptSentToAccountantAt)}`
+                  : ""}
+              </span>
+            ) : null}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      key: "commission",
+      header: "Comissão",
+      align: "right",
+      priority: 3,
+      cell: (c) =>
+        c.commissionDue == null ? (
+          <span className="text-muted-foreground">—</span>
+        ) : (
+          <span className="flex flex-col items-end">
+            {formatBRL(c.commissionDue)}
+            {c.commissionPaidAt ? (
+              <span className="crm-meta">paga {formatCalendarDate(c.commissionPaidAt)}</span>
+            ) : null}
+          </span>
+        ),
+    },
+  ];
+  if (showSteps) {
+    columns.push({
+      key: "step",
+      header: "Próximo passo",
+      priority: 1,
+      cell: (c) => <ContributionSteps ctx={ctx} contribution={c} variant="row" compact />,
+    });
+  }
+
+  return (
+    <DataTable
+      className={className}
+      caption={caption}
+      columns={columns}
+      rows={rows}
+      rowKey={(c) => c.id}
+      rowHref={(c) => `/app/aportes/${c.id}`}
+      rowClassName={(c) => (c.status === "cancelado" ? "opacity-70" : undefined)}
+      mobile={{
+        primary: (c) => c.leadName,
+        secondary: (c) => (
+          <>
+            <StatusBadge kind="contribution" value={c.status} />
+            <span className="tabular-nums text-foreground">{formatBRL(c.proposedAmount)}</span>
+            {c.expectedCloseAt ? <Expected c={c} now={now} /> : null}
+            {showProject ? <span className="basis-full">{c.projectName}</span> : null}
+          </>
+        ),
+        action: showSteps
+          ? (c) => <ContributionSteps ctx={ctx} contribution={c} variant="row" size="touch" />
+          : undefined,
+      }}
+      empty={
+        empty ?? (
+          <EmptyState
+            icon={HandCoins}
+            title="Nenhum aporte proposto."
+            description="Quando um patrocinador aceitar a proposta, registre aqui."
+          />
+        )
+      }
+    />
   );
 }
