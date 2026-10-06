@@ -16,12 +16,13 @@ Convenções de toda a pasta: português do Brasil; toda afirmação legal, trib
 | 6 | `playbooks/README.md`, depois os quatro playbooks | Como a prospecção opera a partir de 05/10/2026: rotina semanal, LinkedIn, networking, campanhas, parceria com contadores |
 | 7 | `produto/mentoria-e-curso.md` | O produto digital: formato, currículo, preço, plano de validação com critérios de seguir ou parar |
 | 8 | `arquitetura/ADR-001-stack.md`, `arquitetura/ADR-002-defaults-simulador.md`, `arquitetura/modelo-de-dados.md`, `arquitetura/scaffold.md`, `arquitetura/next16-convencoes.md` | A decisão de stack, o esquema de banco, o plano executável do scaffold e as convenções do Next.js 16; as três propostas em `arquitetura/propostas/` são leitura opcional para entender o que o ADR julgou |
-| 9 | `roadmap.md` | Fases, sprints de duas semanas, épicos, histórias com critérios de aceite, métricas, marcos de decisão e as primeiras duas semanas |
+| 9 | `design/crm-design-system.md`, depois `design/crm-redesign-plano.md` | O sistema de design do CRM (tokens, shell, componentes, badges, telas, estados, acessibilidade) e o plano de implementação em fases com frentes paralelas; leitura obrigatória antes de tocar em `src/app/(app)` ou `src/components/crm` |
+| 10 | `roadmap.md` | Fases, sprints de duas semanas, épicos, histórias com critérios de aceite, métricas, marcos de decisão e as primeiras duas semanas |
 
 Trilhas por papel:
 
-- Rafael (desenvolvedor): 1, 8, 5, 4 (seções 8 e 9 de personas), 3 (seções 2.3, 2.8 e 7), 9.
-- Sócio (operação e CRM): 1, 2, 6, 4, 5 (seções 5 e 10), 7, 9.
+- Rafael (desenvolvedor): 1, 8, 9, 5, 4 (seções 8 e 9 de personas), 3 (seções 2.3, 2.8 e 7), 10.
+- Sócio (operação e CRM): 1, 2, 6, 4, 5 (seções 5 e 10), 7, 10.
 - Daniela (rosto e voz): 1 (em especial a nota de revisão e as perguntas), 6 (`playbooks/README.md` e a lista "Antes de começar"), 7 (seções 1, 5 e 6), e as perguntas em aberto de `../README.md`.
 
 ## Índice por pasta
@@ -81,6 +82,13 @@ Trilhas por papel:
 | Arquivo | O que é |
 |---|---|
 | `mentoria-e-curso.md` | Produto digital: públicos, formatos (coorte de 8 semanas como primeiro lançamento), currículo, comparáveis de preço, hipóteses de preço e meta mínima, plano de validação de 6 semanas com critérios de seguir ou parar, operação (plataforma, aulas, suporte, certificado), ligação com a Fase 2, métricas, riscos e perguntas |
+
+### `design/`
+
+| Arquivo | O que é |
+|---|---|
+| `crm-design-system.md` | Sistema de design do CRM "Mesa de trabalho": decisões que fecham as contradições do painel de propostas, diagnóstico das capturas, princípios, tokens com valores CSS finais e contrastes calculados, escala tipográfica, shell (desktop e celular), inventário de componentes com props e recipes Tailwind, badges semânticos por estágio e status, especificação tela a tela com wireframes, estados, microcopy e checklist de acessibilidade e celular |
+| `crm-redesign-plano.md` | Plano de implementação do redesign em três fases: Fase 1 fundação (tokens, primitivos, componentes compartilhados, shell, autenticação, carregamento, busca), Fase 2 com sete frentes de arquivos disjuntos para agentes em paralelo (Hoje; Leads; Lead; Organizações; Projetos; Aportes; Exportar, Conta, Entrar e Redefinir senha) e Fase 3 de integração e QA visual, cada uma com arquivos, mudanças e critérios de aceite verificáveis |
 
 ### `arquitetura/`
 
