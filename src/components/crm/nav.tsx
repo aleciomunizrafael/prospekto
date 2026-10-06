@@ -20,6 +20,7 @@ export function CrmNav({ userName }: { userName: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const [leaving, setLeaving] = useState(false);
+  const accountActive = pathname.startsWith("/app/conta");
 
   async function signOut() {
     setLeaving(true);
@@ -53,7 +54,17 @@ export function CrmNav({ userName }: { userName: string }) {
           </Link>
         );
       })}
-      <span className="text-muted-foreground ml-auto hidden sm:inline">{userName}</span>
+      <Link
+        href="/app/conta"
+        aria-current={accountActive ? "page" : undefined}
+        className={cn(
+          "ml-auto rounded-md px-2 py-1 hover:bg-muted",
+          accountActive ? "bg-muted font-medium" : "text-muted-foreground",
+        )}
+      >
+        <span className="hidden sm:inline">{userName || "Conta"}</span>
+        <span className="sm:hidden">Conta</span>
+      </Link>
       <Button type="button" variant="outline" size="sm" onClick={signOut} disabled={leaving}>
         {leaving ? "Saindo..." : "Sair"}
       </Button>

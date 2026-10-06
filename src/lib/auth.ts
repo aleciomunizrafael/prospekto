@@ -34,5 +34,10 @@ export const auth = betterAuth({
       "/sign-in/email": { window: 60, max: 5 },
     },
   },
+  // A troca de senha só existe pela Server Action de src/actions/account.ts, que tem limite por
+  // pessoa em form_attempts; pelo HTTP (/api/auth/change-password) o mesmo cookie roubado poderia
+  // adivinhar a senha atual contando só com o limitador em memória. O 404 vale só para pedidos
+  // HTTP: auth.api.changePassword chamado pela ação continua funcionando.
+  disabledPaths: ["/change-password"],
   plugins: [nextCookies()],
 });

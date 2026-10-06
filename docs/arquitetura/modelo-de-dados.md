@@ -263,7 +263,7 @@ Interações, tarefas e eventos de sistema. `tarefa` com `due_at` e `done_at` nu
 
 ### 3.11 `form_attempts`
 
-Limite de 5 envios por IP por hora (`estrutura-e-copy.md`, seção 5.1), sem serviço externo. Sem `tenant_id`.
+Limite de 5 envios por IP por hora (`estrutura-e-copy.md`, seção 5.1), sem serviço externo. Sem `tenant_id`. A troca de senha em "Minha conta" (`src/actions/account.ts`) reutiliza a tabela com a chave `senha:<user_id>` no lugar do IP: 5 tentativas por pessoa por hora.
 
 | Campo | Tipo | Obrig. | Descrição |
 |---|---|---|---|

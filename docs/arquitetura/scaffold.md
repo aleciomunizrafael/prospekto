@@ -152,14 +152,14 @@ prospekto/
         layout.tsx                   exige sessão (requireSession) e monta a navegação do CRM
         app/page.tsx                 "Hoje"
         app/leads/ app/leads/[id]/ app/organizacoes/ app/organizacoes/[id]/
-        app/projetos/ app/projetos/[id]/ app/aportes/ app/exportar/
+        app/projetos/ app/projetos/[id]/ app/aportes/ app/exportar/ app/conta/
       api/
         auth/[...all]/route.ts       Better Auth
         downloads/guia/route.ts      PDF com link assinado
         cron/daily/route.ts          e-mail diário, SLAs, limpeza; CRON_SECRET
         webhooks/resend/route.ts     bounce e descadastro
         health/route.ts              select 1
-    actions/                         Server Actions: leads.ts, simulator.ts, crm.ts, projects.ts, contributions.ts, auth.ts
+    actions/                         Server Actions: leads.ts, simulator.ts, crm.ts, projects.ts, contributions.ts, auth.ts, account.ts
     assets/
       contabilizando-cultura-guia.pdf   cópia de docs/fontes/materiais/ (só após a edição revisada)
     components/

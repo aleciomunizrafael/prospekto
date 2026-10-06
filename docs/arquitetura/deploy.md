@@ -62,7 +62,7 @@ Previews: o `ignoreCommand` do `vercel.json` cancela o build de qualquer branch 
 
 ## 4. Primeiro acesso ao CRM (seed)
 
-Duas formas. **Pelo GitHub Actions** (sem instalar nada): cadastre em Settings, Secrets and variables, Actions os segredos `DATABASE_URL_UNPOOLED` (Storage, Neon, ".env.local snippet") e `BACKUP_PASSPHRASE` (senha forte, guardada no gerenciador; é a mesma do backup). Em Actions, workflow `seed`, "Run workflow", informe os usuários (`Nome <email>;Nome <email>`, o primeiro é owner), se quiser o projeto de exemplo e, para quem já existe e perdeu a senha, a opção "reset_password". As senhas temporárias saem só no artefato `credenciais-<run>` cifrado (1 dia de retenção): baixe, extraia e rode `gpg -d credenciais.txt.gpg` no Git Bash com a passphrase. Alternativa sem senha: depois do seed, use "Esqueci a senha" em `/entrar`, que funciona quando o Resend entrega para o e-mail da pessoa.
+Duas formas. **Pelo GitHub Actions** (sem instalar nada): cadastre em Settings, Secrets and variables, Actions os segredos `DATABASE_URL_UNPOOLED` (Storage, Neon, ".env.local snippet") e `BACKUP_PASSPHRASE` (senha forte, guardada no gerenciador; é a mesma do backup). Em Actions, workflow `seed`, "Run workflow", informe os usuários (`Nome <email>;Nome <email>`, o primeiro é owner), se quiser o projeto de exemplo e, para quem já existe e perdeu a senha, a opção "reset_password". As senhas temporárias saem só no artefato `credenciais-<run>` cifrado (1 dia de retenção): baixe, extraia e rode `gpg -d credenciais.txt.gpg` no Git Bash com a passphrase. Alternativa sem senha: depois do seed, use "Esqueci a senha" em `/entrar`, que funciona quando o Resend entrega para o e-mail da pessoa. Quem já está logado troca a senha em "Minha conta" (`/app/conta`).
 
 **No seu terminal**, apontando para o banco de produção:
 
@@ -72,7 +72,7 @@ SEED_USERS="Daniela Sandrin Copat <email-da-daniela>;Nome do sócio <email-do-so
 npm run db:seed
 ```
 
-O script cria o tenant `prospekto` e os usuários (a primeira pessoa é `owner`), e grava as senhas temporárias em um arquivo 0600 num diretório temporário indicado no terminal; envie por canal seguro e apague o arquivo. Entrada em `https://<domínio>/entrar`; "Esqueci a senha" funciona assim que o Resend estiver enviando. `SEED_EXAMPLE=1` cria o projeto de exemplo (não publicado), útil para treinar.
+O script cria o tenant `prospekto` e os usuários (a primeira pessoa é `owner`), e grava as senhas temporárias em um arquivo 0600 num diretório temporário indicado no terminal; envie por canal seguro e apague o arquivo. Entrada em `https://<domínio>/entrar`; "Esqueci a senha" funciona assim que o Resend estiver enviando; quem já está logado troca a senha em "Minha conta" (`/app/conta`). `SEED_EXAMPLE=1` cria o projeto de exemplo (não publicado), útil para treinar.
 
 ## 5. Domínio e URLs finais
 
