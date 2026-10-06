@@ -8,11 +8,16 @@ on:
   workflow_dispatch:
     inputs:
       seed_users:
-        description: 'Usuários no formato "Nome <email>;Nome <email>" (o primeiro é owner; e-mails já existentes são pulados)'
+        description: 'Usuários no formato "Nome <email>;Nome <email>" (o primeiro é owner; e-mails já existentes são pulados, salvo com "reset_password")'
         required: true
         type: string
       seed_example:
         description: "Criar também o projeto de exemplo (A Tacada Perfeita, não publicado)"
+        required: false
+        type: boolean
+        default: false
+      reset_password:
+        description: "Redefinir a senha dos usuários informados que já existem (gera senha temporária nova)"
         required: false
         type: boolean
         default: false
@@ -31,6 +36,7 @@ jobs:
       NEXT_PUBLIC_APP_URL: https://prospekto-sistema.vercel.app
       SEED_USERS: ${{ inputs.seed_users }}
       SEED_EXAMPLE: ${{ inputs.seed_example && '1' || '' }}
+      SEED_RESET_PASSWORD: ${{ inputs.reset_password && '1' || '' }}
     steps:
       - if: env.HAS_SECRETS != 'true'
         run: |

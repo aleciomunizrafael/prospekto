@@ -1,4 +1,5 @@
 // scaffold.md, seção 5.6: tenant `prospekto` e usuários de SEED_USERS ("Nome <email>;Nome <email>").
+// SEED_RESET_PASSWORD=1 gera senha temporária nova para os e-mails que já existem.
 // Idempotente: pula e-mails já existentes. Sem e-mails reais neste arquivo.
 //
 // Criação de usuário com cadastro fechado (disableSignUp): o Better Auth 1.7.7 recusa
@@ -56,12 +57,19 @@ if (users.length === 0) {
   const ctx = await auth.$context;
   for (const [index, user] of users.entries()) {
     const existing = await ctx.internalAdapter.findUserByEmail(user.email);
-    if (existing?.user) {
-      console.log(`usuário já existe, pulado: ${maskEmail(user.email)}`);
-      continue;
-    }
     const password = generateRandomString(20, "a-z", "A-Z", "0-9");
     const hash = await ctx.password.hash(password);
+    if (existing?.user) {
+      // SEED_RESET_PASSWORD=1: redefine a senha de quem já existe (mesmo hash scrypt do cadastro).
+      if (process.env.SEED_RESET_PASSWORD === "1") {
+        await ctx.internalAdapter.updatePassword(existing.user.id, hash);
+        await storeCredentials(user.email, password);
+        console.log(`senha redefinida: ${maskEmail(user.email)}`);
+      } else {
+        console.log(`usuário já existe, pulado: ${maskEmail(user.email)}`);
+      }
+      continue;
+    }
     const created = await ctx.internalAdapter.createUser(
       {
         name: user.name,

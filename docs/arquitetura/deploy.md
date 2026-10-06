@@ -60,7 +60,7 @@ openssl rand -base64 32   # CRON_SECRET
 
 ## 4. Primeiro acesso ao CRM (seed)
 
-Duas formas. **Pelo GitHub Actions** (sem instalar nada): cadastre em Settings, Secrets and variables, Actions os segredos `DATABASE_URL_UNPOOLED` (Storage, Neon, ".env.local snippet") e `BACKUP_PASSPHRASE` (senha forte, guardada no gerenciador; é a mesma do backup). Em Actions, workflow `seed`, "Run workflow", informe os usuários (`Nome <email>;Nome <email>`, o primeiro é owner) e, se quiser, o projeto de exemplo. As senhas temporárias saem só no artefato `credenciais-<run>` cifrado (1 dia de retenção): baixe, extraia e rode `gpg -d credenciais.txt.gpg` no Git Bash com a passphrase. Alternativa sem senha: depois do seed, use "Esqueci a senha" em `/entrar`, que funciona quando o Resend entrega para o e-mail da pessoa.
+Duas formas. **Pelo GitHub Actions** (sem instalar nada): cadastre em Settings, Secrets and variables, Actions os segredos `DATABASE_URL_UNPOOLED` (Storage, Neon, ".env.local snippet") e `BACKUP_PASSPHRASE` (senha forte, guardada no gerenciador; é a mesma do backup). Em Actions, workflow `seed`, "Run workflow", informe os usuários (`Nome <email>;Nome <email>`, o primeiro é owner), se quiser o projeto de exemplo e, para quem já existe e perdeu a senha, a opção "reset_password". As senhas temporárias saem só no artefato `credenciais-<run>` cifrado (1 dia de retenção): baixe, extraia e rode `gpg -d credenciais.txt.gpg` no Git Bash com a passphrase. Alternativa sem senha: depois do seed, use "Esqueci a senha" em `/entrar`, que funciona quando o Resend entrega para o e-mail da pessoa.
 
 **No seu terminal**, apontando para o banco de produção:
 
