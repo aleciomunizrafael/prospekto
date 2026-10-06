@@ -1,7 +1,16 @@
+import { ChevronLeft, ChevronRight, Ellipsis, Search, SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { selectClass } from "@/components/crm/forms/fields";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Toolbar, type FilterDef, type ToolbarChip } from "@/components/crm/ui/toolbar";
 import { leadFiltersToQuery, type LeadFilters } from "@/lib/crm/filters";
 import {
   PIPELINE_LABELS,
@@ -14,7 +23,18 @@ import { LEAD_SOURCES, LEAD_TEMPERATURES } from "@/lib/domain/enums";
 import { PIPELINES, STAGES, type Pipeline } from "@/lib/domain/pipelines";
 import { cn } from "@/lib/utils";
 
-// Abas por pipeline (links) e filtros em formulário GET: tudo fica na URL.
+// Abas por pipeline (links), barra de filtros (formulário GET) e paginação da lista de Leads
+// (crm-design-system.md, seção 7.3). Tudo fica na URL: `parseLeadFilters` e `leadFiltersToQuery`
+// não mudam, e os links gerados aqui são os mesmos de antes.
+
+const ACTION = "/app/leads";
+
+function leadsHref(f: Partial<LeadFilters>): string {
+  return `${ACTION}${leadFiltersToQuery(f)}`;
+}
+
+// Abas de pipeline: no celular rolam dentro do próprio elemento (a única rolagem horizontal
+// permitida); no desktop ficam em linha.
 export function PipelineTabs({
   current,
   counts,
@@ -23,133 +43,297 @@ export function PipelineTabs({
   counts: Record<Pipeline, number>;
 }) {
   return (
-    <nav aria-label="Pipelines" className="flex flex-wrap gap-1 border-b">
+    <nav
+      aria-label="Pipelines"
+      className="-mx-4 flex snap-x overflow-x-auto border-b border-border px-4 md:mx-0 md:px-0"
+    >
       {PIPELINES.map((p) => (
         <Link
           key={p}
-          href={`/app/leads${leadFiltersToQuery({ pipeline: p })}`}
+          href={leadsHref({ pipeline: p })}
           aria-current={p === current ? "page" : undefined}
           className={cn(
-            "-mb-px border-b-2 px-3 py-2 text-sm",
+            "-mb-px flex h-11 shrink-0 snap-start items-center gap-1.5 border-b-2 px-3 text-sm whitespace-nowrap transition-colors duration-120 md:h-10",
             p === current
-              ? "border-primary font-medium"
-              : "text-muted-foreground border-transparent hover:border-border",
+              ? "border-primary font-medium text-foreground"
+              : "border-transparent text-muted-foreground hover:border-border hover:text-foreground",
           )}
         >
-          {PIPELINE_LABELS[p]} <span className="text-muted-foreground">({counts[p]})</span>
+          {PIPELINE_LABELS[p]}
+          <span className="tabular-nums text-muted-foreground">{counts[p]}</span>
         </Link>
       ))}
     </nav>
   );
 }
 
-export function LeadFilterForm({
-  filters,
-  users,
+type User = { id: string; name: string };
+
+const SORT_OPTIONS = [
+  { value: "next_action", label: "próxima ação" },
+  { value: "created", label: "mais recentes" },
+];
+
+function filterDefs(f: LeadFilters, users: User[]) {
+  const stage: FilterDef = {
+    name: "stage",
+    label: "Estágio",
+    value: f.stage ?? "",
+    options: STAGES[f.pipeline].map((s) => ({ value: s, label: stageLabel(s) })),
+  };
+  const segment: FilterDef | null =
+    f.pipeline === "patrocinadores"
+      ? {
+          name: "segment",
+          label: "Segmento",
+          value: f.segment ?? "",
+          options: [
+            { value: "PJ", label: SEGMENT_LABELS.PJ },
+            { value: "PF", label: SEGMENT_LABELS.PF },
+          ],
+        }
+      : null;
+  const source: FilterDef = {
+    name: "source",
+    label: "Origem",
+    value: f.source ?? "",
+    options: LEAD_SOURCES.map((s) => ({ value: s, label: SOURCE_LABELS[s] })),
+    allLabel: "todas",
+  };
+  const owner: FilterDef = {
+    name: "owner",
+    label: "Dono",
+    value: f.ownerUserId ?? "",
+    options: users.map((u) => ({ value: u.id, label: u.name })),
+  };
+  const temperature: FilterDef = {
+    name: "temperature",
+    label: "Temperatura",
+    value: f.temperature ?? "",
+    options: LEAD_TEMPERATURES.map((t) => ({ value: t, label: TEMPERATURE_LABELS[t] })),
+    allLabel: "todas",
+  };
+  const sort: FilterDef = { name: "sort", label: "Ordenar", value: f.sort, options: SORT_OPTIONS };
+  const main = [stage, segment, source, owner].filter((d): d is FilterDef => d !== null);
+  return { main, temperature, sort };
+}
+
+function chipsFor(f: LeadFilters): ToolbarChip[] {
+  const chips: ToolbarChip[] = [];
+  if (f.temperature) {
+    chips.push({
+      label: `Temperatura: ${TEMPERATURE_LABELS[f.temperature]}`,
+      removeHref: leadsHref({ ...f, temperature: undefined, page: 1 }),
+    });
+  }
+  if (f.includeLost) {
+    chips.push({
+      label: "Mostrar perdidos",
+      removeHref: leadsHref({ ...f, includeLost: false, page: 1 }),
+    });
+  }
+  return chips;
+}
+
+const selectBase =
+  "rounded-lg border border-input bg-background px-2 text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [&:has(option[value='']:checked)]:text-placeholder";
+
+// Select de filtro com rótulo visível (menu "Mais filtros" no desktop e folha no celular).
+function LabeledSelect({
+  filter,
+  prefix,
+  size,
+  isSort,
 }: {
-  filters: LeadFilters;
-  users: { id: string; name: string }[];
+  filter: FilterDef;
+  prefix: string;
+  size: "sm" | "touch";
+  isSort?: boolean;
 }) {
-  const f = filters;
+  const id = `${prefix}-${filter.name}`;
   return (
-    <form
-      method="get"
-      action="/app/leads"
-      className="grid gap-3 rounded-lg border p-3 sm:grid-cols-3 lg:grid-cols-6"
-    >
-      <input type="hidden" name="pipeline" value={f.pipeline} />
-      <label className="flex flex-col gap-1 text-xs sm:col-span-2">
-        Buscar
-        <Input name="q" defaultValue={f.search ?? ""} placeholder="Nome, e-mail ou empresa" />
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-sm font-medium">
+        {filter.label}
       </label>
-      <label className="flex flex-col gap-1 text-xs">
-        Estágio
-        <select name="stage" defaultValue={f.stage ?? ""} className={selectClass}>
-          <option value="">Todos (sem perdidos)</option>
-          {STAGES[f.pipeline].map((s) => (
-            <option key={s} value={s}>
-              {stageLabel(s)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {f.pipeline === "patrocinadores" ? (
-        <label className="flex flex-col gap-1 text-xs">
-          Segmento
-          <select name="segment" defaultValue={f.segment ?? ""} className={selectClass}>
-            <option value="">Todos</option>
-            <option value="PJ">{SEGMENT_LABELS.PJ}</option>
-            <option value="PF">{SEGMENT_LABELS.PF}</option>
-          </select>
-        </label>
-      ) : null}
-      <label className="flex flex-col gap-1 text-xs">
-        Temperatura
-        <select name="temperature" defaultValue={f.temperature ?? ""} className={selectClass}>
-          <option value="">Todas</option>
-          {LEAD_TEMPERATURES.map((t) => (
-            <option key={t} value={t}>
-              {TEMPERATURE_LABELS[t]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex flex-col gap-1 text-xs">
-        Origem
-        <select name="source" defaultValue={f.source ?? ""} className={selectClass}>
-          <option value="">Todas</option>
-          {LEAD_SOURCES.map((s) => (
-            <option key={s} value={s}>
-              {SOURCE_LABELS[s]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex flex-col gap-1 text-xs">
-        Dono
-        <select name="owner" defaultValue={f.ownerUserId ?? ""} className={selectClass}>
-          <option value="">Todos</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex flex-col gap-1 text-xs">
-        Ordenar por
-        <select name="sort" defaultValue={f.sort} className={selectClass}>
-          <option value="next_action">Próxima ação</option>
-          <option value="created">Mais recentes</option>
-        </select>
-      </label>
-      <label className="flex items-center gap-2 self-end pb-2 text-sm">
-        <input
-          type="checkbox"
-          name="lost"
-          value="1"
-          defaultChecked={f.includeLost}
-          className="accent-primary size-4"
-        />
-        Mostrar perdidos
-      </label>
-      <div className="flex items-end gap-2">
-        <Button type="submit" size="default">
-          Filtrar
-        </Button>
-        <Button
-          variant="ghost"
-          size="default"
-          nativeButton={false}
-          render={<Link href={`/app/leads${leadFiltersToQuery({ pipeline: f.pipeline })}`} />}
-        >
-          Limpar
-        </Button>
-      </div>
-    </form>
+      <select
+        id={id}
+        name={filter.name}
+        defaultValue={filter.value}
+        className={cn(selectBase, size === "sm" ? "h-9 text-sm" : "h-11 text-base")}
+      >
+        {isSort ? null : <option value="">{capitalize(filter.allLabel ?? "todos")}</option>}
+        {filter.options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {isSort ? capitalize(o.label) : o.label}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function Chips({ chips, clearHref }: { chips: ToolbarChip[]; clearHref: string }) {
+  if (chips.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {chips.map((chip) => (
+        <Badge
+          key={chip.label}
+          variant="outline"
+          render={<Link href={chip.removeHref} aria-label={`Remover filtro ${chip.label}`} />}
+          className="hover:bg-surface-2"
+        >
+          {chip.label}
+          <X aria-hidden="true" />
+        </Badge>
+      ))}
+      <Link
+        href={clearHref}
+        className="text-sm text-muted-foreground underline-offset-2 hover:underline"
+      >
+        Limpar
+      </Link>
+    </div>
+  );
+}
+
+// Barra de filtros. Desktop: a `Toolbar` compartilhada (busca, quatro selects, ordenação) com o
+// menu "⋯ Mais filtros" (temperatura e perdidos) dentro do mesmo <form>, num <details> para
+// funcionar sem JavaScript e sem sair do formulário. Celular: busca + "Filtrar (N)" abrindo uma
+// folha com todos os filtros; N conta os filtros ativos, inclusive temperatura e perdidos, sem
+// contar pipeline nem a ordenação padrão.
+export function LeadToolbar({ filters, users }: { filters: LeadFilters; users: User[] }) {
+  const f = filters;
+  const { main, temperature, sort } = filterDefs(f, users);
+  const lost: FilterDef = {
+    name: "lost",
+    label: "Perdidos",
+    value: f.includeLost ? "1" : "",
+    options: [{ value: "1", label: "Mostrar perdidos" }],
+    allLabel: "ocultar perdidos",
+  };
+  const chips = chipsFor(f);
+  const clearHref = leadsHref({ pipeline: f.pipeline });
+  const moreCount = (f.temperature ? 1 : 0) + (f.includeLost ? 1 : 0);
+  const activeCount = main.filter((d) => d.value !== "").length + moreCount;
+  const search = { name: "q", placeholder: "Nome, e-mail ou empresa", value: f.search ?? "" };
+  const sortIsDefault = f.sort === "next_action";
+
+  const moreFilters = (
+    <details className="relative">
+      <summary
+        className={cn(
+          buttonVariants({ variant: "outline", size: "sm" }),
+          "cursor-pointer list-none [&::-webkit-details-marker]:hidden",
+        )}
+      >
+        <Ellipsis aria-hidden="true" />
+        Mais filtros{moreCount > 0 ? ` (${moreCount})` : ""}
+      </summary>
+      <div className="absolute top-full right-0 z-20 mt-1 flex w-64 flex-col gap-3 rounded-lg bg-popover p-3 text-popover-foreground shadow-pop ring-1 ring-border">
+        <LabeledSelect filter={temperature} prefix="mais" size="sm" />
+        <LabeledSelect filter={lost} prefix="mais" size="sm" />
+      </div>
+    </details>
+  );
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="hidden md:block">
+        <Toolbar
+          action={ACTION}
+          search={search}
+          filters={main}
+          hidden={{ pipeline: f.pipeline }}
+          sort={sort}
+          extra={moreFilters}
+          chips={chips}
+          clearHref={clearHref}
+        />
+      </div>
+
+      <div className="flex flex-col gap-2 md:hidden">
+        <div className="flex items-center gap-2">
+          <form method="get" action={ACTION} className="relative min-w-0 flex-1">
+            <input type="hidden" name="pipeline" value={f.pipeline} />
+            {[...main, temperature].map((d) =>
+              d.value ? <input key={d.name} type="hidden" name={d.name} value={d.value} /> : null,
+            )}
+            {f.includeLost ? <input type="hidden" name="lost" value="1" /> : null}
+            {sortIsDefault ? null : <input type="hidden" name="sort" value={f.sort} />}
+            <label htmlFor="leads-busca" className="sr-only">
+              {search.placeholder}
+            </label>
+            <Search
+              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <input
+              id="leads-busca"
+              type="search"
+              name="q"
+              defaultValue={search.value}
+              placeholder={search.placeholder}
+              className="h-11 w-full rounded-lg border border-input bg-background pr-2 pl-8 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+            />
+          </form>
+          <Sheet>
+            <SheetTrigger render={<Button variant="outline" size="touch" className="shrink-0" />}>
+              <SlidersHorizontal aria-hidden="true" />
+              {activeCount > 0 ? `Filtrar (${activeCount})` : "Filtrar"}
+            </SheetTrigger>
+            <SheetContent side="bottom">
+              <SheetHeader>
+                <SheetTitle>Filtrar leads</SheetTitle>
+                <SheetDescription>Escolha os filtros e toque em Aplicar.</SheetDescription>
+              </SheetHeader>
+              <form method="get" action={ACTION} className="flex flex-col gap-3">
+                <input type="hidden" name="pipeline" value={f.pipeline} />
+                {f.search ? <input type="hidden" name="q" value={f.search} /> : null}
+                {[...main, temperature].map((d) => (
+                  <LabeledSelect key={d.name} filter={d} prefix="folha" size="touch" />
+                ))}
+                <LabeledSelect filter={sort} prefix="folha" size="touch" isSort />
+                <label className="flex min-h-11 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="lost"
+                    value="1"
+                    defaultChecked={f.includeLost}
+                    className="accent-primary size-4"
+                  />
+                  Mostrar perdidos
+                </label>
+                <Button type="submit" size="touch" className="w-full">
+                  Aplicar
+                </Button>
+                {activeCount > 0 ? (
+                  <Button
+                    variant="ghost"
+                    size="touch"
+                    className="w-full"
+                    nativeButton={false}
+                    render={<Link href={clearHref} />}
+                  >
+                    Limpar
+                  </Button>
+                ) : null}
+              </form>
+            </SheetContent>
+          </Sheet>
+        </div>
+        <Chips chips={chips} clearHref={clearHref} />
+      </div>
+    </div>
+  );
+}
+
+// "1–25 de 83" com botões Anterior/Próxima (`rel`, `aria-label`); some sem leads.
 export function Pagination({
   filters,
   total,
@@ -159,26 +343,79 @@ export function Pagination({
   total: number;
   pageSize: number;
 }) {
+  if (total === 0) return null;
   const pages = Math.max(1, Math.ceil(total / pageSize));
-  if (pages <= 1) return null;
-  const link = (page: number) => `/app/leads${leadFiltersToQuery({ ...filters, page })}`;
+  const page = Math.min(filters.page, pages);
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+  const link = (p: number) => leadsHref({ ...filters, page: p });
   return (
-    <nav aria-label="Paginação" className="flex items-center justify-between text-sm">
-      <span className="text-muted-foreground">
-        Página {filters.page} de {pages} · {total} leads
+    <nav aria-label="Paginação" className="flex items-center justify-between gap-2 text-sm">
+      <span className="tabular-nums text-muted-foreground">
+        {from}–{to} de {total}
       </span>
-      <div className="flex gap-2">
-        {filters.page > 1 ? (
-          <Link href={link(filters.page - 1)} className="underline underline-offset-4">
-            Anterior
-          </Link>
-        ) : null}
-        {filters.page < pages ? (
-          <Link href={link(filters.page + 1)} className="underline underline-offset-4">
-            Próxima
-          </Link>
-        ) : null}
-      </div>
+      {pages > 1 ? (
+        <div className="flex gap-2">
+          <PageButton
+            href={page > 1 ? link(page - 1) : null}
+            rel="prev"
+            label="Página anterior"
+            icon={ChevronLeft}
+            text="Anterior"
+          />
+          <PageButton
+            href={page < pages ? link(page + 1) : null}
+            rel="next"
+            label="Próxima página"
+            icon={ChevronRight}
+            text="Próxima"
+            iconAfter
+          />
+        </div>
+      ) : null}
     </nav>
+  );
+}
+
+function PageButton({
+  href,
+  rel,
+  label,
+  icon: Icon,
+  text,
+  iconAfter = false,
+}: {
+  href: string | null;
+  rel: "prev" | "next";
+  label: string;
+  icon: typeof ChevronLeft;
+  text: string;
+  iconAfter?: boolean;
+}) {
+  const content = (
+    <>
+      {iconAfter ? null : <Icon aria-hidden="true" />}
+      {text}
+      {iconAfter ? <Icon aria-hidden="true" /> : null}
+    </>
+  );
+  const className = "h-9 md:h-7";
+  if (!href) {
+    return (
+      <Button variant="outline" size="sm" disabled aria-label={label} className={className}>
+        {content}
+      </Button>
+    );
+  }
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className={className}
+      nativeButton={false}
+      render={<Link href={href} rel={rel} aria-label={label} />}
+    >
+      {content}
+    </Button>
   );
 }

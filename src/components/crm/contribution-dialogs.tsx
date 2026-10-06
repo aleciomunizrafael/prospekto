@@ -1,8 +1,13 @@
 "use client";
-// Diálogos do fluxo de aporte (modelo-de-dados.md, 3.9; regras R-6 a R-9): nova proposta, assinar
-// termo, confirmar depósito, emitir recibo, enviar ao contador, registrar comissão, cancelar.
-// Cada passo mostra o que falta antes de permitir.
-import { useState } from "react";
+// Diálogos do fluxo de aporte (modelo-de-dados.md, 3.9; regras R-6 a R-9; crm-design-system.md,
+// seção 7.12): nova proposta, assinar termo, confirmar depósito, emitir recibo, enviar ao contador,
+// registrar comissão, cancelar. Cada descrição diz o efeito do passo; o que falta aparece como
+// checklist (Blockers) e o botão fica desabilitado; "Cancelar aporte" é uma confirmação destrutiva
+// (ConfirmDialog, role="alertdialog") com o motivo obrigatório. Os `triggerLabel` identificam cada
+// diálogo no menu "⋯" de contribution-steps.tsx (COMMISSION_LABEL/CANCEL_LABEL): não renomear.
+import { Ellipsis, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState, type ReactNode } from "react";
 import {
   cancelContributionAction,
   confirmDepositAction,
@@ -13,7 +18,14 @@ import {
   sendReceiptToAccountantAction,
   signTermAction,
 } from "@/actions/contributions";
-import { formatBRL } from "@/lib/crm/format";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { formatBRL, parseDecimalBr } from "@/lib/crm/format";
 import {
   CONTRIBUTION_TYPE_LABELS,
   LOST_REASON_LABELS,
@@ -32,6 +44,9 @@ import {
   type Option,
 } from "./project-forms/action-form";
 import { LeadPicker } from "./project-forms/lead-picker";
+import { fabClassName } from "./shell/fab";
+import { Callout } from "./ui/callout";
+import { KeyValueList } from "./ui/key-value-list";
 
 export type ProjectOption = {
   id: string;
@@ -41,15 +56,40 @@ export type ProjectOption = {
   allowedMechanisms: string[];
 };
 
+const NEW_LABEL = "Novo aporte";
+
+function moneyDefault(value: number | null | undefined): string {
+  return value == null ? "" : value.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+}
+
+// Tira `?novo=1` da URL ao fechar o diálogo aberto por ela, sem perder os outros filtros.
+function stripNovoParam(router: ReturnType<typeof useRouter>) {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("novo")) return;
+  url.searchParams.delete("novo");
+  router.replace(`${url.pathname}${url.search}${url.hash}`, { scroll: false });
+}
+
 export function NewContributionDialog({
   projects,
   sponsorOrgs,
   fixedProjectId,
+  defaultOpen = false,
+  fab = false,
+  trigger,
 }: {
   projects: ProjectOption[];
   sponsorOrgs: Option[];
   fixedProjectId?: string;
+  // Abre já carregado (`/app/aportes?novo=1`); ao fechar, o parâmetro sai da URL.
+  defaultOpen?: boolean;
+  // Gatilho é o FAB das listas no celular (crm-design-system.md, seção 4.2).
+  fab?: boolean;
+  trigger?: ReactNode;
 }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(defaultOpen);
   const [projectId, setProjectId] = useState(fixedProjectId ?? projects[0]?.id ?? "");
   const [leadSegment, setLeadSegment] = useState<string | null>(null);
   const project = projects.find((p) => p.id === projectId);
@@ -60,15 +100,27 @@ export function NewContributionDialog({
       "projeto de fomento direto (FSA/BRDE, PNAB, edital) não recebe aporte de incentivador",
     );
   }
+  const fabTrigger = (
+    <button type="button" aria-label={NEW_LABEL} className={fabClassName}>
+      <Plus className="size-6" aria-hidden="true" />
+    </button>
+  );
   return (
     <ActionDialog
-      triggerLabel="Novo aporte"
+      triggerLabel={NEW_LABEL}
       title="Nova proposta de aporte"
-      description="Nasce em Proposta; avança com termo, depósito e recibo."
+      description="Cria a proposta em nome do patrocinador no projeto escolhido. Ela avança com o termo assinado, o depósito e o recibo."
       action={createContributionAction}
       submitLabel="Criar proposta"
+      pendingLabel="Criando…"
       variant="default"
       wide
+      trigger={fab ? fabTrigger : trigger}
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next && defaultOpen) stripNovoParam(router);
+      }}
     >
       {fixedProjectId ? (
         <HiddenField name="projectId" value={fixedProjectId} />
@@ -111,7 +163,7 @@ export function NewContributionDialog({
           defaultValue={allowed[0] ?? ""}
           key={projectId}
         />
-        <MoneyField name="proposedAmount" label="Valor proposto (R$)" required />
+        <MoneyField name="proposedAmount" label="Valor proposto" required />
         <DateField name="expectedCloseAt" label="Previsão de fechamento" />
         <SelectField
           name="orgId"
@@ -148,9 +200,10 @@ export function SignTermDialog({
     <ActionDialog
       triggerLabel="Assinar termo"
       title="Registrar termo assinado"
-      description="Data real da assinatura e, se já enviados, os dados da conta vinculada do projeto."
+      description="Registra a data real da assinatura e libera a confirmação do depósito. Se os dados da conta vinculada do projeto já foram enviados, anote a data."
       action={signTermAction}
       submitLabel="Registrar termo"
+      pendingLabel="Registrando…"
       variant="default"
       disabled={blockers.length > 0 && !onlyOrgMissing}
     >
@@ -171,18 +224,30 @@ export function SignTermDialog({
   );
 }
 
+// Diferença entre o depositado e o proposto a partir da qual o aviso aparece (só apresentação;
+// 210.000 sobre 200.000 avisa). A folga absorve o arredondamento binário de 0,05.
+const DEPOSIT_TOLERANCE = 0.05 - 1e-9;
+
+export function depositDiffers(proposed: number, deposited: number | null): boolean {
+  if (deposited == null || !Number.isFinite(proposed) || proposed <= 0) return false;
+  return Math.abs(deposited - proposed) / proposed >= DEPOSIT_TOLERANCE;
+}
+
 export function ConfirmDepositDialog({
   contributionId,
   blockers,
   proposedAmount,
 }: ContributionStepProps & { proposedAmount: number }) {
+  const [deposited, setDeposited] = useState<number | null>(proposedAmount);
+  const differs = depositDiffers(proposedAmount, deposited);
   return (
     <ActionDialog
       triggerLabel="Confirmar depósito"
       title="Confirmar depósito"
-      description={`Valor proposto: ${formatBRL(proposedAmount)}. O captado do projeto é recalculado (regra R-6).`}
+      description="Confirma o depósito, recalcula o captado do projeto e libera o recibo."
       action={confirmDepositAction}
       submitLabel="Confirmar depósito"
+      pendingLabel="Confirmando…"
       variant="default"
       disabled={blockers.length > 0}
     >
@@ -191,10 +256,18 @@ export function ConfirmDepositDialog({
       <DateField name="depositedAt" label="Data do depósito" required />
       <MoneyField
         name="depositedAmount"
-        label="Valor depositado (R$)"
+        label="Valor depositado"
         required
-        defaultValue={proposedAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+        help={`Proposto: ${formatBRL(proposedAmount)}.`}
+        defaultValue={moneyDefault(proposedAmount)}
+        onChange={(e) => setDeposited(parseDecimalBr(e.target.value))}
       />
+      {differs ? (
+        <Callout tone="warning" role="alert">
+          O valor difere do proposto ({formatBRL(proposedAmount)}) em 5 % ou mais. Confira antes de
+          confirmar; o registro continua permitido.
+        </Callout>
+      ) : null}
     </ActionDialog>
   );
 }
@@ -204,9 +277,10 @@ export function IssueReceiptDialog({ contributionId, blockers }: ContributionSte
     <ActionDialog
       triggerLabel="Emitir recibo"
       title="Registrar recibo emitido"
-      description="Um aporte gera um único recibo; o número é único por projeto (regra R-7)."
+      description="Registra o número e a data do recibo e libera o envio ao contador. Cada aporte tem um só recibo, com número único no projeto."
       action={issueReceiptAction}
       submitLabel="Registrar recibo"
+      pendingLabel="Registrando…"
       variant="default"
       disabled={blockers.length > 0}
     >
@@ -229,8 +303,10 @@ export function SendToAccountantDialog({ contributionId, blockers }: Contributio
     <ActionDialog
       triggerLabel="Enviar ao contador"
       title="Registrar envio do recibo ao contador"
+      description="Registra a data em que o recibo foi ao contador do patrocinador, que precisa dele para a dedução. Depois, só falta a comissão."
       action={sendReceiptToAccountantAction}
       submitLabel="Registrar envio"
+      pendingLabel="Registrando…"
       disabled={blockers.length > 0}
     >
       <HiddenField name="contributionId" value={contributionId} />
@@ -255,7 +331,8 @@ export function RecordCommissionDialog({
   contributionId,
   blockers,
   commission,
-}: ContributionStepProps & { commission: CommissionContext }) {
+  size,
+}: ContributionStepProps & { commission: CommissionContext; size?: "sm" | "touch" }) {
   const feeLeft =
     commission.fundraisingFeeAmount == null
       ? null
@@ -264,44 +341,50 @@ export function RecordCommissionDialog({
     <ActionDialog
       triggerLabel={commission.currentDue == null ? "Registrar comissão" : "Alterar comissão"}
       title="Comissão de captação deste aporte"
-      description="Limites da IN MinC 29/2026, art. 19 (regra R-8): 10% do depositado, a rubrica aprovada e o teto de R$ 150 mil por projeto e ano (aviso)."
+      description="Registra a comissão devida e, se já paga, a data. Os limites da IN MinC 29/2026, art. 19, aparecem abaixo; o teto por projeto e ano só avisa."
       action={recordCommissionAction}
       submitLabel="Registrar comissão"
+      pendingLabel="Registrando…"
       disabled={blockers.length > 0}
+      size={size}
       stayOpenOnSuccess
     >
       <HiddenField name="contributionId" value={contributionId} />
       <Blockers intro="Antes de registrar a comissão falta:" items={blockers} />
-      <ul className="text-muted-foreground list-disc pl-5 text-sm">
-        <li>Valor depositado: {formatBRL(commission.depositedAmount)}</li>
-        <li>
-          Máximo pelo mecanismo:{" "}
-          {commission.maxByPercent == null
-            ? "limite não verificado para este mecanismo"
-            : formatBRL(commission.maxByPercent)}
-        </li>
-        {commission.contractedPercent != null ? (
-          <li>Percentual contratado: {commission.contractedPercent}%</li>
-        ) : null}
-        <li>
-          Rubrica de captação restante:{" "}
-          {feeLeft == null ? "rubrica não informada no projeto" : formatBRL(feeLeft)}
-        </li>
-        {commission.capPerProject != null ? (
-          <li>
-            Teto por projeto e ano: {formatBRL(commission.capPerProject)} (aviso, não bloqueia)
-          </li>
-        ) : null}
-      </ul>
+      <KeyValueList
+        columns={2}
+        hideEmpty={false}
+        emptyLabel="não informado no projeto"
+        items={[
+          { label: "Valor depositado", value: formatBRL(commission.depositedAmount) },
+          {
+            label: "Máximo pelo mecanismo",
+            value:
+              commission.maxByPercent == null
+                ? "sem limite verificado para este mecanismo"
+                : formatBRL(commission.maxByPercent),
+          },
+          {
+            label: "Percentual contratado",
+            value:
+              commission.contractedPercent == null ? null : `${commission.contractedPercent} %`,
+          },
+          {
+            label: "Rubrica de captação restante",
+            value: feeLeft == null ? null : formatBRL(feeLeft),
+          },
+          {
+            label: "Teto por projeto e ano",
+            value: commission.capPerProject == null ? null : formatBRL(commission.capPerProject),
+            hint: commission.capPerProject == null ? undefined : "aviso, não bloqueia",
+          },
+        ]}
+      />
       <MoneyField
         name="commissionDue"
-        label="Comissão devida (R$)"
+        label="Comissão devida"
         required
-        defaultValue={
-          commission.currentDue == null
-            ? ""
-            : commission.currentDue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
-        }
+        defaultValue={moneyDefault(commission.currentDue)}
       />
       <DateField
         name="commissionPaidAt"
@@ -317,31 +400,93 @@ export function CancelContributionDialog({
   contributionId,
   blockers,
   wasDeposited,
-}: ContributionStepProps & { wasDeposited: boolean }) {
+  trigger,
+  open,
+  onOpenChange,
+}: ContributionStepProps & {
+  wasDeposited: boolean;
+  trigger?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   return (
     <ActionDialog
       triggerLabel="Cancelar aporte"
       title="Cancelar aporte"
       description={
         wasDeposited
-          ? "Aporte já depositado: a nota com o motivo é obrigatória e o captado do projeto é recalculado."
-          : "O aporte sai do fluxo; o lead continua no CRM."
+          ? "O aporte sai do fluxo e o captado do projeto é recalculado sem ele. O lead continua no CRM."
+          : "O aporte sai do fluxo; o lead continua no CRM e pode receber uma nova proposta."
       }
       action={cancelContributionAction}
       submitLabel="Cancelar aporte"
+      pendingLabel="Cancelando…"
       submitVariant="destructive"
       variant="ghost"
+      alert
+      requireField="lostReason"
       disabled={blockers.length > 0}
+      trigger={trigger}
+      open={open}
+      onOpenChange={onOpenChange}
     >
       <HiddenField name="contributionId" value={contributionId} />
       <Blockers intro="Não é possível cancelar:" items={blockers} />
+      {wasDeposited ? (
+        <Callout tone="warning" role="alert">
+          Aporte já depositado: a nota com o motivo é obrigatória.
+        </Callout>
+      ) : null}
       <SelectField
         name="lostReason"
         label="Motivo"
         required
         options={optionsFrom(LOST_REASON_LABELS)}
       />
-      <TextareaField name="notes" label="Nota" required={wasDeposited} />
+      <TextareaField
+        name="notes"
+        label="Nota"
+        required={wasDeposited}
+        help={wasDeposited ? "Explique o motivo: fica registrada no aporte." : undefined}
+      />
     </ActionDialog>
+  );
+}
+
+// Menu "⋯" do cabeçalho do detalhe (crm-design-system.md, seção 7.9): só "Cancelar aporte",
+// longe da ação primária; abre o ConfirmDialog acima.
+export function ContributionHeaderMenu({
+  contributionId,
+  blockers,
+  wasDeposited,
+}: ContributionStepProps & { wasDeposited: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button variant="outline" size="icon" aria-label="Mais ações" />}
+        >
+          <Ellipsis />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={blockers.length > 0}
+            onClick={() => setOpen(true)}
+          >
+            Cancelar aporte
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <CancelContributionDialog
+        contributionId={contributionId}
+        blockers={blockers}
+        wasDeposited={wasDeposited}
+        trigger={null}
+        open={open}
+        onOpenChange={setOpen}
+      />
+    </>
   );
 }

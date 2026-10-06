@@ -1,101 +1,171 @@
-import Link from "next/link";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { describeOverdue } from "@/lib/crm/dates";
-import { formatDateTime } from "@/lib/crm/format";
-import { SEGMENT_LABELS, SOURCE_LABELS, stageLabel } from "@/lib/crm/labels";
+import type { ReactNode } from "react";
+import { claimLeadAction } from "@/actions/crm-leads";
+import { Avatar } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { DataTable, RowLink, type Column } from "@/components/crm/ui/data-table";
+import { SlaIndicator } from "@/components/crm/ui/sla-indicator";
+import { StatusBadge } from "@/components/crm/ui/status-badge";
+import { leadFiltersToQuery, type LeadFilters } from "@/lib/crm/filters";
+import { SEGMENT_LABELS, SOURCE_LABELS } from "@/lib/crm/labels";
 import { leadCompany, stageInfo } from "@/lib/crm/lead-view";
+import { isTerminalStage, type Pipeline } from "@/lib/domain/pipelines";
 import type { LeadListRow } from "@/lib/repos/leads";
 import { cn } from "@/lib/utils";
-import { TemperatureBadge } from "./badges";
 
-export function LeadTable({ rows, now }: { rows: LeadListRow[]; now: Date }) {
-  if (rows.length === 0) {
-    return (
-      <p className="text-muted-foreground py-8 text-center text-sm">
-        Nenhum lead com esses filtros.
-      </p>
-    );
-  }
+// Tabela de leads (crm-design-system.md, seção 7.3) sobre a DataTable: cinco colunas no desktop
+// (Nome com empresa · segmento, Estágio, Próxima ação ordenável, Origem, Dono) e cards no celular.
+// A linha inteira abre o lead pelo link do nome; "Assumir" (lead sem dono) fica por cima do link
+// (`relative z-10`) e cai no detalhe com o dono atribuído (`claimLeadAction`).
+
+function CompanyLine({ lead, className }: { lead: LeadListRow; className?: string }) {
+  const company = leadCompany(lead);
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Nome</TableHead>
-            <TableHead>Empresa</TableHead>
-            <TableHead>Segmento</TableHead>
-            <TableHead>Estágio</TableHead>
-            <TableHead>Temperatura</TableHead>
-            <TableHead>Origem</TableHead>
-            <TableHead>Próxima ação</TableHead>
-            <TableHead>Dono</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((lead) => {
-            const info = stageInfo(lead, now);
-            return (
-              <TableRow key={lead.id}>
-                <TableCell className="font-medium">
-                  <Link
-                    href={`/app/leads/${lead.id}`}
-                    className="underline-offset-4 hover:underline"
-                  >
-                    {lead.name}
-                  </Link>
-                </TableCell>
-                <TableCell>
-                  {leadCompany(lead) ?? <span className="text-muted-foreground">-</span>}
-                </TableCell>
-                <TableCell>{SEGMENT_LABELS[lead.segment]}</TableCell>
-                <TableCell>
-                  <div className="flex flex-col">
-                    <span>{stageLabel(lead.stage)}</span>
-                    <span
-                      className={cn(
-                        "text-xs",
-                        info.slaOverdue ? "text-destructive" : "text-muted-foreground",
-                      )}
-                    >
-                      {info.daysInStage === 0 ? "hoje" : `${info.daysInStage} d`} · {info.slaText}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <TemperatureBadge temperature={lead.temperature} />
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col">
-                    <span>{SOURCE_LABELS[lead.source]}</span>
-                    {lead.sourceDetail ? (
-                      <span className="text-muted-foreground max-w-40 truncate text-xs">
-                        {lead.sourceDetail}
-                      </span>
-                    ) : null}
-                  </div>
-                </TableCell>
-                <TableCell className={cn(info.nextActionOverdue && "text-destructive font-medium")}>
-                  {lead.nextActionAt
-                    ? info.nextActionOverdue
-                      ? describeOverdue(lead.nextActionAt, now)
-                      : formatDateTime(lead.nextActionAt)
-                    : "-"}
-                </TableCell>
-                <TableCell>
-                  {lead.ownerName ?? <span className="text-muted-foreground">sem dono</span>}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
+    <span className={cn("crm-meta min-w-0 truncate", className)}>
+      {company ? `${company} · ` : ""}
+      {SEGMENT_LABELS[lead.segment]}
+    </span>
+  );
+}
+
+function NameCell({ lead }: { lead: LeadListRow }) {
+  return (
+    <span className="inline-flex min-w-0 items-center gap-2">
+      <span className="truncate">{lead.name}</span>
+      <StatusBadge kind="temperature" value={lead.temperature} size="sm" />
+    </span>
+  );
+}
+
+// "Assumir": o usuário da sessão vira dono e a navegação cai no detalhe (claimLeadAction já
+// redireciona). O form fica por cima do link da linha.
+function ClaimButton({ leadId, size }: { leadId: string; size: "sm" | "touch" }) {
+  return (
+    <form action={claimLeadAction} className="relative z-10 inline-flex">
+      <input type="hidden" name="leadId" value={leadId} />
+      <Button type="submit" variant="outline" size={size}>
+        Assumir
+      </Button>
+    </form>
+  );
+}
+
+export function LeadTable({
+  rows,
+  now,
+  filters,
+  empty,
+  footer,
+}: {
+  rows: LeadListRow[];
+  now: Date;
+  filters: LeadFilters;
+  empty: ReactNode;
+  footer?: ReactNode;
+}) {
+  const href = (lead: LeadListRow) => `/app/leads/${lead.id}`;
+  const sortedByNextAction = filters.sort === "next_action";
+  const columns: Column<LeadListRow>[] = [
+    {
+      key: "name",
+      header: "Nome",
+      cell: (lead) => (
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <RowLink href={href(lead)}>
+            <NameCell lead={lead} />
+          </RowLink>
+          <CompanyLine lead={lead} />
+        </div>
+      ),
+    },
+    {
+      key: "stage",
+      header: "Estágio",
+      width: "w-44",
+      cell: (lead) => <StatusBadge kind="stage" value={lead.stage} pipeline={lead.pipeline} />,
+    },
+    {
+      key: "next_action",
+      header: "Próxima ação",
+      width: "w-64",
+      sort: {
+        param: "sort",
+        value: "next_action",
+        active: sortedByNextAction ? "asc" : undefined,
+        href: `/app/leads${leadFiltersToQuery({ ...filters, sort: "next_action", page: 1 })}`,
+      },
+      cell: (lead) => (
+        <SlaIndicator
+          info={stageInfo(lead, now)}
+          nextActionAt={lead.nextActionAt}
+          now={now}
+          stage={lead}
+        />
+      ),
+    },
+    {
+      key: "source",
+      header: "Origem",
+      priority: 3,
+      width: "w-44",
+      cell: (lead) => (
+        <div className="flex min-w-0 flex-col">
+          <span>{SOURCE_LABELS[lead.source]}</span>
+          {lead.sourceDetail ? (
+            <span className="crm-meta max-w-40 truncate" title={lead.sourceDetail}>
+              {lead.sourceDetail}
+            </span>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      key: "owner",
+      header: "Dono",
+      priority: 2,
+      width: "w-28",
+      cell: (lead) =>
+        lead.ownerName ? (
+          <Avatar name={lead.ownerName} size="sm" />
+        ) : (
+          <ClaimButton leadId={lead.id} size="sm" />
+        ),
+    },
+  ];
+
+  return (
+    <DataTable
+      caption="Leads"
+      columns={columns}
+      rows={rows}
+      rowHref={href}
+      rowKey={(lead) => lead.id}
+      // A linha (e não só a primeira célula) é a referência do link que cobre a linha inteira;
+      // perdidos ficam esmaecidos.
+      rowClassName={(lead) =>
+        cn(
+          "relative [&>td:first-child]:static",
+          isTerminalStage(lead.pipeline as Pipeline, lead.stage) && "opacity-70",
+        )
+      }
+      mobile={{
+        primary: (lead) => <NameCell lead={lead} />,
+        // Dois andares de meta: estágio + prazo, depois empresa · segmento (linha inteira).
+        secondary: (lead) => (
+          <>
+            <StatusBadge kind="stage" value={lead.stage} pipeline={lead.pipeline} />
+            <SlaIndicator
+              info={stageInfo(lead, now)}
+              nextActionAt={lead.nextActionAt}
+              now={now}
+              stage={lead}
+            />
+            <CompanyLine lead={lead} className="basis-full" />
+          </>
+        ),
+        action: (lead) => (lead.ownerUserId ? null : <ClaimButton leadId={lead.id} size="touch" />),
+      }}
+      empty={empty}
+      footer={footer}
+    />
   );
 }
