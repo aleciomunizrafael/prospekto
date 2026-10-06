@@ -6,14 +6,21 @@ import { z } from "zod";
 const deployEnv = process.env.VERCEL_ENV ?? process.env.PROSPEKTO_ENV;
 export const isDeployed = process.env.NODE_ENV === "production" && !!deployEnv;
 
+// Só a origem (https://host): com caminho ou barra final, o Better Auth muda a base das rotas
+// /api/auth/* e o login passa a responder 404 vazio (visto no primeiro deploy, 06/10/2026).
+const originOnly = (name: string) =>
+  z.url().refine((u) => u === u.trim() && !u.endsWith("/") && new URL(u).pathname === "/", {
+    message: `${name} deve ser só a origem, por exemplo https://prospekto.com.br (sem caminho, sem barra no fim, sem espaços)`,
+  });
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   // Implantado: obrigatório (sem ele o app subiria num PGlite descartável). Local: ausente = PGlite.
   DATABASE_URL: isDeployed ? z.url() : z.url().optional(),
   PGLITE_DIR: z.string().default(".pglite"),
   BETTER_AUTH_SECRET: z.string().min(32),
-  BETTER_AUTH_URL: z.url(),
-  NEXT_PUBLIC_APP_URL: z.url(),
+  BETTER_AUTH_URL: originOnly("BETTER_AUTH_URL"),
+  NEXT_PUBLIC_APP_URL: originOnly("NEXT_PUBLIC_APP_URL"),
   RESEND_API_KEY: isDeployed ? z.string().min(1) : z.string().optional(),
   EMAIL_FROM: z.string().default("Prospekto <onboarding@resend.dev>"),
   LEAD_NOTIFY_EMAIL: z.email().default("projetos@prospekto.com.br"),
@@ -34,3 +41,6 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+// Exposto só para testes do esquema (tests/lib/env.test.ts).
+export { schema as envSchema };
