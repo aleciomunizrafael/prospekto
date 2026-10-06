@@ -1,24 +1,56 @@
+import { Building2, SearchX } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { NewOrganizationDialog } from "@/components/crm/organization-dialogs";
-import { Badge } from "@/components/ui/badge";
+import { DataTable, RowLink, type Column } from "@/components/crm/ui/data-table";
+import { EmptyState } from "@/components/crm/ui/empty-state";
+import { PageHeader } from "@/components/crm/ui/page-header";
+import { StatusBadge } from "@/components/crm/ui/status-badge";
+import { Toolbar, type ToolbarChip } from "@/components/crm/ui/toolbar";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { formatCnpj } from "@/lib/crm/format";
 import { ORGANIZATION_TYPE_LABELS, optionsFrom } from "@/lib/crm/enum-labels";
 import { ORGANIZATION_TYPES, type OrganizationType } from "@/lib/domain/enums";
-import { listOrganizationSummaries, listOrganizations } from "@/lib/repos/organizations";
+import {
+  listOrganizationSummaries,
+  listOrganizations,
+  type OrganizationSummary,
+} from "@/lib/repos/organizations";
 import { listTenantUsers } from "@/lib/repos/users";
 import { requireSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Organizações" };
+
+// Lista de organizações (crm-design-system.md, seção 7.6): PageHeader + Toolbar (busca e tipo,
+// parâmetros `q` e `tipo` inalterados) + DataTable com a linha inteira clicável; cards no celular.
+// `?novo=1` abre o diálogo de nova organização ao carregar e `&tipo=proponente` pré-seleciona o
+// tipo (Projetos manda para cá quando falta o proponente).
+
+const BASE = "/app/organizacoes";
+
+function hrefFor(params: { q?: string; tipo?: string }): string {
+  const sp = new URLSearchParams();
+  if (params.q) sp.set("q", params.q);
+  if (params.tipo) sp.set("tipo", params.tipo);
+  const qs = sp.toString();
+  return qs ? `${BASE}?${qs}` : BASE;
+}
+
+function Dash({ label }: { label: string }) {
+  return (
+    <span className="text-muted-foreground" aria-label={label}>
+      —
+    </span>
+  );
+}
+
+function Count({ value, label }: { value: number; label: string }) {
+  return value === 0 ? <Dash label={`sem ${label}`} /> : <>{value}</>;
+}
+
+function cityUf(o: OrganizationSummary): string {
+  return [o.city, o.uf].filter(Boolean).join("/");
+}
 
 export default async function OrganizationsPage({ searchParams }: PageProps<"/app/organizacoes">) {
   const ctx = await requireSession();
@@ -28,6 +60,7 @@ export default async function OrganizationsPage({ searchParams }: PageProps<"/ap
   const tipo = (ORGANIZATION_TYPES as readonly string[]).includes(tipoRaw)
     ? (tipoRaw as OrganizationType)
     : undefined;
+  const openNew = sp.novo === "1";
 
   const [rows, accountants, users] = await Promise.all([
     listOrganizationSummaries(ctx, { search: q || undefined, type: tipo, limit: 300 }),
@@ -37,91 +70,151 @@ export default async function OrganizationsPage({ searchParams }: PageProps<"/ap
   const accountantOptions = accountants.map((a) => ({ value: a.id, label: a.name }));
   const userOptions = users.map((u) => ({ value: u.id, label: u.name }));
 
-  return (
-    <section className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Organizações</h1>
-          <p className="text-muted-foreground text-sm">
-            Empresas, escritórios contábeis, municípios e proponentes.
-          </p>
+  const hasFilter = Boolean(q || tipo);
+  const chips: ToolbarChip[] = [];
+  if (tipo) {
+    chips.push({ label: `Tipo: ${ORGANIZATION_TYPE_LABELS[tipo]}`, removeHref: hrefFor({ q }) });
+  }
+  if (q) chips.push({ label: `Busca: ${q}`, removeHref: hrefFor({ tipo }) });
+
+  const href = (o: OrganizationSummary) => `${BASE}/${o.id}`;
+  const columns: Column<OrganizationSummary>[] = [
+    {
+      key: "name",
+      header: "Nome",
+      cell: (o) => (
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <RowLink href={href(o)}>{o.name}</RowLink>
+          {o.tradeName ? <span className="crm-meta truncate">{o.tradeName}</span> : null}
         </div>
-        <NewOrganizationDialog accountants={accountantOptions} users={userOptions} />
-      </div>
+      ),
+    },
+    {
+      key: "type",
+      header: "Tipo",
+      width: "w-44",
+      cell: (o) => <StatusBadge kind="orgType" value={o.type} />,
+    },
+    {
+      key: "cnpj",
+      header: "CNPJ",
+      priority: 2,
+      width: "w-48",
+      cell: (o) =>
+        o.cnpj ? <span className="crm-code">{formatCnpj(o.cnpj)}</span> : <Dash label="sem CNPJ" />,
+    },
+    {
+      key: "city",
+      header: "Cidade/UF",
+      priority: 2,
+      width: "w-48",
+      cell: (o) => cityUf(o) || <Dash label="sem cidade" />,
+    },
+    {
+      key: "contacts",
+      header: "Contatos",
+      align: "right",
+      priority: 3,
+      width: "w-24",
+      cell: (o) => <Count value={o.contactsCount} label="contatos" />,
+    },
+    {
+      key: "leads",
+      header: "Leads",
+      align: "right",
+      priority: 3,
+      width: "w-20",
+      cell: (o) => <Count value={o.leadsCount} label="leads" />,
+    },
+  ];
 
-      <form className="flex flex-wrap items-end gap-3" action="/app/organizacoes" method="get">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Buscar</span>
-          <input
-            type="search"
-            name="q"
-            defaultValue={q}
-            placeholder="Nome, nome fantasia ou CNPJ"
-            className="border-input bg-background min-h-10 w-64 rounded-lg border px-3 py-2 text-sm"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">Tipo</span>
-          <select
-            name="tipo"
-            defaultValue={tipo ?? ""}
-            className="border-input bg-background min-h-10 rounded-lg border px-3 py-2 text-sm"
-          >
-            <option value="">Todos</option>
-            {optionsFrom(ORGANIZATION_TYPE_LABELS).map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Button type="submit" variant="outline" className="min-h-10">
-          Filtrar
+  const empty = hasFilter ? (
+    <EmptyState
+      icon={SearchX}
+      size="sm"
+      title="Nenhuma organização com esses filtros."
+      action={
+        <Button variant="outline" size="sm" nativeButton={false} render={<Link href={BASE} />}>
+          Limpar filtros
         </Button>
-        {q || tipo ? (
-          <Link href="/app/organizacoes" className="text-sm underline">
-            Limpar
-          </Link>
-        ) : null}
-      </form>
+      }
+    />
+  ) : (
+    <EmptyState
+      icon={Building2}
+      title="Nenhuma organização ainda."
+      description="Empresas patrocinadoras precisam de CNPJ antes do termo."
+      action={
+        <Button
+          variant="outline"
+          size="sm"
+          nativeButton={false}
+          render={<Link href={`${BASE}?novo=1`} />}
+        >
+          Nova organização
+        </Button>
+      }
+    />
+  );
 
-      {rows.length === 0 ? (
-        <p className="text-muted-foreground">Nenhuma organização encontrada.</p>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nome</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>CNPJ</TableHead>
-              <TableHead>Cidade/UF</TableHead>
-              <TableHead className="text-right">Contatos</TableHead>
-              <TableHead className="text-right">Leads</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((o) => (
-              <TableRow key={o.id}>
-                <TableCell>
-                  <Link href={`/app/organizacoes/${o.id}`} className="font-medium underline">
-                    {o.name}
-                  </Link>
-                  {o.tradeName ? (
-                    <span className="text-muted-foreground block text-xs">{o.tradeName}</span>
-                  ) : null}
-                </TableCell>
-                <TableCell>
-                  <Badge variant="secondary">{ORGANIZATION_TYPE_LABELS[o.type]}</Badge>
-                </TableCell>
-                <TableCell>{formatCnpj(o.cnpj)}</TableCell>
-                <TableCell>{[o.city, o.uf].filter(Boolean).join("/")}</TableCell>
-                <TableCell className="text-right">{o.contactsCount}</TableCell>
-                <TableCell className="text-right">{o.leadsCount}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
-    </section>
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title="Organizações"
+        description="Empresas, escritórios contábeis, municípios e proponentes."
+        actionsOnMobile
+        primary={
+          <NewOrganizationDialog
+            key={openNew ? "aberto" : "fechado"}
+            accountants={accountantOptions}
+            users={userOptions}
+            defaultOpen={openNew}
+            defaultType={tipo}
+            returnHref={hrefFor({ q, tipo })}
+          />
+        }
+      />
+      <Toolbar
+        action={BASE}
+        search={{ name: "q", placeholder: "Nome, nome fantasia ou CNPJ", value: q }}
+        filters={[
+          {
+            name: "tipo",
+            label: "Tipo",
+            value: tipo ?? "",
+            options: optionsFrom(ORGANIZATION_TYPE_LABELS),
+          },
+        ]}
+        chips={chips}
+        clearHref={BASE}
+        mobileTitle="Filtrar organizações"
+      />
+      <DataTable
+        caption="Organizações"
+        columns={columns}
+        rows={rows}
+        rowHref={href}
+        rowKey={(o) => o.id}
+        // A linha inteira (não só a primeira célula) é a referência do link que a cobre.
+        rowClassName={() => "relative [&>td:first-child]:static"}
+        mobile={{
+          primary: (o) => o.name,
+          secondary: (o) => (
+            <>
+              <StatusBadge kind="orgType" value={o.type} />
+              {cityUf(o) ? <span>{cityUf(o)}</span> : null}
+              {o.cnpj ? <span className="crm-code">{formatCnpj(o.cnpj)}</span> : null}
+            </>
+          ),
+          trailing: (o) =>
+            o.leadsCount > 0 ? (
+              <span className="crm-meta">
+                {o.leadsCount} {o.leadsCount === 1 ? "lead" : "leads"}
+              </span>
+            ) : null,
+        }}
+        empty={empty}
+      />
+    </div>
   );
 }
