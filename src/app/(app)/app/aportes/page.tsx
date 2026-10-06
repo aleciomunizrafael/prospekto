@@ -81,8 +81,6 @@ const WHOLE_BRL = new Intl.NumberFormat("pt-BR", {
 function formatWhole(value: number): string {
   return WHOLE_BRL.format(value);
 }
-const KPI_CLASS =
-  "[&_.crm-kpi]:text-2xl [&_.crm-kpi]:leading-8 md:[&_.crm-kpi]:text-[2rem] md:[&_.crm-kpi]:leading-9";
 
 export default async function ContributionsPage({ searchParams }: PageProps<"/app/aportes">) {
   const ctx = await requireSession();
@@ -194,13 +192,11 @@ export default async function ContributionsPage({ searchParams }: PageProps<"/ap
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard
-          className={KPI_CLASS}
           label="Em aberto"
           value={formatWhole(openTotal)}
           hint={plural(openRows.length, "proposta ou termo", "propostas e termos")}
         />
         <StatCard
-          className={KPI_CLASS}
           label="Previsto em 15 dias"
           value={formatWhole(upcomingTotal)}
           hint={plural(upcomingRows.length, "previsto", "previstos")}
@@ -210,14 +206,12 @@ export default async function ContributionsPage({ searchParams }: PageProps<"/ap
           ariaLabel={`${formatBRL(upcomingTotal)} previstos nos próximos 15 dias, abrir lista`}
         />
         <StatCard
-          className={KPI_CLASS}
           label="Depositado"
           value={formatWhole(depositedTotal)}
           hint={plural(depositedRows.length, "aporte", "aportes")}
           tone={depositedRows.length > 0 ? "success" : "neutral"}
         />
         <StatCard
-          className={KPI_CLASS}
           label="Comissão a receber"
           value={formatWhole(commissionTotal)}
           hint={
@@ -307,7 +301,7 @@ export default async function ContributionsPage({ searchParams }: PageProps<"/ap
           ) : (
             <EmptyState
               icon={HandCoins}
-              title="Nenhum aporte proposto."
+              title="Nenhum aporte ainda."
               description="Quando um patrocinador aceitar a proposta, registre aqui."
               action={
                 <Button

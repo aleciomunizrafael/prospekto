@@ -94,6 +94,7 @@ export async function ContributionSteps({
   variant = "row",
   size = "sm",
   compact = false,
+  menu = true,
 }: {
   ctx: Ctx;
   contribution: ContributionSummary;
@@ -102,6 +103,8 @@ export async function ContributionSteps({
   size?: "sm" | "touch";
   // Botão do passo em `outline` (tabelas); sem `compact` o passo principal é o botão sólido.
   compact?: boolean;
+  // `false` esconde o "⋯" (comissão e cancelar) quando a tela já os oferece em outro lugar.
+  menu?: boolean;
 }) {
   const status = contribution.status;
   if (status === "cancelado") {
@@ -191,17 +194,19 @@ export async function ContributionSteps({
 
   // O resto vai para o "⋯": comissão (quando não é o passo atual) e cancelar.
   const menuItems: ActionMenuItem[] = [];
-  if (commissionDialog && step !== "registrar_comissao") {
+  if (menu && commissionDialog && step !== "registrar_comissao") {
     menuItems.push({
       label: COMMISSION_LABEL(contribution),
       disabled: blockers.registrar_comissao.length > 0,
     });
   }
-  menuItems.push({
-    label: CANCEL_LABEL,
-    variant: "destructive",
-    disabled: blockers.cancelar.length > 0,
-  });
+  if (menu) {
+    menuItems.push({
+      label: CANCEL_LABEL,
+      variant: "destructive",
+      disabled: blockers.cancelar.length > 0,
+    });
+  }
 
   const cancelDialog = (
     <CancelContributionDialog
@@ -223,8 +228,8 @@ export async function ContributionSteps({
       }
     >
       {primary}
-      {commissionDialog && step !== "registrar_comissao" ? commissionDialog : null}
-      {cancelDialog}
+      {menu && commissionDialog && step !== "registrar_comissao" ? commissionDialog : null}
+      {menu ? cancelDialog : null}
     </ActionDialogMenu>
   );
 

@@ -169,9 +169,7 @@ export default async function ContributionPage({ params }: PageProps<"/app/aport
     <DetailLayout
       asideLabel="Dados do aporte"
       header={
-        // O último item do breadcrumb (o título inteiro) precisa poder encolher a 390 px; o
-        // Breadcrumb compartilhado não dá `min-w-0` aos itens (anotado para a Fase 3).
-        <div className="flex flex-col gap-4 [&_[data-slot=breadcrumb-item]]:max-w-full [&_[data-slot=breadcrumb-item]]:min-w-0 [&_[data-slot=breadcrumb-page]]:min-w-0">
+        <div className="flex flex-col gap-4">
           <PageHeader
             breadcrumb={[{ label: "Aportes", href: "/app/aportes" }]}
             backHref="/app/aportes"
@@ -191,20 +189,16 @@ export default async function ContributionPage({ params }: PageProps<"/app/aport
                 ) : null}
               </>
             }
-            secondary={[
-              viewLead,
-              viewProject,
-              ...(cancelled
-                ? []
-                : [
-                    <ContributionHeaderMenu
-                      key="mais"
-                      contributionId={c.id}
-                      blockers={blockers.cancelar}
-                      wasDeposited={wasDeposited}
-                    />,
-                  ]),
-            ]}
+            secondary={[viewLead, viewProject]}
+            more={
+              cancelled ? undefined : (
+                <ContributionHeaderMenu
+                  contributionId={c.id}
+                  blockers={blockers.cancelar}
+                  wasDeposited={wasDeposited}
+                />
+              )
+            }
           />
           {cancelled ? (
             <Callout tone="danger" title="Aporte cancelado">
@@ -228,7 +222,10 @@ export default async function ContributionPage({ params }: PageProps<"/app/aport
           <NextStepCard
             step={nextStep}
             action={
-              cancelled ? null : <ContributionSteps ctx={ctx} contribution={c} variant="row" />
+              // Só o botão do passo: "Cancelar aporte" já está no "⋯" do cabeçalho e da barra.
+              cancelled ? null : (
+                <ContributionSteps ctx={ctx} contribution={c} variant="row" menu={false} />
+              )
             }
           />
           <Card>

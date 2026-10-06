@@ -19,9 +19,11 @@ import {
 import { cn } from "@/lib/utils";
 
 // Cabeçalho de página (crm-design-system.md, seção 5.2): eyebrow, h1 em serifa, descrição, linha
-// de `meta` (badges, SLA) e ações. Uma ação primária por tela (decisão D5); mais de três
-// secundárias vão para um menu "⋯". No celular as ações somem (`hidden md:flex`) e a
-// ActionBarMobile do DetailLayout assume; `backHref` alimenta o "voltar" do header do shell.
+// de `meta` (badges, SLA) e ações, sempre na mesma ordem: secundárias (outline) › `more` (o "⋯"
+// da página, com as ações raras ou destrutivas) › primária (azul, à direita). Uma ação primária
+// por tela (decisão D5); mais de três secundárias vão para um "⋯" automático. No celular as ações
+// somem (`hidden md:flex`) e a ActionBarMobile do DetailLayout assume; `backHref` alimenta o
+// "voltar" do header do shell.
 export type PageHeaderCrumb = { label: string; href: string };
 
 const MAX_INLINE_SECONDARY = 3;
@@ -33,6 +35,7 @@ export function PageHeader({
   breadcrumb,
   primary,
   secondary = [],
+  more,
   meta,
   backHref,
   backLabel,
@@ -45,6 +48,8 @@ export function PageHeader({
   breadcrumb?: PageHeaderCrumb[];
   primary?: ReactNode;
   secondary?: ReactNode[];
+  // Menu "⋯" próprio da página (ex.: LeadMoreMenu), renderizado antes da primária.
+  more?: ReactNode;
   meta?: ReactNode;
   backHref?: string;
   backLabel?: string;
@@ -55,7 +60,7 @@ export function PageHeader({
   const inline = secondary.slice(0, MAX_INLINE_SECONDARY);
   const overflow =
     secondary.length > MAX_INLINE_SECONDARY ? secondary.slice(MAX_INLINE_SECONDARY) : [];
-  const hasActions = Boolean(primary) || secondary.length > 0;
+  const hasActions = Boolean(primary) || Boolean(more) || secondary.length > 0;
   return (
     <header
       className={cn("flex flex-col gap-3 md:flex-row md:items-end md:justify-between", className)}
@@ -117,6 +122,7 @@ export function PageHeader({
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null}
+          {more}
           {primary}
         </div>
       ) : null}

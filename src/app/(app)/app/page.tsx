@@ -30,7 +30,6 @@ import {
 } from "@/lib/repos/leads";
 import { listProjectAlerts } from "@/lib/repos/projects";
 import { getSession, requireSession } from "@/lib/session";
-import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Hoje" };
 
@@ -50,14 +49,6 @@ function greetingFor(now: Date): string {
   if (hour < 18) return "Boa tarde";
   return "Boa noite";
 }
-
-// "R$ 350.000,00" não cabe em 32 px num card de 2 colunas a 390 px: o valor em dinheiro usa
-// 22 px no celular e volta ao .crm-kpi (32 px) a partir de md. (Candidato a prop do StatCard.)
-const STAT_CARD_CLASS = "min-w-0 p-3 md:p-4";
-const MONEY_CARD_CLASS = cn(
-  STAT_CARD_CLASS,
-  "[&_.crm-kpi]:text-[1.375rem] [&_.crm-kpi]:leading-9 md:[&_.crm-kpi]:text-[2rem]",
-);
 
 function plural(n: number, singular: string, pluralForm: string): string {
   return `${n} ${n === 1 ? singular : pluralForm}`;
@@ -132,7 +123,6 @@ export default async function TodayPage() {
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
         <StatCard
           label="Vencidas"
-          className={STAT_CARD_CLASS}
           value={String(overdueCount)}
           hint={plural(overdueCount, "próxima ação", "próximas ações")}
           tone={overdueCount > 0 ? "danger" : "neutral"}
@@ -142,7 +132,6 @@ export default async function TodayPage() {
         />
         <StatCard
           label="Sem contato"
-          className={STAT_CARD_CLASS}
           value={String(newCount)}
           hint={newLate > 0 ? `${newLate} fora do prazo` : "todos no prazo"}
           tone={newLate > 0 ? "danger" : "neutral"}
@@ -152,7 +141,6 @@ export default async function TodayPage() {
         />
         <StatCard
           label="Tarefas hoje"
-          className={STAT_CARD_CLASS}
           value={String(tasksCount)}
           hint={tasksLate > 0 ? plural(tasksLate, "atrasada", "atrasadas") : "nenhuma atrasada"}
           tone={tasksLate > 0 ? "danger" : "neutral"}
@@ -162,7 +150,6 @@ export default async function TodayPage() {
         />
         <StatCard
           label="Aportes 15 dias"
-          className={MONEY_CARD_CLASS}
           value={contributionsLabel}
           hint={plural(contributions.length, "previsto", "previstos")}
           icon={HandCoins}

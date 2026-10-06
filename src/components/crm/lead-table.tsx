@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 
 // Tabela de leads (crm-design-system.md, seção 7.3) sobre a DataTable: cinco colunas no desktop
 // (Nome com empresa · segmento, Estágio, Próxima ação ordenável, Origem, Dono) e cards no celular.
-// A linha inteira abre o lead pelo link do nome; "Assumir" (lead sem dono) fica por cima do link
+// A linha inteira abre o lead pelo link do nome; "Assumir" (lead sem responsável) fica por cima do link
 // (`relative z-10`) e cai no detalhe com o dono atribuído (`claimLeadAction`).
 
 function CompanyLine({ lead, className }: { lead: LeadListRow; className?: string }) {
@@ -139,13 +139,9 @@ export function LeadTable({
       rows={rows}
       rowHref={href}
       rowKey={(lead) => lead.id}
-      // A linha (e não só a primeira célula) é a referência do link que cobre a linha inteira;
-      // perdidos ficam esmaecidos.
+      // Perdidos ficam esmaecidos.
       rowClassName={(lead) =>
-        cn(
-          "relative [&>td:first-child]:static",
-          isTerminalStage(lead.pipeline as Pipeline, lead.stage) && "opacity-70",
-        )
+        isTerminalStage(lead.pipeline as Pipeline, lead.stage) ? "opacity-70" : undefined
       }
       mobile={{
         primary: (lead) => <NameCell lead={lead} />,

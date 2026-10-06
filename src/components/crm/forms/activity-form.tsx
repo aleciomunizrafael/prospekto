@@ -52,10 +52,14 @@ function successMessage(type: ActivityKind, formData: FormData): string {
 export function ActivityForm({
   leadId,
   suggestedNextActionAt,
+  now,
   autoFocus = false,
 }: {
   leadId: string;
   suggestedNextActionAt: string | null;
+  // Instante do servidor (ISO): o "Data e hora" padrão e o DateHint usam o mesmo valor no SSR e
+  // na hidratação. `new Date()` no cliente mudava de minuto entre os dois e quebrava a hidratação.
+  now: string;
   autoFocus?: boolean;
 }) {
   const [state, action] = useActionState(async (prev: CrmActionState, formData: FormData) => {
@@ -65,8 +69,8 @@ export function ActivityForm({
     return result;
   }, initialCrmActionState);
   const [type, setType] = useState<ActivityKind>("ligacao");
-  // Calculado uma vez: um defaultValue que muda a cada render faz o base-ui avisar e não ajuda.
-  const [nowLocal] = useState(() => toDateTimeLocal(new Date()));
+  // Fixo por montagem: um defaultValue que muda a cada render faz o base-ui avisar e não ajuda.
+  const [nowLocal] = useState(() => toDateTimeLocal(new Date(now)));
   const formRef = useRef<HTMLFormElement>(null);
   const e = state.fieldErrors ?? {};
 

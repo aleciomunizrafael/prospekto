@@ -9,7 +9,8 @@ import { cn } from "@/lib/utils";
 import { SubmitButton } from "./submit-button";
 
 // "Concluir" de uma tarefa (Hoje, Timeline): um formulário mínimo com a Server Action existente.
-// `size="touch"` no celular; `relative z-10` para ficar acima do link da linha (decisão D10).
+// `size="touch"` no celular; `size="responsive"` é 44 px abaixo de md e 28 px a partir dele (fila
+// de Hoje); `relative z-10` para ficar acima do link da linha (decisão D10).
 export function TaskCompleteButton({
   activityId,
   size = "sm",
@@ -17,7 +18,7 @@ export function TaskCompleteButton({
   className,
 }: {
   activityId: string;
-  size?: "sm" | "touch";
+  size?: "sm" | "touch" | "responsive";
   label?: string;
   className?: string;
 }) {
@@ -29,7 +30,12 @@ export function TaskCompleteButton({
   return (
     <form action={action} className={cn("relative z-10 inline-flex", className)}>
       <input type="hidden" name="activityId" value={activityId} />
-      <SubmitButton variant="outline" size={size} pendingLabel="Concluindo...">
+      <SubmitButton
+        variant="outline"
+        size={size === "responsive" ? "touch" : size}
+        className={size === "responsive" ? "md:h-7 md:px-2.5 md:text-[0.8rem]" : undefined}
+        pendingLabel="Concluindo..."
+      >
         <Check aria-hidden="true" />
         {label}
       </SubmitButton>

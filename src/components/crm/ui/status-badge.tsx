@@ -13,8 +13,8 @@ import { cn } from "@/lib/utils";
 
 // Badge semântico (crm-design-system.md, seções 5.2 e 6): família e ícone vêm de status-tones.ts,
 // o rótulo de labels.ts/enum-labels.ts; texto sempre visível, ícone decorativo. Temperatura "frio"
-// some nas tabelas (`size="sm"`) e aparece como "Frio" no detalhe. Substitui badges.tsx,
-// project-badges.tsx e ContributionStatusBadge.
+// some nas tabelas (`size="sm"`) e aparece como "Frio" no detalhe. É o único badge de status do
+// CRM (ContributionStatusBadge, em contribution-table.tsx, é um reexport).
 export type StatusBadgeKind = "stage" | "contribution" | "temperature" | "orgType";
 
 function resolve(

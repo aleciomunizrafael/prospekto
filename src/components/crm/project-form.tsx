@@ -110,9 +110,6 @@ export function ProjectFields({
     className: edit ? undefined : FOLD_CLASS,
   };
   const grid = edit ? undefined : "grid gap-4 sm:grid-cols-2";
-  // Dentro de <details> o conteúdo fica num só bloco (::details-content): o `gap` do FormSection
-  // não separa a descrição dos campos, por isso a margem.
-  const foldGrid = edit ? "mt-4" : `${grid} mt-4`;
   const span = edit ? undefined : "sm:col-span-2";
   return (
     <>
@@ -160,7 +157,7 @@ export function ProjectFields({
         title="Aprovação"
         badge="exigido em Autorizado"
         description="Dados da portaria, CHP ou autorização do órgão."
-        contentClassName={foldGrid}
+        contentClassName={grid}
         {...fold}
       >
         <TextField
@@ -199,7 +196,7 @@ export function ProjectFields({
       <FormSection
         title="Captação e texto público"
         description="O resumo e as contrapartidas aparecem no site quando o projeto é publicado."
-        contentClassName={foldGrid}
+        contentClassName={grid}
         {...fold}
       >
         <TextareaField

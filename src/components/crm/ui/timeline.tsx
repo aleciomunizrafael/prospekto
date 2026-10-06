@@ -208,13 +208,13 @@ export function Timeline({
                   >
                     <Settings2 className="size-3.5" />
                   </span>
-                  <details className="group">
+                  <details className="group/run">
                     <summary className="cursor-pointer list-none text-sm text-muted-foreground">
                       {run.items.length} mudanças automáticas ·{" "}
-                      <span className="underline-offset-2 group-open:hidden hover:underline">
+                      <span className="underline-offset-2 group-open/run:hidden hover:underline">
                         mostrar
                       </span>
-                      <span className="hidden underline-offset-2 group-open:inline hover:underline">
+                      <span className="hidden underline-offset-2 group-open/run:inline hover:underline">
                         esconder
                       </span>
                     </summary>

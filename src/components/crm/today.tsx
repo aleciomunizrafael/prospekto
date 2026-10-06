@@ -46,9 +46,6 @@ export const QUEUE_VISIBLE_ROWS_MOBILE = 5;
 
 // Botões da linha: 44 px no celular (alvo de toque), compactos no desktop.
 const ROW_BUTTON_CLASS = "h-11 px-4 text-sm md:h-7 md:px-2.5 md:text-[0.8rem]";
-const ROW_ICON_BUTTON_CLASS = "size-11 md:size-8";
-const TASK_BUTTON_CLASS =
-  "[&_button]:h-11 [&_button]:px-4 [&_button]:text-sm md:[&_button]:h-7 md:[&_button]:px-2.5 md:[&_button]:text-[0.8rem]";
 
 const ROW_CLASS =
   "grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-1 md:grid-cols-[minmax(0,1fr)_16rem_auto]";
@@ -246,7 +243,7 @@ function QueueRow({ item, now, className }: { item: QueueItem; now: Date; classN
           <TaskDue dueAt={task.dueAt} now={now} />
         </div>
         <div className={ACTION_CLASS}>
-          <TaskCompleteButton activityId={task.id} size="sm" className={TASK_BUTTON_CLASS} />
+          <TaskCompleteButton activityId={task.id} size="responsive" />
         </div>
       </li>
     );
@@ -273,15 +270,14 @@ function QueueRow({ item, now, className }: { item: QueueItem; now: Date; classN
           nextActionAt={reason === "new" ? null : lead.nextActionAt}
           now={now}
           stage={lead}
-          className="min-w-0 [&>span]:truncate"
+          truncate
         />
       </div>
       <div className={ACTION_CLASS}>
         <LeadWhatsappButton
           lead={{ ...lead, company: leadCompany(lead) }}
           variant="icon"
-          size="sm"
-          className={ROW_ICON_BUTTON_CLASS}
+          size="responsive"
         />
         {lead.ownerUserId ? (
           <RegisterContactLink leadId={lead.id} name={lead.name} />
@@ -372,7 +368,7 @@ function UpcomingRow({ item }: { item: UpcomingItem }) {
         <span className="crm-meta hidden tabular-nums md:inline">{time}</span>
         <div className="flex items-center justify-end gap-2">
           <span className="crm-meta tabular-nums md:hidden">{time}</span>
-          <TaskCompleteButton activityId={task.id} size="sm" className={TASK_BUTTON_CLASS} />
+          <TaskCompleteButton activityId={task.id} size="responsive" />
         </div>
       </li>
     );

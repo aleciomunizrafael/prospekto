@@ -85,6 +85,7 @@ export function ActionBarMobile({
               {more.map((item) => (
                 <li key={item.label}>
                   <SheetClose
+                    nativeButton={!item.href}
                     render={
                       item.href ? (
                         <Link href={item.href} />

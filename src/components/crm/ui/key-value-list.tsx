@@ -87,12 +87,12 @@ export function KeyValueList({
         <div className={cn("text-sm text-muted-foreground", SPAN[columns])}>Nada registrado.</div>
       ) : null}
       {empties.length > 0 ? (
-        <details className={cn("group", SPAN[columns])}>
+        <details className={cn("group/kv", SPAN[columns])}>
           <summary className="cursor-pointer list-none text-sm text-muted-foreground underline-offset-2 hover:underline">
-            <span className="group-open:hidden">
+            <span className="group-open/kv:hidden">
               Mostrar todos os campos ({plural(empties.length, "sem valor", "sem valor")})
             </span>
-            <span className="hidden group-open:inline">Esconder os campos sem valor</span>
+            <span className="hidden group-open/kv:inline">Esconder os campos sem valor</span>
           </summary>
           <div className={cn("mt-3 grid gap-x-6 gap-y-3", COLUMNS[columns])}>
             {empties.map((item, i) => (

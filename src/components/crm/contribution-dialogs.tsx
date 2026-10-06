@@ -78,6 +78,8 @@ export function NewContributionDialog({
   defaultOpen = false,
   fab = false,
   trigger,
+  variant = "default",
+  size,
 }: {
   projects: ProjectOption[];
   sponsorOrgs: Option[];
@@ -87,6 +89,10 @@ export function NewContributionDialog({
   // Gatilho é o FAB das listas no celular (crm-design-system.md, seção 4.2).
   fab?: boolean;
   trigger?: ReactNode;
+  // `outline` quando o botão não é a ação primária da tela (card de Aportes do lead e do projeto;
+  // decisão D5: um botão sólido por tela).
+  variant?: "default" | "outline";
+  size?: "sm" | "touch";
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(defaultOpen);
@@ -113,7 +119,8 @@ export function NewContributionDialog({
       action={createContributionAction}
       submitLabel="Criar proposta"
       pendingLabel="Criando…"
-      variant="default"
+      variant={variant}
+      size={size}
       wide
       trigger={fab ? fabTrigger : trigger}
       open={open}

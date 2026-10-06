@@ -70,7 +70,7 @@ export default async function LeadsPage({ searchParams }: PageProps<"/app/leads"
   ) : (
     <EmptyState
       icon={Users}
-      title={`Ainda não há leads de ${PIPELINE_LABELS[filters.pipeline].toLowerCase()}.`}
+      title={`Nenhum lead de ${PIPELINE_LABELS[filters.pipeline].toLowerCase()} ainda.`}
       description="Os formulários do site entram sozinhos."
       action={
         <Button

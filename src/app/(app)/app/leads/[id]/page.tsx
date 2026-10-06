@@ -1,4 +1,4 @@
-import { ChevronRight, Mail, Shield, ShieldCheck, ShieldX } from "lucide-react";
+import { Mail, Shield, ShieldCheck, ShieldX } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -102,36 +102,9 @@ function attributeValue(field: AttributeField, raw: unknown): ReactNode {
   return enumLabel(raw);
 }
 
-// Bloco de leitura dobrável da lateral (seção 7.4: fechado no celular, aberto no desktop pelo
-// FoldsOpenOnDesktop). Mesmo recorte do FormSection collapsible, sem a classe `group`: o
-// "Mostrar todos os campos" do KeyValueList usa `group-open` e reagiria ao <details> de fora.
-function Fold({
-  title,
-  className,
-  children,
-}: {
-  title: ReactNode;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <details
-      className={cn(
-        "crm-fold flex flex-col gap-4 rounded-xl border border-border bg-card p-4 md:p-5",
-        className,
-      )}
-    >
-      <summary className="crm-h2 flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
-        <ChevronRight
-          className="size-4 shrink-0 text-muted-foreground transition-transform duration-120 in-[[open]]:rotate-90"
-          aria-hidden="true"
-        />
-        <span className="min-w-0 flex-1">{title}</span>
-      </summary>
-      {children}
-    </details>
-  );
-}
+// Blocos de leitura dobráveis da lateral (seção 7.4: fechados no celular, abertos no desktop pelo
+// FoldsOpenOnDesktop): FormSection collapsible com a classe `crm-fold`.
+const FOLD = { collapsible: true, className: "crm-fold" } as const;
 
 function daysInStageText(days: number): string {
   if (days <= 0) return "desde hoje";
@@ -353,17 +326,14 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
           {formatPhoneBR(lead.phone)}
         </a>
       ) : (
-        <span className="flex flex-wrap items-center gap-1 text-muted-foreground">
-          não informado ·
-          <LeadEditDialog
-            lead={editValues}
-            trigger={
-              <Button type="button" variant="link" size="xs" className="h-auto px-0">
-                Editar
-              </Button>
-            }
-          />
-        </span>
+        <LeadEditDialog
+          lead={editValues}
+          trigger={
+            <Button type="button" variant="link" size="xs" className="h-auto px-0">
+              Adicionar telefone
+            </Button>
+          }
+        />
       ),
     },
     { label: "Cidade", value: cityUf || null },
@@ -418,6 +388,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
   const header = (
     <>
       <PageHeader
+        breadcrumb={[{ label: "Leads", href: "/app/leads" }]}
         eyebrow={`${pipelineLabel(lead.pipeline)} · ${SEGMENT_LABELS[lead.segment]}`}
         title={lead.name}
         backHref="/app/leads"
@@ -483,12 +454,8 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
           </Tooltip>,
           <LeadEditDialog key="editar" lead={editValues} />,
         ]}
-        primary={
-          <>
-            <StageMoveDialog {...stageProps} />
-            <LeadMoreMenu {...stageProps} />
-          </>
-        }
+        more={<LeadMoreMenu {...stageProps} />}
+        primary={<StageMoveDialog {...stageProps} />}
       />
       {existente === "1" ? (
         <Callout tone="info" role="status">
@@ -511,6 +478,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
         <ActivityForm
           leadId={lead.id}
           suggestedNextActionAt={suggestedNext ? suggestedNext.toISOString() : null}
+          now={now.toISOString()}
           autoFocus={registrar === "1"}
         />
       </FormSection>
@@ -565,15 +533,27 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
                     allowedMechanisms: allowedContributionMechanisms(p.mechanism),
                   }))}
                 sponsorOrgs={sponsorOrgs.map((o) => ({ value: o.id, label: o.name }))}
+                variant="outline"
+                size="sm"
               />
             </CardAction>
           </CardHeader>
           <CardContent>
-            <ContributionTable ctx={ctx} rows={contributions} layout="cards" now={now} />
+            <ContributionTable
+              ctx={ctx}
+              rows={contributions}
+              layout="cards"
+              showLead={false}
+              now={now}
+            />
           </CardContent>
         </Card>
       ) : null}
-      <Fold title={SEGMENT_BLOCK_TITLE[lead.segment]} className="max-lg:order-6">
+      <FormSection
+        title={SEGMENT_BLOCK_TITLE[lead.segment]}
+        {...FOLD}
+        className={cn(FOLD.className, "max-lg:order-6")}
+      >
         {lead.segment === "PJ" && !lead.orgName ? (
           <Callout tone="warning">
             Para chegar a Termo, cadastre a empresa com CNPJ em{" "}
@@ -581,11 +561,15 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
           </Callout>
         ) : null}
         <KeyValueList items={segmentItems} columns={1} />
-      </Fold>
-      <Fold title="Origem" className="max-lg:order-7">
+      </FormSection>
+      <FormSection title="Origem" {...FOLD} className={cn(FOLD.className, "max-lg:order-7")}>
         <KeyValueList items={originItems} columns={1} />
-      </Fold>
-      <Fold title="Consentimentos" className="max-lg:order-8">
+      </FormSection>
+      <FormSection
+        title="Consentimentos"
+        {...FOLD}
+        className={cn(FOLD.className, "max-lg:order-8")}
+      >
         <ul className="flex flex-col gap-3 text-sm">
           {currentConsents.map(({ purpose, current }) => {
             const Icon = current ? (current.granted ? ShieldCheck : ShieldX) : Shield;
@@ -638,9 +622,13 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
         {consents.length > 2 ? (
           <p className="crm-meta">{consents.length} registros no histórico (nada é apagado).</p>
         ) : null}
-      </Fold>
+      </FormSection>
       {simulationCards.length > 0 ? (
-        <Fold title={`Simulações (${simulationCards.length})`} className="max-lg:order-8">
+        <FormSection
+          title={`Simulações (${simulationCards.length})`}
+          {...FOLD}
+          className={cn(FOLD.className, "max-lg:order-8")}
+        >
           {simulationCards.map((data) => (
             <details key={data.simulationId} className="rounded-lg border border-border p-3">
               <summary className="cursor-pointer text-sm font-medium">
@@ -651,7 +639,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
               </div>
             </details>
           ))}
-        </Fold>
+        </FormSection>
       ) : null}
     </>
   );

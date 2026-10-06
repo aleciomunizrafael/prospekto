@@ -14,6 +14,7 @@ const HIDDEN_KEYS = new Set([
   "telefone",
   "projeto_id",
   "simulation_id",
+  "source",
   "source_detail",
 ]);
 
@@ -30,6 +31,7 @@ const FORM_KEY_LABELS: Record<string, string> = {
   cargo: "Cargo",
   interesse: "Interesse",
   origem: "Origem",
+  sourceDetail: "Detalhe da origem",
 };
 
 const ATTRIBUTE_KEY_LABELS: Record<string, string> = Object.fromEntries(

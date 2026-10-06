@@ -15,8 +15,9 @@ import { cn } from "@/lib/utils";
 // Tabela do CRM (crm-design-system.md, seção 5.2, decisões D9 e D10). Server Component: as
 // funções de coluna rodam no servidor. No desktop é uma Table dentro de um Card; abaixo de `md`
 // vira uma lista de cards com `primary`, `secondary`, `trailing` e `action`. A linha inteira abre
-// o registro pelo link do nome (`RowLink`, classe `row-link`): o primeiro <td> e o <li> do card
-// são `relative`; botões e outros links da linha precisam de `relative z-10` para ficar por cima.
+// o registro pelo link do nome (`RowLink`, classe `row-link`): o <tr> e o <li> do card são
+// `relative`, então o ::after do link cobre a linha toda; botões e outros links da linha precisam
+// de `relative z-10` para ficar por cima.
 // No celular `primary` já é envolvido pelo `RowLink`; no desktop a página coloca o `RowLink` na
 // primeira coluna.
 export type Column<T> = {
@@ -146,13 +147,12 @@ export function DataTable<T>({
           </TableHeader>
           <TableBody>
             {rows.map((row) => (
-              <TableRow key={rowKey(row)} className={cn("h-11", rowClassName?.(row))}>
-                {columns.map((col, i) => (
+              <TableRow key={rowKey(row)} className={cn("relative h-11", rowClassName?.(row))}>
+                {columns.map((col) => (
                   <TableCell
                     key={col.key}
                     className={cn(
                       "whitespace-normal",
-                      i === 0 && "relative",
                       PRIORITY_CLASS[col.priority ?? 1],
                       col.align === "right" && "text-right tabular-nums",
                     )}

@@ -6,6 +6,9 @@ import { cn } from "@/lib/utils";
 // Número grande com rótulo (crm-design-system.md, seção 5.2): os quatro cards de Hoje, os de
 // Projetos e Aportes. Com `href`, o card inteiro é um link com `aria-label` completo
 // ("3 próximas ações vencidas, abrir lista"). Grid pai: `grid grid-cols-2 gap-3 md:grid-cols-4`.
+// O número segue a largura do próprio card (container query): 22 px em cards estreitos (2 colunas
+// a 390 px), 28 px em cards médios (5 colunas no detalhe do projeto) e os 32 px do .crm-kpi a
+// partir de 17rem, para "R$ 1.350.000,00" nunca estourar o card.
 export type StatCardTone = "neutral" | "warning" | "danger" | "success";
 
 const DOT_CLASS: Record<StatCardTone, string> = {
@@ -53,13 +56,15 @@ export function StatCard({
           <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         ) : null}
       </span>
-      <span className="crm-kpi">{value}</span>
+      <span className="crm-kpi truncate text-[1.375rem] leading-8 @[14rem]:text-[1.75rem] @[14rem]:leading-9 @[17rem]:text-[2rem]">
+        {value}
+      </span>
       {extra ? <span className="flex items-center">{extra}</span> : null}
       {hint ? <span className="crm-meta">{hint}</span> : null}
     </>
   );
   const classes = cn(
-    "flex flex-col gap-1 rounded-xl border border-border bg-card p-4 text-left",
+    "@container flex min-w-0 flex-col gap-1 rounded-xl border border-border bg-card p-3 text-left md:p-4",
     href && "transition-colors duration-120 hover:bg-surface-2 focus-visible:outline",
     className,
   );

@@ -50,8 +50,6 @@ const KPI_BRL = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 0,
 });
 const PERCENT = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
-const KPI_RESPONSIVE =
-  "[&_.crm-kpi]:text-xl [&_.crm-kpi]:leading-7 md:[&_.crm-kpi]:text-[1.75rem] md:[&_.crm-kpi]:leading-9";
 
 // Destinos do "Mover para": próximo estágio, retorno previsto (encerrado -> elaboração,
 // arquivado -> prospecção) e voltar um estágio. Arquivar fica numa confirmação própria.
@@ -176,20 +174,24 @@ export default async function ProjectPage({ params }: PageProps<"/app/projetos/[
     proponents: proponents.map((p) => ({ value: p.id, label: p.name })),
     users: userOptions,
   };
+  // Sólido só na barra do celular (ação primária lá); outline no card e no NextStepCard, pois
+  // "Mover para" é a primária do cabeçalho (decisão D5).
+  const newContributionProps = {
+    projects: [
+      {
+        id: project.id,
+        name: project.name,
+        mechanism: project.mechanism,
+        allowedMechanisms: allowedContributionMechanisms(project.mechanism),
+      },
+    ],
+    sponsorOrgs: sponsorOrgs.map((o) => ({ value: o.id, label: o.name })),
+    fixedProjectId: project.id,
+  };
   const newContribution = (
-    <NewContributionDialog
-      projects={[
-        {
-          id: project.id,
-          name: project.name,
-          mechanism: project.mechanism,
-          allowedMechanisms: allowedContributionMechanisms(project.mechanism),
-        },
-      ]}
-      sponsorOrgs={sponsorOrgs.map((o) => ({ value: o.id, label: o.name }))}
-      fixedProjectId={project.id}
-    />
+    <NewContributionDialog {...newContributionProps} variant="outline" size="sm" />
   );
+  const newContributionMobile = <NewContributionDialog {...newContributionProps} />;
 
   // Botão do passo (next-step.ts, `kind`): o diálogo do aporte, um novo aporte ou "Mover para".
   function stepAction(step: NextStep): ReactNode {
@@ -295,7 +297,6 @@ export default async function ProjectPage({ params }: PageProps<"/app/projetos/[
           label="Aprovado"
           value={project.approvedAmount == null ? "—" : KPI_BRL.format(project.approvedAmount)}
           hint={project.approvedAmount == null ? "ainda sem valor aprovado" : undefined}
-          className={KPI_RESPONSIVE}
         />
         <StatCard
           label="Captado"
@@ -314,12 +315,10 @@ export default async function ProjectPage({ params }: PageProps<"/app/projetos/[
             ) : undefined
           }
           hint={raisedAlert ? "abaixo de 10 % captado" : undefined}
-          className={KPI_RESPONSIVE}
         />
         <StatCard
           label="Saldo a captar"
           value={project.balance == null ? "—" : KPI_BRL.format(project.balance)}
-          className={KPI_RESPONSIVE}
         />
         <StatCard
           label="Prazo de captação"
@@ -330,14 +329,13 @@ export default async function ProjectPage({ params }: PageProps<"/app/projetos/[
               : "sem prazo informado"
           }
           tone={deadlineOverdue ? "danger" : deadlineAlert ? "warning" : "neutral"}
-          className={KPI_RESPONSIVE}
         />
         <StatCard
           label="Comissão"
           value={KPI_BRL.format(project.commissionTotal)}
           hint={fee != null ? `de ${KPI_BRL.format(fee)} da rubrica` : "rubrica não informada"}
           tone={commissionOver ? "danger" : "neutral"}
-          className={`${KPI_RESPONSIVE} col-span-2 md:col-span-1`}
+          className="col-span-2 md:col-span-1"
         />
       </div>
     </>
@@ -360,8 +358,6 @@ export default async function ProjectPage({ params }: PageProps<"/app/projetos/[
             layout="cards"
             now={now}
             caption={`Aportes de ${project.name}`}
-            // Uma linha por aporte (44 px): patrocinador · empresa lado a lado, não empilhados.
-            className="[&_li>div:first-child]:flex-row [&_li>div:first-child]:items-baseline [&_li>div:first-child]:gap-1.5 [&_li>div:first-child>span]:before:mr-1.5 [&_li>div:first-child>span]:before:content-['·']"
           />
         </CardContent>
       </Card>
@@ -455,7 +451,7 @@ export default async function ProjectPage({ params }: PageProps<"/app/projetos/[
       main={main}
       aside={aside}
       asideLabel="Dados do projeto"
-      actionsMobile={<ProjectActionBar {...actionProps} newContribution={newContribution} />}
+      actionsMobile={<ProjectActionBar {...actionProps} newContribution={newContributionMobile} />}
     />
   );
 }

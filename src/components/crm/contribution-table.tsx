@@ -1,5 +1,7 @@
 // Tabela de aportes (lista /app/aportes) e lista de cards (bloco do projeto e do lead), com as
-// mesmas colunas e o botão do passo atual (crm-design-system.md, seção 5.2).
+// mesmas colunas e o botão do passo atual (crm-design-system.md, seção 5.2). A primeira coluna
+// tem duas linhas (patrocinador · empresa / → projeto); tipo e mecanismo ficam no `title` da
+// célula (e no detalhe). Os cards são uma linha de 44 px (nome · empresa | badge | valor | passo).
 import { CalendarClock, HandCoins } from "lucide-react";
 import Link from "next/link";
 import {
@@ -49,10 +51,20 @@ function Expected({ c, now }: { c: ContributionSummary; now: Date }) {
   );
 }
 
+// Linha de apoio do card: quem patrocina (e a empresa) quando o título é o projeto; a empresa ou
+// o tipo quando o título é o patrocinador.
+function cardMeta(c: ContributionSummary, showProject: boolean, showLead: boolean): string {
+  if (showProject) {
+    return [showLead ? c.leadName : null, c.orgName].filter(Boolean).join(" · ");
+  }
+  return c.orgName ?? CONTRIBUTION_TYPE_LABELS[c.type];
+}
+
 export function ContributionTable({
   ctx,
   rows,
   showProject = true,
+  showLead = true,
   showSteps = true,
   layout = "table",
   now = new Date(),
@@ -63,6 +75,8 @@ export function ContributionTable({
   ctx: Ctx;
   rows: ContributionSummary[];
   showProject?: boolean;
+  // `false` na página do lead: o nome do patrocinador já é o título da tela.
+  showLead?: boolean;
   showSteps?: boolean;
   layout?: "table" | "cards";
   now?: Date;
@@ -71,11 +85,7 @@ export function ContributionTable({
   className?: string;
 }) {
   if (rows.length === 0 && layout === "cards") {
-    return (
-      <p className={cn("text-sm text-muted-foreground", className)}>
-        Nenhum aporte proposto ainda.
-      </p>
-    );
+    return <p className={cn("text-sm text-muted-foreground", className)}>Nenhum aporte ainda.</p>;
   }
 
   if (layout === "cards") {
@@ -86,19 +96,15 @@ export function ContributionTable({
             key={c.id}
             className="relative flex min-h-11 flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-card px-3 py-2 text-sm transition-colors duration-120 hover:bg-surface-2 focus-within:bg-primary-soft"
           >
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5">
               <RowLink href={`/app/aportes/${c.id}`} className="text-sm">
                 {showProject ? c.projectName : c.leadName}
               </RowLink>
-              <span className="crm-meta truncate">
-                {showProject ? c.leadName : null}
-                {showProject && c.orgName
-                  ? ` · ${c.orgName}`
-                  : !showProject && c.orgName
-                    ? c.orgName
-                    : ""}
-                {!showProject && !c.orgName ? CONTRIBUTION_TYPE_LABELS[c.type] : ""}
-              </span>
+              {cardMeta(c, showProject, showLead) ? (
+                <span className="crm-meta min-w-0 truncate">
+                  {cardMeta(c, showProject, showLead)}
+                </span>
+              ) : null}
             </div>
             <StatusBadge kind="contribution" value={c.status} />
             <span className="tabular-nums">
@@ -127,12 +133,15 @@ export function ContributionTable({
       key: "sponsor",
       header: showProject ? "Patrocinador / projeto" : "Patrocinador",
       priority: 1,
+      width: "min-w-56",
       cell: (c) => (
-        <div className="flex min-w-0 flex-col">
-          <RowLink href={`/app/aportes/${c.id}`}>{c.leadName}</RowLink>
-          <span className="crm-meta">
-            {c.orgName ? `${c.orgName} · ` : ""}
-            {CONTRIBUTION_TYPE_LABELS[c.type]} · {mechanismLabel(c.mechanism)}
+        <div
+          className="flex min-w-0 flex-col"
+          title={`${CONTRIBUTION_TYPE_LABELS[c.type]} · ${mechanismLabel(c.mechanism)}`}
+        >
+          <span className="flex flex-wrap items-baseline gap-x-1.5">
+            <RowLink href={`/app/aportes/${c.id}`}>{c.leadName}</RowLink>
+            {c.orgName ? <span className="crm-meta">{c.orgName}</span> : null}
           </span>
           {showProject ? (
             <Link
@@ -249,14 +258,24 @@ export function ContributionTable({
           </>
         ),
         action: showSteps
-          ? (c) => <ContributionSteps ctx={ctx} contribution={c} variant="row" size="touch" />
+          ? (c) => (
+              // Só o botão do passo no card: "⋯" (comissão, cancelar) fica no detalhe do aporte.
+              <ContributionSteps
+                ctx={ctx}
+                contribution={c}
+                variant="row"
+                size="touch"
+                compact
+                menu={false}
+              />
+            )
           : undefined,
       }}
       empty={
         empty ?? (
           <EmptyState
             icon={HandCoins}
-            title="Nenhum aporte proposto."
+            title="Nenhum aporte ainda."
             description="Quando um patrocinador aceitar a proposta, registre aqui."
           />
         )

@@ -196,7 +196,6 @@ export default async function OrganizationsPage({ searchParams }: PageProps<"/ap
         rowHref={href}
         rowKey={(o) => o.id}
         // A linha inteira (não só a primeira célula) é a referência do link que a cobre.
-        rowClassName={() => "relative [&>td:first-child]:static"}
         mobile={{
           primary: (o) => o.name,
           secondary: (o) => (

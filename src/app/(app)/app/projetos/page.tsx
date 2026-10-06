@@ -65,10 +65,6 @@ const AMOUNT = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 2,
 });
 
-// KPI com 20 px no celular (2 × 2) e 32 px a partir de md.
-const KPI_RESPONSIVE =
-  "[&_.crm-kpi]:text-xl [&_.crm-kpi]:leading-7 md:[&_.crm-kpi]:text-[2rem] md:[&_.crm-kpi]:leading-9";
-
 function Dash({ label }: { label?: string }) {
   return (
     <span className="text-muted-foreground" aria-label={label}>
@@ -326,7 +322,7 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/app/pro
   ) : (
     <EmptyState
       icon={Clapperboard}
-      title="Nenhum projeto na carteira."
+      title="Nenhum projeto ainda."
       description="Cadastre o projeto aprovado ou em elaboração para acompanhar prazo, captação e comissão."
       action={
         <Button
@@ -358,19 +354,13 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/app/pro
           label="Aprovado"
           value={KPI_BRL.format(totals.approved)}
           hint={rows.length === 1 ? "1 projeto" : `${rows.length} projetos`}
-          className={KPI_RESPONSIVE}
         />
         <StatCard
           label="Captado"
           value={KPI_BRL.format(totals.raised)}
           hint={raisedPct == null ? "sem valor aprovado" : `${raisedPct} % do aprovado`}
-          className={KPI_RESPONSIVE}
         />
-        <StatCard
-          label="Saldo a captar"
-          value={KPI_BRL.format(totals.balance)}
-          className={KPI_RESPONSIVE}
-        />
+        <StatCard label="Saldo a captar" value={KPI_BRL.format(totals.balance)} />
         <StatCard
           label="Com alerta"
           value={String(totals.alerts)}
@@ -379,7 +369,6 @@ export default async function ProjectsPage({ searchParams }: PageProps<"/app/pro
           href="/app/projetos?alertas=1"
           icon={TriangleAlert}
           ariaLabel={`${totals.alerts} ${totals.alerts === 1 ? "projeto" : "projetos"} com alerta, abrir lista`}
-          className={KPI_RESPONSIVE}
         />
       </div>
 

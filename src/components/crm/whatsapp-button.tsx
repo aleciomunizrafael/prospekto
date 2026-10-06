@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils";
 
 // "Abrir WhatsApp" do CRM com a mensagem do playbook para o estágio; só aparece com telefone.
 // `variant="icon"` (tabelas e fila de Hoje) tem `aria-label` com o nome e Tooltip; `text` mostra
-// o rótulo. (O site tem o seu próprio WhatsappButton em src/components/site, com analytics.)
+// o rótulo. `size="responsive"` (só no ícone) é 44 px abaixo de md e 32 px a partir dele.
+// (O site tem o seu próprio WhatsappButton em src/components/site, com analytics.)
 export function LeadWhatsappButton({
   lead,
   size = "sm",
@@ -15,7 +16,7 @@ export function LeadWhatsappButton({
   className,
 }: {
   lead: WhatsappLead;
-  size?: "xs" | "sm" | "default" | "touch";
+  size?: "xs" | "sm" | "default" | "touch" | "responsive";
   label?: string;
   variant?: "icon" | "text";
   className?: string;
@@ -25,7 +26,15 @@ export function LeadWhatsappButton({
   const ariaLabel = `Abrir WhatsApp com ${lead.name}`;
   if (variant === "icon") {
     const iconSize =
-      size === "touch" ? "size-11" : size === "xs" ? "size-7" : size === "sm" ? "size-8" : "size-9";
+      size === "touch"
+        ? "size-11"
+        : size === "responsive"
+          ? "size-11 md:size-8"
+          : size === "xs"
+            ? "size-7"
+            : size === "sm"
+              ? "size-8"
+              : "size-9";
     return (
       <Tooltip>
         <TooltipTrigger
@@ -50,8 +59,8 @@ export function LeadWhatsappButton({
   return (
     <Button
       variant="outline"
-      size={size}
-      className={cn("relative z-10", className)}
+      size={size === "responsive" ? "touch" : size}
+      className={cn("relative z-10", size === "responsive" && "md:h-8 md:px-2.5", className)}
       nativeButton={false}
       render={<a href={href} target="_blank" rel="noopener noreferrer" aria-label={ariaLabel} />}
     >

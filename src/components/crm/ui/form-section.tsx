@@ -4,8 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 // Seção de formulário ou de leitura (crm-design-system.md, seção 5.2): fieldset com legenda em
-// serifa; quando `collapsible`, vira <details> (funciona sem JavaScript) com a seta que gira.
-// `badge` ("exigido em Autorizado") e `count` ("0 de 17 preenchidos") ficam ao lado do título.
+// serifa; quando `collapsible`, vira <details> (funciona sem JavaScript) com a seta que gira e o
+// título num <h2> dentro do <summary> (navegação por cabeçalhos). `badge` ("exigido em
+// Autorizado") e `count` ("0 de 17 preenchidos") ficam ao lado do título.
 export function FormSection({
   title,
   description,
@@ -53,10 +54,10 @@ export function FormSection({
             className="size-4 shrink-0 text-muted-foreground transition-transform duration-120 group-open:rotate-90"
             aria-hidden="true"
           />
-          <span className="min-w-0 flex-1">{title}</span>
+          <h2 className="min-w-0 flex-1">{title}</h2>
           {extras}
         </summary>
-        {body}
+        <div className="flex flex-col gap-4">{body}</div>
       </details>
     );
   }

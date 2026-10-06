@@ -147,12 +147,19 @@ prospekto/
         empresas/ultima-chance/        campanha "última chance" PJ (campanhas.md, 3.1); tarefa seguinte
         contadores/planejamento/       campanha de planejamento, webinar (campanhas.md, 4.1); tarefa seguinte
         privacidade/ obrigado/[tipo]/
-        entrar/ redefinir-senha/
+      (auth)/
+        layout.tsx                   cartão sobre o canvas, sem cabeçalho nem rodapé do site
+        entrar/ redefinir-senha/     URLs /entrar e /redefinir-senha (page.tsx + formulário cliente)
       (app)/
-        layout.tsx                   exige sessão (requireSession) e monta a navegação do CRM
-        app/page.tsx                 "Hoje"
-        app/leads/ app/leads/[id]/ app/organizacoes/ app/organizacoes/[id]/
-        app/projetos/ app/projetos/[id]/ app/aportes/ app/exportar/ app/conta/
+        layout.tsx                   requireSession só para a navegação; <div data-crm> com
+                                     skip link, Sidebar (cookie crm-sidebar), Header, <main>,
+                                     BottomBar, Toaster e Shortcuts
+        app/page.tsx                 "Hoje"; cada page.tsx chama requireSession() de novo
+        app/leads/ app/leads/novo/ app/leads/[id]/
+        app/organizacoes/ app/organizacoes/[id]/
+        app/projetos/ app/projetos/novo/ app/projetos/[id]/
+        app/aportes/ app/aportes/[id]/ app/busca/ app/exportar/ app/conta/
+        app/error.tsx app/not-found.tsx e um loading.tsx por rota (loading-skeletons.tsx)
       api/
         auth/[...all]/route.ts       Better Auth
         downloads/guia/route.ts      PDF com link assinado
@@ -165,7 +172,24 @@ prospekto/
     components/
       ui/                            gerado pelo shadcn (não editar à mão além do tema)
       site/                          blocos de página, formulários públicos, whatsapp-button.tsx
-      crm/                           lead-table.tsx, lead-detail.tsx, stage-select.tsx, activity-form.tsx
+      crm/                           componentes do CRM (docs/design/crm-design-system.md, seção 5)
+        shell/                       sidebar, header, header-crumbs, search-form, new-menu,
+                                     user-menu, bottom-bar, fab, toaster, shortcuts, modules.ts,
+                                     nav-items.tsx
+        ui/                          page-header, stat-card, data-table, status-badge,
+                                     sla-indicator, next-step-card, empty-state, toolbar (+
+                                     toolbar-autosubmit), detail-layout, key-value-list, timeline,
+                                     form-section, form-actions, callout, step-flow,
+                                     action-bar-mobile, confirm-dialog, meter, date-hint,
+                                     segmented-control, loading-skeletons
+        forms/                       fields, attribute-fields, submit-button, task-complete-button,
+                                     lead-create-form, lead-edit-dialog, activity-form, owner-form,
+                                     stage-move-dialog
+        project-forms/               action-form, action-dialog (+ ActionDialogMenu), lead-picker
+        today.tsx lead-filters.tsx lead-table.tsx organization-form.tsx
+        organization-dialogs.tsx project-form.tsx project-dialogs.tsx
+        contribution-table.tsx contribution-steps.tsx contribution-dialogs.tsx
+        whatsapp-button.tsx
     config/
       site.ts                        nome, e-mail, WhatsApp, textos wa.me por página, POLICY_VERSION
     env.ts                           validação das variáveis (Zod)
@@ -183,6 +207,9 @@ prospekto/
                                      tenants.ts, form-attempts.ts (todos com ctx; "server-only")
       domain/                        enums.ts, pipelines.ts, scoring.ts, commission.ts, sla.ts
                                      (puro: sem Next, sem banco)
+      crm/                           apresentação do CRM, pura: labels, enum-labels, format,
+                                     lead-view, filters, describe-sla, next-step, status-tones,
+                                     humanize-activity, activity-text, initials, whatsapp-messages
       simulator/                     params.ts, simulate.ts, format.ts, simulate.test.ts
                                      (puro; lê docs/dominio/parametros-simulador.json)
       validation/                    um schema Zod por formulário e por segmento

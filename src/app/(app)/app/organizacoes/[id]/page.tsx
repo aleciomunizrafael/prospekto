@@ -338,7 +338,6 @@ export default async function OrganizationPage({
           rows={leads}
           rowHref={leadHref}
           rowKey={(l) => l.id}
-          rowClassName={() => "relative [&>td:first-child]:static"}
           mobile={{
             primary: (l) => l.name,
             secondary: (l) => (
