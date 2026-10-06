@@ -30,6 +30,8 @@ const buttonVariants = cva(
         "icon-sm":
           "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
         "icon-lg": "size-9",
+        // Alvo de toque de 44px (crm-design-system.md, seção 5.1): celular e ActionBarMobile.
+        touch: "h-11 gap-2 px-4 text-sm",
       },
     },
     defaultVariants: {

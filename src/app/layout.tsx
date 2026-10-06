@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Source_Serif_4 } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { site } from "@/config/site";
@@ -29,6 +29,14 @@ export const metadata: Metadata = {
   description: "Projetos culturais, leis de incentivo e captação de patrocínio na Serra Gaúcha.",
   openGraph: { siteName: site.name, locale: "pt_BR", type: "website" },
   twitter: { card: "summary" },
+};
+
+// viewport-fit=cover libera env(safe-area-inset-*) para a barra inferior do CRM
+// (crm-design-system.md, seção 3.2); width e initialScale são os padrões do Next, explicitados.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -259,3 +259,123 @@
     min-width: 44px;
   }
 }
+
+/* --- CRM (docs/design/crm-design-system.md, seção 3) ---------------------------------- */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface-2: var(--surface-2);
+  --color-divider: var(--divider);
+  --color-placeholder: var(--placeholder);
+  --color-primary-soft: var(--primary-soft);
+  --color-brand-soft: var(--brand-soft);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-error-soft: var(--error-soft);
+  --shadow-pop: var(--shadow-pop);
+  --shadow-raise: var(--shadow-raise);
+}
+
+/* Variante para esconder o fallback sem JavaScript (botão "Filtrar" da Toolbar). */
+@custom-variant scripting (@media (scripting: enabled));
+
+:root {
+  --canvas: #f4f1eb;
+  --surface-2: #f8f6f2;
+  --divider: #ece9e2;
+  --placeholder: #6b7680;
+  --primary-soft: #e6eef5;
+  --brand-soft: #f7e6e8;
+  --success-soft: #e4f1e6;
+  --warning: #7a4a00;
+  --warning-soft: #fbf0da;
+  --error-soft: #fbe7e7;
+  --shadow-pop: 0 8px 24px rgb(30 42 50 / 0.12);
+  --shadow-raise: 0 1px 2px rgb(30 42 50 / 0.06);
+}
+
+.dark {
+  --canvas: #121a20;
+  --surface-2: #16202a;
+  --divider: #28333c;
+  --placeholder: #8e98a1;
+  --primary-soft: #1d3147;
+  --brand-soft: #3a1f25;
+  --success-soft: #1c3322;
+  --warning: #e6b566;
+  --warning-soft: #332a14;
+  --error-soft: #3a1f1f;
+}
+
+@layer components {
+  /* Escopo do CRM: corpo 14px, borda de campo com 3:1, placeholder com 4,5:1. */
+  [data-crm] {
+    --input: #8f8a80;
+    font-size: 14px;
+    line-height: 1.43;
+  }
+  .dark [data-crm] {
+    --input: #6b7680;
+  }
+  [data-crm] ::placeholder {
+    color: var(--placeholder);
+  }
+  /* Escala tipográfica do CRM (seção 3.3). */
+  .crm-h1,
+  .crm-h2,
+  .crm-kpi {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  .crm-h1 {
+    font-size: 1.5rem;
+    line-height: 1.875rem;
+  }
+  @media (min-width: 960px) {
+    .crm-h1 {
+      font-size: 1.75rem;
+      line-height: 2.125rem;
+    }
+  }
+  .crm-h2 {
+    font-size: 1.125rem;
+    line-height: 1.5rem;
+  }
+  .crm-kpi {
+    font-size: 2rem;
+    line-height: 2.25rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .crm-eyebrow {
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  .crm-meta {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: var(--muted-foreground);
+  }
+  .crm-code {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Foco visível sobre fundos escuros (botão primário, FAB, barra inferior ativa). */
+  [data-crm] .bg-primary:focus-visible,
+  [data-crm] .bg-foreground:focus-visible {
+    outline-color: #fff;
+  }
+  /* Linha de tabela clicável: o link do nome cobre a linha; demais controles ficam por cima. */
+  [data-crm] .row-link::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+  }
+}
