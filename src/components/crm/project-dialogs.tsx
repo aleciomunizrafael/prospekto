@@ -1,7 +1,14 @@
 "use client";
-// Diálogos do projeto: "Mover para" (seção 9.2), "Arquivar", "Publicar no site" (R-11),
-// "Despublicar" e "Editar". Cada diálogo lista o que falta e mostra o campo ali mesmo.
-import { useState } from "react";
+// Diálogos do projeto (crm-design-system.md, seções 7.7, 7.8 e 7.12): "Mover para" (destino com
+// o tipo no texto da opção e o que falta como checklist editável), "Arquivar" (confirmação
+// destrutiva com motivo), "Publicar no site" (aviso da regra de publicação), "Despublicar"
+// (confirmação) e "Editar" (folha lateral). Também as ações do cabeçalho no desktop e a barra
+// de ações do celular, que montam os mesmos diálogos sem gatilho e os abrem pelos menus.
+import { Ellipsis, ExternalLink } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { isValidElement, useId, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import {
   createProjectAction,
   moveProjectStageAction,
@@ -9,12 +16,30 @@ import {
   unpublishProjectAction,
   updateProjectAction,
 } from "@/actions/projects";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   LOST_REASON_LABELS,
   MECHANISM_LABELS,
   optionsFrom,
   stageLabel,
 } from "@/lib/crm/enum-labels";
+import { SubmitButton } from "./forms/submit-button";
 import { ActionDialog } from "./project-forms/action-dialog";
 import {
   ActionForm,
@@ -28,6 +53,10 @@ import {
   type Option,
 } from "./project-forms/action-form";
 import { ProjectFields, type ProjectFormValues } from "./project-form";
+import { ActionBarMobile, type ActionBarMoreItem } from "./ui/action-bar-mobile";
+import { Callout } from "./ui/callout";
+import { ConfirmDialog } from "./ui/confirm-dialog";
+import { FormActions } from "./ui/form-actions";
 
 export type MoveDestination = {
   to: string;
@@ -35,11 +64,28 @@ export type MoveDestination = {
   missing: string[];
 };
 
+// Gatilho opcional dos diálogos: um elemento substitui o botão padrão; `null` não renderiza
+// gatilho (o diálogo é aberto por `open`/`onOpenChange`, como nos menus).
+type Openable = {
+  trigger?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+};
+
 type MoveProps = {
   projectId: string;
   stage: string;
   destinations: MoveDestination[];
   users: Option[];
+  // Destino já selecionado ao abrir (o NextStepCard passa o próximo estágio).
+  defaultTarget?: string;
+  trigger?: ReactNode;
+};
+
+const DESTINATION_SUFFIX: Record<MoveDestination["kind"], string> = {
+  next: "próximo",
+  back: "voltar",
+  return: "retorno previsto",
 };
 
 // Campo editável para cada item de "o que falta" devolvido por collectProjectMissing.
@@ -57,16 +103,12 @@ function MissingFieldInput({ item, users }: { item: string; users: Option[] }) {
     case "número do processo":
       return <TextField name="processNumber" label="Número do processo" required />;
     case "valor aprovado":
-      return <MoneyField name="approvedAmount" label="Valor aprovado (R$)" required />;
+      return <MoneyField name="approvedAmount" label="Valor aprovado" required />;
     case "prazo de captação":
       return <DateField name="fundraisingDeadline" label="Prazo de captação" required />;
     case "rubrica de captação":
       return (
-        <MoneyField
-          name="fundraisingFeeAmount"
-          label="Rubrica de captação aprovada (R$)"
-          required
-        />
+        <MoneyField name="fundraisingFeeAmount" label="Rubrica de captação aprovada" required />
       );
     case "data limite do relatório":
       return <DateField name="reportDueAt" label="Data limite do relatório" required />;
@@ -86,40 +128,50 @@ function MissingFieldInput({ item, users }: { item: string; users: Option[] }) {
   }
 }
 
-export function MoveProjectStageDialog({ projectId, stage, destinations, users }: MoveProps) {
-  const [to, setTo] = useState(destinations[0]?.to ?? "");
+export function MoveProjectStageDialog({
+  projectId,
+  stage,
+  destinations,
+  users,
+  defaultTarget,
+  trigger,
+}: MoveProps) {
+  const initial = destinations.find((d) => d.to === defaultTarget)?.to ?? destinations[0]?.to ?? "";
+  const [to, setTo] = useState(initial);
   const dest = destinations.find((d) => d.to === to);
   if (destinations.length === 0) return null;
+  const blockedId = `mover-falta-${projectId}`;
   return (
     <ActionDialog
       triggerLabel="Mover para"
       title={`Mover de ${stageLabel(stage)}`}
       description="Só o próximo estágio, os retornos previstos e voltar um estágio (para corrigir registro)."
       action={moveProjectStageAction}
-      submitLabel="Mover"
+      submitLabel={dest ? `Mover para ${stageLabel(dest.to)}` : "Mover"}
+      pendingLabel="Movendo…"
       variant="default"
+      trigger={trigger}
     >
       <HiddenField name="projectId" value={projectId} />
       <SelectField
         name="to"
-        label="Mover para"
+        label="Destino"
         required
         placeholder="Escolha o destino"
         options={destinations.map((d) => ({
           value: d.to,
-          label:
-            d.kind === "back"
-              ? `Voltar para ${stageLabel(d.to)} (corrigir registro)`
-              : d.kind === "return"
-                ? `${stageLabel(d.to)} (retorno previsto)`
-                : stageLabel(d.to),
+          label: `${stageLabel(d.to)} · ${DESTINATION_SUFFIX[d.kind]}`,
         }))}
         value={to}
         onChange={(e) => setTo(e.target.value)}
       />
       {dest?.missing.length ? (
         <>
-          <Blockers intro={`Para mover para ${stageLabel(dest.to)} falta:`} items={dest.missing} />
+          <Blockers
+            id={blockedId}
+            intro={`Para entrar em ${stageLabel(dest.to)} o projeto precisa de:`}
+            items={dest.missing}
+          />
           {dest.missing.map((item) => (
             <MissingFieldInput key={item} item={item} users={users} />
           ))}
@@ -137,15 +189,43 @@ export function MoveProjectStageDialog({ projectId, stage, destinations, users }
   );
 }
 
-export function ArchiveProjectDialog({ projectId }: { projectId: string }) {
+// Confirmação destrutiva (decisão D16): botão desabilitado até o motivo; "Detalhe" só em "Outro".
+export function ArchiveProjectDialog({
+  projectId,
+  missing = [],
+  users = [],
+  trigger,
+  open,
+  onOpenChange,
+}: {
+  projectId: string;
+  // O que falta para arquivar além do motivo (ex.: "responsável pelo projeto"): o campo aparece
+  // ali mesmo, como no "Mover para".
+  missing?: string[];
+  users?: Option[];
+} & Openable) {
+  const [reason, setReason] = useState("");
+  const extra = missing.filter((item) => item !== "motivo do arquivamento");
   return (
-    <ActionDialog
-      triggerLabel="Arquivar"
+    <ConfirmDialog
+      trigger={
+        trigger === undefined ? (
+          <Button type="button" variant="outline">
+            Arquivar
+          </Button>
+        ) : (
+          trigger
+        )
+      }
+      open={open}
+      onOpenChange={onOpenChange}
       title="Arquivar projeto"
-      description="Projeto recusado, não aprovado, sem captação mínima ou prazo vencido. Sai da carteira do site."
+      description="Para projeto recusado, não aprovado, sem captação mínima ou com prazo vencido. Ele sai da carteira do site; nada é apagado e pode voltar para Prospecção depois."
+      confirmLabel="Arquivar projeto"
+      pendingLabel="Arquivando…"
+      tone="danger"
       action={moveProjectStageAction}
-      submitLabel="Arquivar"
-      submitVariant="destructive"
+      requireField="lostReason"
     >
       <HiddenField name="projectId" value={projectId} />
       <HiddenField name="to" value="arquivado" />
@@ -154,29 +234,70 @@ export function ArchiveProjectDialog({ projectId }: { projectId: string }) {
         label="Motivo"
         required
         options={optionsFrom(LOST_REASON_LABELS)}
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
       />
-      <TextField name="lostReasonDetail" label="Detalhe (obrigatório quando o motivo é Outro)" />
-    </ActionDialog>
+      {reason === "outro" ? (
+        <TextField name="lostReasonDetail" label="Detalhe" required autoFocus />
+      ) : null}
+      {extra.map((item) => (
+        <MissingFieldInput key={item} item={item} users={users} />
+      ))}
+    </ConfirmDialog>
   );
 }
+
+const PUBLISH_RULE = "Só com o projeto em Captando e autorização por escrito do proponente.";
 
 export function PublishProjectDialog({
   projectId,
   canPublish,
-}: {
-  projectId: string;
-  canPublish: boolean;
-}) {
+  trigger,
+  open,
+  onOpenChange,
+}: { projectId: string; canPublish: boolean } & Openable) {
+  const helpId = useId();
+  if (!canPublish && trigger === undefined) {
+    // Desabilitado de verdade, mas focável: o Tooltip e o aria-describedby explicam por quê.
+    return (
+      <>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                variant="outline"
+                disabled
+                focusableWhenDisabled
+                aria-describedby={helpId}
+                className="aria-disabled:opacity-50"
+              />
+            }
+          >
+            Publicar no site
+          </TooltipTrigger>
+          <TooltipContent>Só com o projeto em Captando</TooltipContent>
+        </Tooltip>
+        <span id={helpId} className="sr-only">
+          Só com o projeto em Captando.
+        </span>
+      </>
+    );
+  }
   return (
     <ActionDialog
       triggerLabel="Publicar no site"
       title="Publicar na carteira do site"
-      description="Só com o projeto em Captando e autorização por escrito do proponente (regra R-11)."
+      description="O projeto passa a aparecer em prospekto.com.br/projetos com o resumo e as contrapartidas."
       action={publishProjectAction}
       submitLabel="Publicar"
-      variant="default"
-      disabled={!canPublish}
+      pendingLabel="Publicando…"
+      variant="outline"
+      trigger={trigger}
+      open={open}
+      onOpenChange={onOpenChange}
     >
+      <Callout tone="info">{PUBLISH_RULE}</Callout>
       <HiddenField name="projectId" value={projectId} />
       <TextField
         name="publishAuthorizedBy"
@@ -189,40 +310,284 @@ export function PublishProjectDialog({
   );
 }
 
-export function UnpublishProjectForm({ projectId }: { projectId: string }) {
+export function UnpublishProjectDialog({
+  projectId,
+  trigger,
+  open,
+  onOpenChange,
+}: { projectId: string } & Openable) {
   return (
-    <ActionForm
+    <ConfirmDialog
+      trigger={
+        trigger === undefined ? (
+          <Button type="button" variant="outline">
+            Despublicar
+          </Button>
+        ) : (
+          trigger
+        )
+      }
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Retirar o projeto do site"
+      description="O projeto deixa de aparecer na carteira pública. Pode ser publicado de novo com uma nova autorização."
+      confirmLabel="Despublicar"
+      pendingLabel="Retirando…"
       action={unpublishProjectAction}
-      submitLabel="Despublicar"
-      variant="outline"
-      showSuccess={false}
-      className="inline-flex"
     >
       <HiddenField name="projectId" value={projectId} />
-    </ActionForm>
+    </ConfirmDialog>
   );
 }
+
+// Mantido para quem ainda importa o nome antigo (a página usa o diálogo acima).
+export const UnpublishProjectForm = UnpublishProjectDialog;
 
 export function NewProjectForm({ proponents, users }: { proponents: Option[]; users: Option[] }) {
   return (
-    <ActionForm action={createProjectAction} submitLabel="Criar projeto" pendingLabel="Criando...">
+    <ActionForm
+      action={createProjectAction}
+      submitLabel="Criar projeto"
+      pendingLabel="Criando…"
+      className="gap-6 [&>div:last-child]:hidden"
+    >
       <ProjectFields proponents={proponents} users={users} />
+      <FormActions
+        cancelHref="/app/projetos"
+        note={
+          <>
+            <span aria-hidden="true">*</span> obrigatório
+          </>
+        }
+        className="mx-0 rounded-xl border border-border md:mx-0"
+      >
+        <SubmitButton pendingLabel="Criando…">Criar projeto</SubmitButton>
+      </FormActions>
     </ActionForm>
   );
 }
 
-export function EditProjectForm({
-  project,
-  proponents,
-  users,
-}: {
+type EditProps = {
   project: ProjectFormValues;
   proponents: Option[];
   users: Option[];
-}) {
+};
+
+// "Editar" abre uma folha lateral com o formulário completo; salvar fecha e atualiza a página.
+export function EditProjectSheet({
+  project,
+  proponents,
+  users,
+  trigger,
+  open: controlledOpen,
+  onOpenChange,
+}: EditProps & Openable) {
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = controlledOpen ?? ownOpen;
+  const setOpen = (value: boolean) => {
+    setOwnOpen(value);
+    onOpenChange?.(value);
+  };
+  const router = useRouter();
   return (
-    <ActionForm action={updateProjectAction} submitLabel="Salvar alterações">
-      <ProjectFields project={project} proponents={proponents} users={users} />
-    </ActionForm>
+    <Sheet open={open} onOpenChange={setOpen}>
+      {trigger === null ? null : (
+        <SheetTrigger
+          render={isValidElement(trigger) ? trigger : <Button type="button" variant="outline" />}
+        >
+          {isValidElement(trigger) ? null : "Editar"}
+        </SheetTrigger>
+      )}
+      <SheetContent side="right" className="sm:max-w-xl">
+        <SheetHeader>
+          <SheetTitle>Editar projeto</SheetTitle>
+          <SheetDescription>
+            Os campos exigidos por cada estágio continuam sendo conferidos ao mover o projeto.
+          </SheetDescription>
+        </SheetHeader>
+        <ActionForm
+          action={updateProjectAction}
+          submitLabel="Salvar alterações"
+          pendingLabel="Salvando…"
+          showSuccess={false}
+          footer="dialog"
+          secondaryAction={
+            <SheetClose
+              render={<Button type="button" variant="ghost" size="touch" className="md:h-9" />}
+            >
+              Cancelar
+            </SheetClose>
+          }
+          onSuccess={() => {
+            toast.success("Projeto salvo.");
+            router.refresh();
+            setOpen(false);
+          }}
+        >
+          <ProjectFields project={project} proponents={proponents} users={users} mode="edit" />
+        </ActionForm>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// Compatibilidade com o nome antigo: o formulário de edição dentro da folha.
+export const EditProjectForm = EditProjectSheet;
+
+export type ProjectActionsProps = EditProps & {
+  projectId: string;
+  slug: string;
+  stage: string;
+  publishedOnSite: boolean;
+  destinations: MoveDestination[];
+  // Campos que faltam para arquivar (missingForProjectMove(project, "arquivado")).
+  archiveMissing: string[];
+};
+
+function siteHref(slug: string): string {
+  return `/projetos/${slug}`;
+}
+
+// Ações secundárias do cabeçalho no desktop (seção 7.7): Ver no site, Editar, Publicar ou
+// Despublicar e "⋯" com Arquivar. Fica como um só nó em `secondary` do PageHeader; "Mover para"
+// (primário) vem da página.
+export function ProjectHeaderActions({
+  projectId,
+  slug,
+  stage,
+  publishedOnSite,
+  archiveMissing,
+  project,
+  proponents,
+  users,
+}: ProjectActionsProps) {
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const archived = stage === "arquivado";
+  return (
+    <>
+      {publishedOnSite ? (
+        <Button
+          variant="outline"
+          nativeButton={false}
+          render={<Link href={siteHref(slug)} target="_blank" rel="noopener" />}
+        >
+          <ExternalLink aria-hidden="true" />
+          Ver no site
+        </Button>
+      ) : null}
+      <EditProjectSheet project={project} proponents={proponents} users={users} />
+      {publishedOnSite ? (
+        <UnpublishProjectDialog projectId={projectId} />
+      ) : (
+        <PublishProjectDialog projectId={projectId} canPublish={stage === "captando"} />
+      )}
+      {archived ? null : (
+        <>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<Button variant="outline" size="icon" aria-label="Mais ações" />}
+            >
+              <Ellipsis />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem variant="destructive" onClick={() => setArchiveOpen(true)}>
+                Arquivar projeto
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <ArchiveProjectDialog
+            projectId={projectId}
+            missing={archiveMissing}
+            users={users}
+            trigger={null}
+            open={archiveOpen}
+            onOpenChange={setArchiveOpen}
+          />
+        </>
+      )}
+    </>
+  );
+}
+
+// Barra fixa do celular (seção 4.2): "Novo aporte" (vem da página), "Mover para" e "⋯" com
+// Editar, Publicar ou Despublicar, Ver no site e Arquivar.
+export function ProjectActionBar({
+  projectId,
+  slug,
+  stage,
+  publishedOnSite,
+  destinations,
+  archiveMissing,
+  project,
+  proponents,
+  users,
+  newContribution,
+}: ProjectActionsProps & { newContribution?: ReactNode }) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [unpublishOpen, setUnpublishOpen] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const canPublish = stage === "captando";
+  const more: ActionBarMoreItem[] = [{ label: "Editar", onSelect: () => setEditOpen(true) }];
+  if (publishedOnSite) {
+    more.push({ label: "Despublicar", onSelect: () => setUnpublishOpen(true) });
+    more.push({ label: "Ver no site", href: siteHref(slug) });
+  } else if (canPublish) {
+    more.push({ label: "Publicar no site", onSelect: () => setPublishOpen(true) });
+  }
+  if (stage !== "arquivado") {
+    more.push({ label: "Arquivar projeto", tone: "danger", onSelect: () => setArchiveOpen(true) });
+  }
+  const move =
+    destinations.length > 0 ? (
+      <MoveProjectStageDialog
+        projectId={projectId}
+        stage={stage}
+        destinations={destinations}
+        users={users}
+        trigger={
+          <Button type="button" variant="outline" size="touch">
+            Mover para
+          </Button>
+        }
+      />
+    ) : null;
+  return (
+    <>
+      <ActionBarMobile
+        primary={newContribution ?? move ?? <span />}
+        secondary={newContribution ? (move ?? undefined) : undefined}
+        more={more}
+      />
+      <EditProjectSheet
+        project={project}
+        proponents={proponents}
+        users={users}
+        trigger={null}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
+      <PublishProjectDialog
+        projectId={projectId}
+        canPublish={canPublish}
+        trigger={null}
+        open={publishOpen}
+        onOpenChange={setPublishOpen}
+      />
+      <UnpublishProjectDialog
+        projectId={projectId}
+        trigger={null}
+        open={unpublishOpen}
+        onOpenChange={setUnpublishOpen}
+      />
+      <ArchiveProjectDialog
+        projectId={projectId}
+        missing={archiveMissing}
+        users={users}
+        trigger={null}
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+      />
+    </>
   );
 }
