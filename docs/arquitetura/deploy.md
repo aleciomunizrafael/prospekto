@@ -32,7 +32,7 @@ openssl rand -base64 32   # CRON_SECRET
 | `BETTER_AUTH_URL` | por enquanto `https://<nome-do-projeto>.vercel.app`; troque pelo domínio na etapa 5 |
 | `NEXT_PUBLIC_APP_URL` | o mesmo valor de `BETTER_AUTH_URL` |
 | `RESEND_API_KEY` | chave da etapa 3 (pode cadastrar depois e fazer "Redeploy") |
-| `EMAIL_FROM` | `Prospekto <onboarding@resend.dev>` até o domínio ser verificado no Resend |
+| `EMAIL_FROM` | `Prospekto <onboarding@resend.dev>` até o domínio ser verificado no Resend. Cole sem aspas nem crases e com os sinais `< >`: fora desse formato o Resend responde 422 em todo envio, e o build passa a recusar o valor com uma mensagem citando a variável |
 | `LEAD_NOTIFY_EMAIL` | e-mail que recebe os leads (até o domínio ser verificado, precisa ser o e-mail da conta do Resend; ver etapa 3) |
 | `DEV_ALERT_EMAIL` | e-mail do desenvolvedor |
 | `DEFAULT_TENANT_ID` | `prospekto` |

@@ -41,3 +41,50 @@ describe("variáveis de ambiente: URLs da app", () => {
     ).toBe(false);
   });
 });
+
+describe("variáveis de ambiente: EMAIL_FROM", () => {
+  it.each([
+    ["ausente", undefined],
+    ["vazia", ""],
+    ["só espaços", "   "],
+  ])("usa o remetente padrão quando %s", (_rotulo, value) => {
+    const result = envSchema.safeParse({ ...base, EMAIL_FROM: value });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.EMAIL_FROM).toBe("Prospekto <onboarding@resend.dev>");
+  });
+
+  it.each([
+    "Prospekto <onboarding@resend.dev>",
+    "onboarding@resend.dev",
+    "Daniela Sandrin Copat . Prospekto <contato@envio.prospekto.com.br>",
+    "Prospekto Consultoria & Projetos <projetos@prospekto.com.br>",
+  ])("aceita %s", (value) => {
+    const result = envSchema.safeParse({ ...base, EMAIL_FROM: value });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.EMAIL_FROM).toBe(value);
+  });
+
+  it("remove espaços nas pontas", () => {
+    const result = envSchema.safeParse({
+      ...base,
+      EMAIL_FROM: " Prospekto <onboarding@resend.dev> ",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.EMAIL_FROM).toBe("Prospekto <onboarding@resend.dev>");
+  });
+
+  it.each([
+    ["aspas em volta", '"Prospekto <onboarding@resend.dev>"'],
+    ["crases em volta", "`Prospekto <onboarding@resend.dev>`"],
+    ["sem os sinais < >", "Prospekto onboarding@resend.dev"],
+    ["sinal > faltando", "Prospekto <onboarding@resend.dev"],
+    ["sem arroba", "Prospekto <onboarding.resend.dev>"],
+    ["só o nome", "Prospekto"],
+  ])("rejeita %s, citando a variável", (_rotulo, value) => {
+    const result = envSchema.safeParse({ ...base, EMAIL_FROM: value });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((i) => i.message).join(" ")).toContain("EMAIL_FROM");
+    }
+  });
+});
