@@ -32,8 +32,8 @@ jobs:
       # (a senha é gravada com hash scrypt próprio, independente de BETTER_AUTH_SECRET).
       BETTER_AUTH_SECRET: seed-only-placeholder-secret-with-at-least-32-characters-0000
       FORM_SECRET: seed-only-placeholder-form-secret-with-at-least-32-chars-0000
-      BETTER_AUTH_URL: https://prospekto-sistema.vercel.app
-      NEXT_PUBLIC_APP_URL: https://prospekto-sistema.vercel.app
+      BETTER_AUTH_URL: https://prospekto.com.br
+      NEXT_PUBLIC_APP_URL: https://prospekto.com.br
       SEED_USERS: ${{ inputs.seed_users }}
       SEED_EXAMPLE: ${{ inputs.seed_example && '1' || '' }}
       SEED_RESET_PASSWORD: ${{ inputs.reset_password && '1' || '' }}
