@@ -16,7 +16,7 @@ Estrutura digital e comercial de captação para a **Prospekto Consultoria & Pro
 
 ## Estado atual
 
-**Kickoff concluído em 03/10/2026; app da Fase 1 construída e revisada em 04/10/2026; primeiro deploy de produção no Vercel em 05/10/2026 (`https://prospekto-sistema.vercel.app`, até o domínio próprio entrar).**
+**Kickoff concluído em 03/10/2026; app da Fase 1 construída e revisada em 04/10/2026; primeiro deploy de produção no Vercel em 05/10/2026 e domínio próprio `https://prospekto.com.br` apontado em 08/10/2026.**
 
 - `docs/`: visão, briefing e materiais-fonte, referência legal verificada, mercado, personas e funis, especificação do site e do simulador, playbooks, produto digital, ADR-001 (stack), ADR-002 (padrões do simulador), modelo de dados, scaffold e roadmap. Índice em `docs/README.md`.
 - `src/`: site público (home, empresas, contadores, pessoa física, municípios, proponentes, mentoria, diagnóstico, projetos, guia, contato, privacidade, obrigado), simulador de incentivo fiscal (biblioteca pura com todos os casos da especificação, telas, gate de captura, resultado por link assinado e e-mail), captura de leads (Server Action com antispam, consentimento LGPD, deduplicação, e-mails, descadastro de um clique) e CRM em `/app` (login e redefinição de senha, "Hoje", leads com filtros e "Mover para" com campos obrigatórios por estágio, atividades, organizações e contatos, projetos com publicação na carteira, aportes com termo, depósito, recibo e comissão, exportação CSV, e-mail diário por cron, webhook do Resend).
