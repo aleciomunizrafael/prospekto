@@ -34,10 +34,14 @@ jobs:
       FORM_SECRET: seed-only-placeholder-form-secret-with-at-least-32-chars-0000
       BETTER_AUTH_URL: https://prospekto.com.br
       NEXT_PUBLIC_APP_URL: https://prospekto.com.br
-      SEED_USERS: ${{ inputs.seed_users }}
       SEED_EXAMPLE: ${{ inputs.seed_example && '1' || '' }}
       SEED_RESET_PASSWORD: ${{ inputs.reset_password && '1' || '' }}
     steps:
+      # A entrada traz nomes e e-mails de pessoas (regra R-16): mascarada antes de qualquer passo
+      # imprimi-la. Lida do payload do evento, não de env, para o valor não aparecer no cabeçalho
+      # do log; por isso SEED_USERS entra só no passo do seed, já mascarada.
+      - name: Mascarar a lista de usuários no log
+        run: echo "::add-mask::$(jq -r '.inputs.seed_users' "$GITHUB_EVENT_PATH")"
       - if: env.HAS_SECRETS != 'true'
         run: |
           echo "Segredos DATABASE_URL_UNPOOLED e BACKUP_PASSPHRASE ausentes: configure em Settings > Secrets and variables > Actions."
@@ -50,7 +54,12 @@ jobs:
       - run: npm ci
       - name: Migrações (idempotente)
         run: npm run db:migrate
+      # shell: bash liga o pipefail: sem ele o `tee` escondia a falha do seed e o job ficava verde
+      # com uma entrada inválida (visto em 08/10/2026).
       - name: Seed
+        shell: bash
+        env:
+          SEED_USERS: ${{ inputs.seed_users }}
         run: npm run db:seed | tee seed.log
       - name: Cifrar senhas temporárias
         env:

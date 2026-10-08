@@ -40,9 +40,14 @@ function parseSeedUsers(raw: string | undefined): SeedUser[] {
     .split(";")
     .map((entry) => entry.trim())
     .filter(Boolean)
-    .map((entry) => {
+    .map((entry, index) => {
       const match = entry.match(/^(.*?)\s*<([^>]+)>$/);
-      if (!match) throw new Error(`SEED_USERS: entrada inválida "${entry}" (use "Nome <email>")`);
+      // Sem o texto da entrada: ela traz nome e e-mail de uma pessoa, e o log é compartilhado (R-16).
+      if (!match) {
+        throw new Error(
+          `SEED_USERS: entrada ${index + 1} inválida; use "Nome <email>" (nome, espaço, e-mail entre < e >)`,
+        );
+      }
       return { name: match[1].trim() || match[2].trim(), email: match[2].trim().toLowerCase() };
     });
 }
