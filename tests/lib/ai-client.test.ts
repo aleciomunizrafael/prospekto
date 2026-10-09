@@ -21,11 +21,18 @@ vi.mock("@anthropic-ai/sdk", () => {
   class AuthenticationError extends APIError {}
   class PermissionDeniedError extends APIError {}
   class RateLimitError extends APIError {}
+  // Como no SDK: APIError com status undefined, lançado quando o `signal` da chamada aborta.
+  class APIUserAbortError extends APIError {
+    constructor() {
+      super(undefined, "Request was aborted.");
+    }
+  }
   class Anthropic {
     static APIError = APIError;
     static AuthenticationError = AuthenticationError;
     static PermissionDeniedError = PermissionDeniedError;
     static RateLimitError = RateLimitError;
+    static APIUserAbortError = APIUserAbortError;
     beta = { messages: { create: sdk.create } };
     constructor(options: unknown) {
       sdk.ctorArgs.push(options);
@@ -37,6 +44,7 @@ vi.mock("@anthropic-ai/sdk", () => {
     AuthenticationError,
     PermissionDeniedError,
     RateLimitError,
+    APIUserAbortError,
   };
 });
 
@@ -85,6 +93,7 @@ async function Errors() {
     APIError: new (status?: number, message?: string) => Error;
     AuthenticationError: new (status?: number, message?: string) => Error;
     RateLimitError: new (status?: number, message?: string) => Error;
+    APIUserAbortError: new () => Error;
   };
 }
 
@@ -138,7 +147,11 @@ describe("runStructured: forma da chamada", () => {
     if (!result.ok) return;
     expect(result.data).toEqual({ resumo: "Lead quente." });
     expect(result.model).toBe("claude-opus-5-5");
-    expect(sdk.ctorArgs).toEqual([{ apiKey: "chave-de-teste", timeout: 55_000, maxRetries: 2 }]);
+    expect(sdk.ctorArgs).toEqual([{ apiKey: "chave-de-teste", timeout: 50_000, maxRetries: 2 }]);
+    // Prazo total da chamada (todas as tentativas), abaixo do maxDuration = 60 da página do lead.
+    const opts = sdk.create.mock.calls[0][1];
+    expect(opts.signal).toBeInstanceOf(AbortSignal);
+    expect(opts.signal.aborted).toBe(false);
     expect(sdk.create).toHaveBeenCalledTimes(1);
     const params = sdk.create.mock.calls[0][0];
     expect(params.model).toBe("claude-opus-5-5");
@@ -395,6 +408,29 @@ describe("runStructured: teto diário", () => {
 });
 
 describe("runStructured: erros do SDK", () => {
+  it("aborto pelo prazo total vira erro registrado, sem retentativa e sem a mensagem no log", async () => {
+    const { APIUserAbortError } = await Errors();
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    sdk.create.mockRejectedValueOnce(new APIUserAbortError());
+    const { runStructured } = await loadClient();
+    const own = await makeTenant();
+    const result = await runStructured(own, { ...baseInput, leadId: null });
+    expect(result).toEqual({
+      ok: false,
+      reason: "error",
+      message: "A IA está indisponível agora. Tente em instantes.",
+    });
+    expect(sdk.create).toHaveBeenCalledTimes(1);
+    const [run] = await runsOf(own);
+    expect(run.status).toBe("error");
+    expect(run.data?.httpStatus).toBeNull();
+    expect(run.durationMs).toBeGreaterThanOrEqual(0);
+    const line = spy.mock.calls.map((c) => String(c[0])).find((l) => l.includes("falha na ia"));
+    expect(line).toBeDefined();
+    expect(JSON.parse(line!)).toMatchObject({ kind: "brief", httpStatus: null });
+    expect(line).not.toContain("aborted");
+  });
+
   it("APIError 429 vira reason error, grava status error e loga sem a mensagem", async () => {
     const { RateLimitError } = await Errors();
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});

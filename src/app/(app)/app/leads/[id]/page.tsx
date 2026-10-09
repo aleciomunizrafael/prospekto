@@ -82,7 +82,8 @@ export const metadata: Metadata = { title: "Lead" };
 
 // A geração de briefing ou rascunho pela IA pode passar de 10 s; em Next 16 o maxDuration da
 // página vale para as Server Actions usadas nela (route-segment-config/maxDuration.md). 60 s cabe
-// no Hobby e no Pro do Vercel com Fluid compute (ADR-003, seção 7.1).
+// no Hobby e no Pro do Vercel com Fluid compute, e a chamada ao modelo tem prazo total de 50 s
+// (AI_DEADLINE_MS, inclusive retentativas) para a falha sempre ser registrada (ADR-003, seção 7.1).
 export const maxDuration = 60;
 
 function aiSnapshot(run: AiRun | null): AiRunSnapshot | null {

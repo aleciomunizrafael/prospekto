@@ -7,7 +7,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { z } from "zod";
-import { AI_DAILY_LIMIT, AI_DEFAULT_MODEL, AI_MAX_TOKENS } from "@/config/ai";
+import { AI_DAILY_LIMIT, AI_DEADLINE_MS, AI_DEFAULT_MODEL, AI_MAX_TOKENS } from "@/config/ai";
 import { env } from "@/env";
 import { log } from "@/lib/log";
 import { countAiRunsToday, insertAiRun } from "@/lib/repos/ai-runs";
@@ -26,7 +26,10 @@ let client: Anthropic | null = null;
 function getClient(): Anthropic | null {
   const apiKey = env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
-  client ??= new Anthropic({ apiKey, timeout: 55_000, maxRetries: 2 });
+  // `timeout` é por tentativa e `maxRetries` repete em 429, 5xx e timeout; o prazo total fica no
+  // `signal` de cada chamada (runStructured), senão três tentativas de 50 s estourariam o
+  // maxDuration da página e a execução sumiria sem linha em ai_runs.
+  client ??= new Anthropic({ apiKey, timeout: AI_DEADLINE_MS, maxRetries: 2 });
   return client;
 }
 
@@ -97,16 +100,23 @@ export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
   const model = aiModel();
   const started = performance.now();
   try {
-    const response = await api.beta.messages.create({
-      model,
-      max_tokens: AI_MAX_TOKENS,
-      betas: [FALLBACK_BETA, STRUCTURED_OUTPUTS_BETA],
-      fallbacks: "default",
-      system: [{ type: "text", text: input.system, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: input.user }],
-      // betaZodOutputFormat serve ao `create` também (só não há parse automático; ver classify).
-      output_config: { effort, format: betaZodOutputFormat(input.schema) },
-    });
+    const response = await api.beta.messages.create(
+      {
+        model,
+        max_tokens: AI_MAX_TOKENS,
+        betas: [FALLBACK_BETA, STRUCTURED_OUTPUTS_BETA],
+        fallbacks: "default",
+        system: [{ type: "text", text: input.system, cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: input.user }],
+        // betaZodOutputFormat serve ao `create` também (só não há parse automático; ver classify).
+        output_config: { effort, format: betaZodOutputFormat(input.schema) },
+      },
+      {
+        // Prazo total, inclusive retentativas: ao estourar, o SDK lança APIUserAbortError (APIError
+        // com status undefined) sem repetir, e a falha passa pelo catch abaixo dentro do maxDuration.
+        signal: AbortSignal.timeout(AI_DEADLINE_MS),
+      },
+    );
     const durationMs = Math.round(performance.now() - started);
     const { status, parsed: raw } = classify(response, input.schema);
     const fallback = (response.usage.iterations ?? []).some((i) => i.type === "fallback_message");

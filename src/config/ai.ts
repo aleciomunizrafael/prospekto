@@ -10,6 +10,13 @@ export const AI_DAILY_LIMIT = 200;
 // Cabe a maior saída estruturada mais o pensamento, que conta em max_tokens mesmo sem ser devolvido.
 export const AI_MAX_TOKENS = 4000;
 
+// Prazo total de uma chamada ao modelo, somando todas as tentativas do SDK (AbortSignal.timeout em
+// runStructured) e também o timeout de cada tentativa. Precisa ficar abaixo do `maxDuration = 60`
+// da página do lead, que vale para as Server Actions usadas nela, com folga para carregar os dados
+// antes e gravar ai_runs depois: se o Vercel matasse a função, a execução não seria registrada e a
+// pessoa veria a página de erro genérica em vez da mensagem do cartão.
+export const AI_DEADLINE_MS = 50_000;
+
 export const AI_TIMEZONE = "America/Sao_Paulo";
 
 // Janelas em que a Daniela aceita reunião (dias ISO 1 = segunda … 5 = sexta; horas locais).
