@@ -24,7 +24,7 @@ import { createLead, getLead } from "@/lib/repos/leads";
 import { consentContato, makeTenant } from "../helpers";
 
 const session = vi.hoisted(() => ({ ctx: null as Ctx | null }));
-const sdk = vi.hoisted(() => ({ parse: vi.fn() }));
+const sdk = vi.hoisted(() => ({ create: vi.fn() }));
 
 vi.mock("@/lib/session", () => ({
   requireSession: async () => {
@@ -59,7 +59,7 @@ vi.mock("@anthropic-ai/sdk", () => {
     static AuthenticationError = AuthenticationError;
     static PermissionDeniedError = PermissionDeniedError;
     static RateLimitError = RateLimitError;
-    beta = { messages: { parse: sdk.parse } };
+    beta = { messages: { create: sdk.create } };
   }
   return {
     default: Anthropic,
@@ -106,8 +106,9 @@ function response(parsed: unknown, over: Record<string, unknown> = {}) {
     model: "claude-opus-5-5",
     stop_reason: "end_turn",
     stop_details: null,
-    content: [],
-    parsed_output: parsed,
+    // A saída estruturada chega como JSON num bloco de texto (client.beta.messages.create).
+    content:
+      parsed == null ? [] : [{ type: "text", text: JSON.stringify(parsed), citations: null }],
     usage: {
       input_tokens: 2100,
       output_tokens: 400,
@@ -158,7 +159,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  sdk.parse.mockReset();
+  sdk.create.mockReset();
   vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-teste");
   vi.stubEnv("AI_MODEL", "");
 });
@@ -183,7 +184,7 @@ describe("guarda de sessão", () => {
       await expect(
         recordWhatsappReplyAction(initialCrmActionState, fd({ leadId, text: "Olá" })),
       ).rejects.toThrow("REDIRECT:/entrar");
-      expect(sdk.parse).not.toHaveBeenCalled();
+      expect(sdk.create).not.toHaveBeenCalled();
     } finally {
       session.ctx = ctx;
     }
@@ -193,7 +194,7 @@ describe("guarda de sessão", () => {
 describe("generateReplyAction", () => {
   it("e-mail: mensagem com canal, horários e perguntas do segmento, sem dado pessoal; effort low", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    sdk.parse.mockResolvedValue(response(emailOutput));
+    sdk.create.mockResolvedValue(response(emailOutput));
     const { generateReplyAction } = await loadActions();
     const result = await generateReplyAction(idle, fd({ leadId, channel: "email" }));
     expect(result.status).toBe("ok");
@@ -204,8 +205,8 @@ describe("generateReplyAction", () => {
     expect(result.data.slots).toEqual(slots);
     expect(result.runId).toMatch(UUID_RE);
 
-    expect(sdk.parse).toHaveBeenCalledTimes(1);
-    const params = sdk.parse.mock.calls[0][0];
+    expect(sdk.create).toHaveBeenCalledTimes(1);
+    const params = sdk.create.mock.calls[0][0];
     expect(params.model).toBe("claude-opus-5-5");
     expect(params.max_tokens).toBe(4000);
     expect(params.output_config.effort).toBe("low");
@@ -258,19 +259,19 @@ describe("generateReplyAction", () => {
   });
 
   it("o system é byte a byte igual entre canais e chamadas (cache de prompt)", async () => {
-    sdk.parse.mockResolvedValueOnce(response(emailOutput));
-    sdk.parse.mockResolvedValueOnce(response(whatsappOutput));
+    sdk.create.mockResolvedValueOnce(response(emailOutput));
+    sdk.create.mockResolvedValueOnce(response(whatsappOutput));
     const { generateReplyAction } = await loadActions();
     await generateReplyAction(idle, fd({ leadId, channel: "email" }));
     await generateReplyAction(idle, fd({ leadId, channel: "whatsapp" }));
-    const [a, b] = sdk.parse.mock.calls.map((c) => c[0].system[0].text as string);
+    const [a, b] = sdk.create.mock.calls.map((c) => c[0].system[0].text as string);
     expect(a).toBe(b);
     expect(a).toBe(REPLY_SYSTEM);
-    expect(sdk.parse.mock.calls[1][0].messages[0].content).toContain("CANAL: WhatsApp");
+    expect(sdk.create.mock.calls[1][0].messages[0].content).toContain("CANAL: WhatsApp");
   });
 
   it("resposta sem um dos horários recebe o parágrafo acrescentado por normalizeReply", async () => {
-    sdk.parse.mockResolvedValueOnce(
+    sdk.create.mockResolvedValueOnce(
       response({
         ...emailOutput,
         texto: `Olá, Rodrigo.\n\nPodemos conversar ${A}?\n\n${EMAIL_SIGNATURE}`,
@@ -286,7 +287,7 @@ describe("generateReplyAction", () => {
   });
 
   it("WhatsApp para lead novo sem contato termina com a frase de saída e sem assunto, também em ai_runs", async () => {
-    sdk.parse.mockResolvedValueOnce(response(whatsappOutput));
+    sdk.create.mockResolvedValueOnce(response(whatsappOutput));
     const { generateReplyAction } = await loadActions();
     const result = await generateReplyAction(idle, fd({ leadId, channel: "whatsapp" }));
     expect(result.status).toBe("ok");
@@ -318,7 +319,7 @@ describe("generateReplyAction", () => {
       attributes: { empresa: "Empresa Contatada" },
     });
     await db.update(leads).set({ lastContactAt: new Date() }).where(eq(leads.id, lead.id));
-    sdk.parse.mockResolvedValueOnce(
+    sdk.create.mockResolvedValueOnce(
       response({
         ...whatsappOutput,
         texto: `Olá, Rodrigo. Retomando a nossa conversa: quem decide o patrocínio na empresa? Tenho horários ${A} e ${B}. Qual prefere?\n\n${WHATSAPP_SIGNATURE}\n\n${WHATSAPP_EXIT_SENTENCE}`,
@@ -328,17 +329,17 @@ describe("generateReplyAction", () => {
     const result = await generateReplyAction(idle, fd({ leadId: lead.id, channel: "whatsapp" }));
     expect(result.status).toBe("ok");
     if (result.status !== "ok") return;
-    const user: string = sdk.parse.mock.calls[0][0].messages[0].content;
+    const user: string = sdk.create.mock.calls[0][0].messages[0].content;
     expect(user).toContain("PRIMEIRO CONTATO: não");
     expect(user).not.toContain("PRIMEIRO CONTATO: sim");
     expect(result.data.texto).not.toContain(WHATSAPP_EXIT_SENTENCE);
     expect(result.data.texto.endsWith(WHATSAPP_SIGNATURE)).toBe(true);
     // O system continua o mesmo (cache de prompt): a diferença vai na mensagem de usuário.
-    expect(sdk.parse.mock.calls[0][0].system[0].text).toBe(REPLY_SYSTEM);
+    expect(sdk.create.mock.calls[0][0].system[0].text).toBe(REPLY_SYSTEM);
   });
 
   it("URL e e-mail inventados saem antes de gravar: ai_runs.output é o texto normalizado", async () => {
-    sdk.parse.mockResolvedValueOnce(
+    sdk.create.mockResolvedValueOnce(
       response({
         ...emailOutput,
         texto: `${emailOutput.texto.replace(EMAIL_SIGNATURE, "")}Veja https://exemplo-inventado.com/x ou escreva para daniela@example.test.\n\n${EMAIL_SIGNATURE}`,
@@ -359,7 +360,7 @@ describe("generateReplyAction", () => {
   });
 
   it("e-mail ou telefone inventado pelo modelo sai mascarado", async () => {
-    sdk.parse.mockResolvedValueOnce(
+    sdk.create.mockResolvedValueOnce(
       response({
         ...emailOutput,
         texto: `${emailOutput.texto.replace(EMAIL_SIGNATURE, "")}Escreva para daniela@example.test ou ligue (54) 98403-2180.\n\n${EMAIL_SIGNATURE}`,
@@ -377,7 +378,7 @@ describe("generateReplyAction", () => {
 
   it("recusa, corte e sem chave viram as mensagens do ADR sem quebrar", async () => {
     const { generateReplyAction } = await loadActions();
-    sdk.parse.mockResolvedValueOnce(
+    sdk.create.mockResolvedValueOnce(
       response(null, { stop_reason: "refusal", stop_details: { category: "general_harms" } }),
     );
     expect(await generateReplyAction(idle, fd({ leadId, channel: "email" }))).toEqual({
@@ -385,7 +386,7 @@ describe("generateReplyAction", () => {
       reason: "refusal",
       message: "A IA não conseguiu gerar este conteúdo. Escreva manualmente.",
     });
-    sdk.parse.mockResolvedValueOnce(response(null, { stop_reason: "max_tokens" }));
+    sdk.create.mockResolvedValueOnce(response(null, { stop_reason: "max_tokens" }));
     expect(await generateReplyAction(idle, fd({ leadId, channel: "email" }))).toEqual({
       status: "error",
       reason: "max_tokens",
@@ -395,13 +396,13 @@ describe("generateReplyAction", () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "");
     const before = (await runsOfLead()).length;
     const { generateReplyAction: disabled } = await loadActions();
-    sdk.parse.mockReset();
+    sdk.create.mockReset();
     expect(await disabled(idle, fd({ leadId, channel: "email" }))).toEqual({
       status: "error",
       reason: "disabled",
       message: "IA não configurada.",
     });
-    expect(sdk.parse).not.toHaveBeenCalled();
+    expect(sdk.create).not.toHaveBeenCalled();
     expect(await runsOfLead()).toHaveLength(before);
   });
 
@@ -431,7 +432,7 @@ describe("generateReplyAction", () => {
       reason: "error",
       message: "Lead não encontrado.",
     });
-    expect(sdk.parse).not.toHaveBeenCalled();
+    expect(sdk.create).not.toHaveBeenCalled();
   });
 });
 

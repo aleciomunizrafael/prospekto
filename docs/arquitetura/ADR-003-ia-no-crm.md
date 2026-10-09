@@ -119,7 +119,7 @@ O ditado pode citar terceiros (o contador da empresa, um sócio). São dados de 
 | Pensamento | Nunca enviar `thinking`: nesse modelo ele está sempre ligado e `disabled` ou `budget_tokens` devolvem 400. O controle é `output_config.effort` | Mesma seção: "thinking is always on; omit `thinking`; control depth with `output_config.effort`" |
 | Esforço | `medium` no briefing e no organizar; `low` nos rascunhos curtos de resposta | O padrão do modelo é `medium`; `low` reduz latência e custo em texto curto. Rever com uso real |
 | `max_tokens` | 4000 em todas as chamadas | Cabe a maior saída (briefing com cerca de 900 tokens de JSON) mais o pensamento, que **conta em `max_tokens`** mesmo sem ser devolvido. `stop_reason = "max_tokens"` é tratado (7.4) |
-| Saída estruturada | `client.beta.messages.parse` com `output_config.format = betaZodOutputFormat(schema)` (`@anthropic-ai/sdk/helpers/beta/zod`); o resultado chega em `parsed_output` (ou `null` quando a saída não valida) | `tool-use.md`, "Structured Outputs": substitui o antigo pré-preenchimento de JSON, que é proibido aqui. Os esquemas evitam `minItems`, `maxItems` e `minLength` (subconjunto de JSON Schema do recurso); limites ficam no prompt e no código (`slice`) |
+| Saída estruturada | `client.beta.messages.create` com `output_config.format = betaZodOutputFormat(schema)` (`@anthropic-ai/sdk/helpers/beta/zod`) e o beta `structured-outputs-2025-12-15` (o mesmo cabeçalho que `parse` acrescentaria); a validação do JSON pelo esquema é feita no código (`JSON.parse` + `schema.safeParse` do primeiro bloco `text`) | `tool-use.md`, "Structured Outputs": substitui o antigo pré-preenchimento de JSON, que é proibido aqui. Não usamos `client.beta.messages.parse` porque ele lança `AnthropicError` (que não é `APIError`) quando a saída vem truncada por `max_tokens` ou fora do esquema, o que perderia `stop_reason` e `usage` (7.4). Os esquemas evitam `minItems`, `maxItems` e `minLength` (subconjunto de JSON Schema do recurso); limites ficam no prompt e no código (`slice`) |
 | Fallback de recusa | `client.beta.messages` com `betas: ["server-side-fallback-2026-07-01"]` e `fallbacks: "default"` | `model-migration.md`: forma escalar `"default"` escolhe o modelo substituto por categoria de recusa; o cabeçalho é exatamente esse (a forma em array usa outro). O tipo `BetaFallbacksParam = Array<BetaFallbackParam> \| 'default'` existe no SDK 0.133.0 |
 | Prompt caching | `system` como array com um bloco de texto estável por recurso e `cache_control: { type: "ephemeral" }` no último bloco; data, nome e contexto do lead vão só na mensagem de usuário | `shared/prompt-caching.md`: cache é prefixo; nada volátil no system; mínimo de 512 tokens cacheáveis nesse modelo (os três system prompts têm entre 700 e 1.200 tokens) |
 | Pré-preenchimento | Nunca há mensagem `assistant` na chamada | Regra do projeto; no Opus 5.5 o prefill não existe |
@@ -144,10 +144,10 @@ runStructured(ctx, {
 Por dentro, na ordem: `isAiEnabled()` (sem chave devolve `{ ok: false, reason: "disabled" }` sem tocar o banco); teto diário (`countAiRunsToday(ctx) >= AI_DAILY_LIMIT` devolve `reason: "quota"`); a chamada:
 
 ```ts
-const response = await client.beta.messages.parse({
+const response = await client.beta.messages.create({
   model: aiModel(),
   max_tokens: 4000,
-  betas: ["server-side-fallback-2026-07-01"],
+  betas: ["server-side-fallback-2026-07-01", "structured-outputs-2025-12-15"],
   fallbacks: "default",
   system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
   messages: [{ role: "user", content: user }],
@@ -155,7 +155,7 @@ const response = await client.beta.messages.parse({
 });
 ```
 
-Depois: classificação por `stop_reason` (7.4), gravação em `ai_runs` (seção 8), log com `kind`, `leadId`, `model: response.model`, `inputTokens`, `outputTokens`, `cacheReadInputTokens`, `durationMs` e `fallback` (verdadeiro quando `usage.iterations` contém uma entrada `fallback_message`), nunca o conteúdo.
+Depois: classificação por `stop_reason` e validação do JSON do bloco `text` pelo esquema (7.4; nenhum ramo lança), gravação em `ai_runs` (seção 8), log com `kind`, `leadId`, `model: response.model`, `inputTokens`, `outputTokens`, `cacheReadInputTokens`, `durationMs` e `fallback` (verdadeiro quando `usage.iterations` contém uma entrada `fallback_message`), nunca o conteúdo.
 
 ### 7.3 Prompts
 
@@ -165,9 +165,9 @@ Os textos completos estão em `ia-plano.md`, por frente. Regras comuns: portugu�
 
 | Situação | Detecção | O que a tela mostra | O que grava |
 |---|---|---|---|
-| Sucesso | `stop_reason = "end_turn"` e `parsed_output` não nulo | O cartão com o resultado | `ai_runs.status = "ok"` com `output` |
+| Sucesso | `stop_reason = "end_turn"` e o JSON do bloco `text` valida pelo esquema | O cartão com o resultado | `ai_runs.status = "ok"` com `output` |
 | Recusa | `stop_reason = "refusal"` (inclusive depois do fallback) | `Callout warning`: "A IA não conseguiu gerar este conteúdo. Escreva manualmente." Sem botão de repetir automático | `status = "refusal"`, `output = null`, `stop_details.category` em `data` |
-| Corte por tamanho | `stop_reason = "max_tokens"` ou `parsed_output = null` | `Callout warning`: "A resposta veio incompleta. Tente de novo." com "Gerar de novo" | `status = "max_tokens"` ou `"invalid_output"` |
+| Corte por tamanho | `stop_reason = "max_tokens"`; ou bloco `text` ausente, JSON inválido ou fora do esquema (`safeParse` reprova) | `Callout warning`: "A resposta veio incompleta. Tente de novo." com "Gerar de novo" | `status = "max_tokens"` ou `"invalid_output"`, sempre com os tokens de `usage` (a chamada foi cobrada) |
 | Sem chave | `isAiEnabled() = false` | Botões desabilitados e a frase "IA não configurada" | nada |
 | Teto diário | contagem ≥ 200 | "Limite diário de IA atingido (200 execuções). Volta a funcionar amanhã." | nada |
 | Erro da API (`Anthropic.APIError`: 401, 429, 5xx, timeout) | `instanceof` das classes do SDK | "A IA está indisponível agora. Tente em instantes." | `status = "error"` com `data.status` (código HTTP) e sem mensagem de erro bruta |
@@ -189,7 +189,7 @@ Em nenhum caso a página do lead deixa de renderizar: os cartões de IA são Cli
 | `input_tokens`, `output_tokens` | integer | sim, padrão 0 | `usage` da resposta |
 | `cache_read_input_tokens` | integer | sim, padrão 0 | Para conferir se o cache está funcionando |
 | `duration_ms` | integer | não | Tempo da chamada |
-| `output` | jsonb | não | O `parsed_output` validado; nulo em recusa e erro |
+| `output` | jsonb | não | A saída validada pelo esquema e normalizada (`normalize` do recurso); nula fora de `ok` |
 | `data` | jsonb | não | Metadados sem conteúdo: `{ effort, fallback, stopDetailsCategory, httpStatus, channel }` |
 | `created_by` | text FK `users` | não | Quem clicou |
 | `created_at` | timestamptz | sim | |

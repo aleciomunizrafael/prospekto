@@ -26,7 +26,7 @@ export const aiRuns = pgTable(
     outputTokens: integer().notNull().default(0),
     cacheReadInputTokens: integer().notNull().default(0),
     durationMs: integer(),
-    output: jsonb().$type<Record<string, unknown>>(), // parsed_output validado; nulo fora de "ok"
+    output: jsonb().$type<Record<string, unknown>>(), // saída validada e normalizada; nula fora de "ok"
     data: jsonb().$type<Record<string, unknown>>(), // { effort, fallback, stopDetailsCategory, httpStatus, channel }
     createdBy: text().references(() => users.id),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

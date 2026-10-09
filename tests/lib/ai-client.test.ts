@@ -8,7 +8,7 @@ import { aiRuns } from "@/lib/db/schema";
 import type { Ctx } from "@/lib/repos/ctx";
 import { makeTenant } from "../helpers";
 
-const sdk = vi.hoisted(() => ({ parse: vi.fn(), ctorArgs: [] as unknown[] }));
+const sdk = vi.hoisted(() => ({ create: vi.fn(), ctorArgs: [] as unknown[] }));
 
 vi.mock("@anthropic-ai/sdk", () => {
   class APIError extends Error {
@@ -26,7 +26,7 @@ vi.mock("@anthropic-ai/sdk", () => {
     static AuthenticationError = AuthenticationError;
     static PermissionDeniedError = PermissionDeniedError;
     static RateLimitError = RateLimitError;
-    beta = { messages: { parse: sdk.parse } };
+    beta = { messages: { create: sdk.create } };
     constructor(options: unknown) {
       sdk.ctorArgs.push(options);
     }
@@ -46,6 +46,9 @@ vi.mock("@anthropic-ai/sdk/helpers/beta/zod", () => ({
 
 const schema = z.object({ resumo: z.string() });
 
+// Bloco de texto como a API devolve: JSON da saída estruturada (ou texto truncado/vazio).
+const textBlock = (text: string) => ({ type: "text", text, citations: null });
+
 function response(over: Record<string, unknown> = {}) {
   return {
     id: "msg_teste",
@@ -54,8 +57,7 @@ function response(over: Record<string, unknown> = {}) {
     model: "claude-opus-5-5",
     stop_reason: "end_turn",
     stop_details: null,
-    content: [],
-    parsed_output: { resumo: "Lead quente." },
+    content: [textBlock('{"resumo": "Lead quente."}')],
     usage: {
       input_tokens: 1200,
       output_tokens: 300,
@@ -93,7 +95,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  sdk.parse.mockReset();
+  sdk.create.mockReset();
   sdk.ctorArgs.length = 0;
   vi.stubEnv("ANTHROPIC_API_KEY", "chave-de-teste");
   vi.stubEnv("AI_MODEL", "");
@@ -120,7 +122,7 @@ describe("runStructured: sem chave", () => {
     expect(isAiEnabled()).toBe(false);
     const result = await runStructured(own, { ...baseInput, leadId: null });
     expect(result).toEqual({ ok: false, reason: "disabled", message: "IA não configurada." });
-    expect(sdk.parse).not.toHaveBeenCalled();
+    expect(sdk.create).not.toHaveBeenCalled();
     expect(sdk.ctorArgs).toHaveLength(0);
     expect(await runsOf(own)).toHaveLength(0);
   });
@@ -128,7 +130,7 @@ describe("runStructured: sem chave", () => {
 
 describe("runStructured: forma da chamada", () => {
   it("envia modelo, max_tokens, betas, fallbacks, cache_control e effort; sem thinking nem assistant", async () => {
-    sdk.parse.mockResolvedValueOnce(response());
+    sdk.create.mockResolvedValueOnce(response());
     const { runStructured, aiModel } = await loadClient();
     expect(aiModel()).toBe("claude-opus-5-5");
     const result = await runStructured(ctx, { ...baseInput, leadId: null });
@@ -137,11 +139,14 @@ describe("runStructured: forma da chamada", () => {
     expect(result.data).toEqual({ resumo: "Lead quente." });
     expect(result.model).toBe("claude-opus-5-5");
     expect(sdk.ctorArgs).toEqual([{ apiKey: "chave-de-teste", timeout: 55_000, maxRetries: 2 }]);
-    expect(sdk.parse).toHaveBeenCalledTimes(1);
-    const params = sdk.parse.mock.calls[0][0];
+    expect(sdk.create).toHaveBeenCalledTimes(1);
+    const params = sdk.create.mock.calls[0][0];
     expect(params.model).toBe("claude-opus-5-5");
     expect(params.max_tokens).toBe(4000);
-    expect(params.betas).toEqual(["server-side-fallback-2026-07-01"]);
+    expect(params.betas).toEqual([
+      "server-side-fallback-2026-07-01",
+      "structured-outputs-2025-12-15",
+    ]);
     expect(params.fallbacks).toBe("default");
     expect(params.system).toEqual([
       { type: "text", text: baseInput.system, cache_control: { type: "ephemeral" } },
@@ -172,16 +177,16 @@ describe("runStructured: forma da chamada", () => {
 
   it("AI_MODEL troca o modelo enviado", async () => {
     vi.stubEnv("AI_MODEL", "claude-sonnet-5-5");
-    sdk.parse.mockResolvedValueOnce(response({ model: "claude-sonnet-5-5" }));
+    sdk.create.mockResolvedValueOnce(response({ model: "claude-sonnet-5-5" }));
     const { runStructured, aiModel } = await loadClient();
     expect(aiModel()).toBe("claude-sonnet-5-5");
     await runStructured(ctx, { ...baseInput, leadId: null, effort: "low" });
-    expect(sdk.parse.mock.calls[0][0].model).toBe("claude-sonnet-5-5");
-    expect(sdk.parse.mock.calls[0][0].output_config.effort).toBe("low");
+    expect(sdk.create.mock.calls[0][0].model).toBe("claude-sonnet-5-5");
+    expect(sdk.create.mock.calls[0][0].output_config.effort).toBe("low");
   });
 
   it("o cliente é criado uma vez por processo", async () => {
-    sdk.parse.mockResolvedValue(response());
+    sdk.create.mockResolvedValue(response());
     const { runStructured } = await loadClient();
     await runStructured(ctx, { ...baseInput, leadId: null });
     await runStructured(ctx, { ...baseInput, leadId: null });
@@ -190,7 +195,7 @@ describe("runStructured: forma da chamada", () => {
 
   it("log da execução traz kind, modelo e tokens, nunca o conteúdo", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    sdk.parse.mockResolvedValueOnce(response());
+    sdk.create.mockResolvedValueOnce(response());
     const { runStructured } = await loadClient();
     await runStructured(ctx, { ...baseInput, leadId: null });
     const line = spy.mock.calls.map((c) => String(c[0])).find((l) => l.includes("ia executada"));
@@ -212,16 +217,36 @@ describe("runStructured: forma da chamada", () => {
 });
 
 describe("runStructured: estados de parada", () => {
+  // Formas que o SDK real devolve: `client.beta.messages.parse` lançaria nos três primeiros casos
+  // (JSON truncado, fora do esquema ou texto vazio); com `create` a classificação é no código e a
+  // execução fica registrada com os tokens e sem log de erro.
   it.each([
     [
       "refusal",
-      { stop_reason: "refusal", stop_details: { category: "general_harms" }, parsed_output: null },
+      {
+        stop_reason: "refusal",
+        stop_details: { category: "general_harms" },
+        content: [textBlock("")],
+      },
       "general_harms",
     ],
-    ["max_tokens", { stop_reason: "max_tokens", parsed_output: null }, null],
-    ["invalid_output", { stop_reason: "end_turn", parsed_output: null }, null],
+    [
+      "max_tokens",
+      {
+        stop_reason: "max_tokens",
+        content: [
+          { type: "thinking", thinking: "", signature: "" },
+          textBlock('{"resumo": "Lead qu'),
+        ],
+      },
+      null,
+    ],
+    ["invalid_output", { stop_reason: "end_turn", content: [textBlock('{"resumo": 42}')] }, null],
+    ["invalid_output", { stop_reason: "end_turn", content: [] }, null],
+    ["refusal", { stop_reason: "refusal", stop_details: null, content: [] }, null],
   ] as const)("%s", async (reason, over, category) => {
-    sdk.parse.mockResolvedValueOnce(response(over as Record<string, unknown>));
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    sdk.create.mockResolvedValueOnce(response(over as Record<string, unknown>));
     const { runStructured } = await loadClient();
     const own = await makeTenant();
     const result = await runStructured(own, { ...baseInput, leadId: null });
@@ -233,11 +258,31 @@ describe("runStructured: estados de parada", () => {
     expect(run.status).toBe(reason);
     expect(run.output).toBeNull();
     expect(run.inputTokens).toBe(1200);
+    expect(run.outputTokens).toBe(300);
     expect(run.data?.stopDetailsCategory).toBe(category);
+    expect(run.data?.httpStatus).toBe(200);
+    expect(errors.mock.calls.some((c) => String(c[0]).includes("falha na ia"))).toBe(false);
+  });
+
+  it("nunca loga o texto bruto nem o motivo do Zod na saída fora do esquema", async () => {
+    const spies = [
+      vi.spyOn(console, "log").mockImplementation(() => {}),
+      vi.spyOn(console, "warn").mockImplementation(() => {}),
+      vi.spyOn(console, "error").mockImplementation(() => {}),
+    ];
+    sdk.create.mockResolvedValueOnce(
+      response({ content: [textBlock('{"resumo": 42, "nome": "Fulano Sigiloso"}')] }),
+    );
+    const { runStructured } = await loadClient();
+    await runStructured(await makeTenant(), { ...baseInput, leadId: null });
+    const lines = spies.flatMap((s) => s.mock.calls.map((c) => String(c[0])));
+    expect(lines.some((l) => l.includes("ia executada"))).toBe(true);
+    expect(lines.join("\n")).not.toContain("Fulano");
+    expect(lines.join("\n")).not.toContain("expected");
   });
 
   it("fallback: grava data.fallback = true e o modelo que respondeu", async () => {
-    sdk.parse.mockResolvedValueOnce(
+    sdk.create.mockResolvedValueOnce(
       response({
         model: "claude-opus-4-8",
         usage: {
@@ -264,7 +309,9 @@ describe("runStructured: estados de parada", () => {
 
 describe("runStructured: normalize e data", () => {
   it("normalize roda antes de gravar: ai_runs.output e o retorno são a saída normalizada; data extra entra mesclado", async () => {
-    sdk.parse.mockResolvedValueOnce(response({ parsed_output: { resumo: "  Lead quente.  " } }));
+    sdk.create.mockResolvedValueOnce(
+      response({ content: [textBlock('{"resumo": "  Lead quente.  "}')] }),
+    );
     const { runStructured } = await loadClient();
     const own = await makeTenant();
     const normalize = vi.fn((p: { resumo: string }) => ({ resumo: p.resumo.trim().toUpperCase() }));
@@ -292,14 +339,14 @@ describe("runStructured: normalize e data", () => {
   it("fora de ok, normalize não roda e data extra ainda é gravado, inclusive no erro do SDK", async () => {
     const { RateLimitError } = await Errors();
     vi.spyOn(console, "error").mockImplementation(() => {});
-    sdk.parse.mockResolvedValueOnce(
+    sdk.create.mockResolvedValueOnce(
       response({
         stop_reason: "refusal",
         stop_details: { category: "general_harms" },
-        parsed_output: null,
+        content: [],
       }),
     );
-    sdk.parse.mockRejectedValueOnce(new RateLimitError(429, "Rate limited"));
+    sdk.create.mockRejectedValueOnce(new RateLimitError(429, "Rate limited"));
     const { runStructured } = await loadClient();
     const own = await makeTenant();
     const normalize = vi.fn((p: { resumo: string }) => p);
@@ -331,18 +378,18 @@ describe("runStructured: teto diário", () => {
     });
     await db.insert(aiRuns).values(Array.from({ length: 199 }, () => row(now)));
     await db.insert(aiRuns).values(Array.from({ length: 5 }, () => row(yesterday)));
-    sdk.parse.mockResolvedValue(response());
+    sdk.create.mockResolvedValue(response());
     const { runStructured } = await loadClient();
     const first = await runStructured(own, { ...baseInput, leadId: null });
     expect(first.ok).toBe(true);
-    expect(sdk.parse).toHaveBeenCalledTimes(1);
+    expect(sdk.create).toHaveBeenCalledTimes(1);
     const second = await runStructured(own, { ...baseInput, leadId: null });
     expect(second).toEqual({
       ok: false,
       reason: "quota",
       message: "Limite diário de IA atingido (200 execuções). Volta a funcionar amanhã.",
     });
-    expect(sdk.parse).toHaveBeenCalledTimes(1);
+    expect(sdk.create).toHaveBeenCalledTimes(1);
     expect(await runsOf(own)).toHaveLength(205);
   });
 });
@@ -351,7 +398,7 @@ describe("runStructured: erros do SDK", () => {
   it("APIError 429 vira reason error, grava status error e loga sem a mensagem", async () => {
     const { RateLimitError } = await Errors();
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    sdk.parse.mockRejectedValueOnce(new RateLimitError(429, "Rate limited: texto bruto do erro"));
+    sdk.create.mockRejectedValueOnce(new RateLimitError(429, "Rate limited: texto bruto do erro"));
     const { runStructured } = await loadClient();
     const own = await makeTenant();
     const result = await runStructured(own, { ...baseInput, leadId: null });
@@ -379,7 +426,7 @@ describe("runStructured: erros do SDK", () => {
   it("401 avisa chave inválida (warn) e devolve error", async () => {
     const { AuthenticationError } = await Errors();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    sdk.parse.mockRejectedValueOnce(new AuthenticationError(401, "invalid x-api-key"));
+    sdk.create.mockRejectedValueOnce(new AuthenticationError(401, "invalid x-api-key"));
     const { runStructured } = await loadClient();
     const own = await makeTenant();
     const result = await runStructured(own, { ...baseInput, leadId: null });
@@ -393,7 +440,7 @@ describe("runStructured: erros do SDK", () => {
 
   it("erro que não é do SDK também vira error, com httpStatus nulo", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    sdk.parse.mockRejectedValueOnce(new Error("socket hang up"));
+    sdk.create.mockRejectedValueOnce(new Error("socket hang up"));
     const { runStructured } = await loadClient();
     const own = await makeTenant();
     const result = await runStructured(own, { ...baseInput, leadId: null });

@@ -13,7 +13,7 @@ import type { Ctx } from "@/lib/repos/ctx";
 import { createLead, getLead } from "@/lib/repos/leads";
 import { makeTenant, uniqueEmail } from "../helpers";
 
-const sdk = vi.hoisted(() => ({ parse: vi.fn() }));
+const sdk = vi.hoisted(() => ({ create: vi.fn() }));
 const session = vi.hoisted(() => ({ ctx: null as Ctx | null }));
 
 vi.mock("@anthropic-ai/sdk", () => {
@@ -32,7 +32,7 @@ vi.mock("@anthropic-ai/sdk", () => {
     static AuthenticationError = AuthenticationError;
     static PermissionDeniedError = PermissionDeniedError;
     static RateLimitError = RateLimitError;
-    beta = { messages: { parse: sdk.parse } };
+    beta = { messages: { create: sdk.create } };
   }
   return {
     default: Anthropic,
@@ -87,8 +87,8 @@ function response(parsed: Record<string, unknown> | null = parsedOutput()) {
     model: "claude-opus-5-5",
     stop_reason: parsed ? "end_turn" : "refusal",
     stop_details: parsed ? null : { category: "general_harms" },
-    content: [],
-    parsed_output: parsed,
+    // A saída estruturada chega como JSON num bloco de texto (client.beta.messages.create).
+    content: parsed ? [{ type: "text", text: JSON.stringify(parsed), citations: null }] : [],
     usage: {
       input_tokens: 1500,
       output_tokens: 400,
@@ -119,7 +119,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  sdk.parse.mockReset();
+  sdk.create.mockReset();
   vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-teste");
   vi.stubEnv("AI_MODEL", "");
 });
@@ -156,13 +156,13 @@ describe("guarda de sessão", () => {
     } finally {
       session.ctx = ctx;
     }
-    expect(sdk.parse).not.toHaveBeenCalled();
+    expect(sdk.create).not.toHaveBeenCalled();
   });
 });
 
 describe("organizeNotesAction", () => {
   it("envia o relato mascarado (CNPJ preservado) com o system do segmento e effort medium", async () => {
-    sdk.parse.mockResolvedValueOnce(response());
+    sdk.create.mockResolvedValueOnce(response());
     const lead = await newLead("PJ");
     const { organizeNotesAction } = await loadActions();
     const state = await organizeNotesAction(
@@ -170,8 +170,8 @@ describe("organizeNotesAction", () => {
       fd({ leadId: lead.id, text: RELATO }),
     );
     expect(state.status).toBe("ok");
-    expect(sdk.parse).toHaveBeenCalledTimes(1);
-    const params = sdk.parse.mock.calls[0][0];
+    expect(sdk.create).toHaveBeenCalledTimes(1);
+    const params = sdk.create.mock.calls[0][0];
     expect(params.output_config.effort).toBe("medium");
     expect(params.max_tokens).toBe(4000);
     expect("thinking" in params).toBe(false);
@@ -208,7 +208,7 @@ describe("organizeNotesAction", () => {
   });
 
   it("devolve a sugestão normalizada: campos validados, próxima ação às 09:00 e tarefas", async () => {
-    sdk.parse.mockResolvedValueOnce(response());
+    sdk.create.mockResolvedValueOnce(response());
     const lead = await newLead("PJ");
     const { organizeNotesAction } = await loadActions();
     const state = await organizeNotesAction(
@@ -232,7 +232,7 @@ describe("organizeNotesAction", () => {
   });
 
   it("valor inválido num campo chega à tela em incertezas, sem o campo", async () => {
-    sdk.parse.mockResolvedValueOnce(
+    sdk.create.mockResolvedValueOnce(
       response(
         parsedOutput({
           campos_extraidos: [{ chave: "regime_tributario", valor: "lucro real" }],
@@ -283,7 +283,7 @@ describe("organizeNotesAction", () => {
     } finally {
       session.ctx = ctx;
     }
-    expect(sdk.parse).not.toHaveBeenCalled();
+    expect(sdk.create).not.toHaveBeenCalled();
   });
 
   it("sem chave devolve disabled sem chamar o SDK; recusa vira refusal com mensagem pronta", async () => {
@@ -299,10 +299,10 @@ describe("organizeNotesAction", () => {
       reason: "disabled",
       message: "IA não configurada.",
     });
-    expect(sdk.parse).not.toHaveBeenCalled();
+    expect(sdk.create).not.toHaveBeenCalled();
 
     vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-teste");
-    sdk.parse.mockResolvedValueOnce(response(null));
+    sdk.create.mockResolvedValueOnce(response(null));
     mod = await loadActions();
     const refused = await mod.organizeNotesAction(
       initialAiActionState,

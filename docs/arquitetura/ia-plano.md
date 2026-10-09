@@ -77,7 +77,7 @@ export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
 1. `!isAiEnabled()` → `{ ok: false, reason: "disabled", message: "IA não configurada." }`.
 2. `await countAiRunsToday(ctx, new Date()) >= AI_DAILY_LIMIT` → `reason: "quota"`.
 3. Chamada exatamente como no ADR-003, 7.2. `system` é `[{ type: "text", text: input.system, cache_control: { type: "ephemeral" } }]`.
-4. `stop_reason === "refusal"` → `reason: "refusal"`; `"max_tokens"` → `reason: "max_tokens"`; `parsed_output == null` → `reason: "invalid_output"`; senão `ok`.
+4. `stop_reason === "refusal"` → `reason: "refusal"`; `"max_tokens"` → `reason: "max_tokens"`; sem bloco `text`, JSON inválido ou `schema.safeParse` reprovado → `reason: "invalid_output"`; senão `ok` (a chamada é `create`, não `parse`: ADR-003, 7.1).
 5. Em qualquer saída da etapa 3 em diante (inclusive exceção do SDK), `insertAiRun` com `status`, tokens de `response.usage` (zero em exceção), `model` (`response.model` ou o modelo pedido em exceção), `output` (só em `ok`), `data: { effort, fallback, stopDetailsCategory, httpStatus }`, `createdBy: ctx.userId`.
 6. `log("info", "ia executada", { kind, leadId, model, status, inputTokens, outputTokens, cacheReadInputTokens, durationMs, fallback })`; em exceção, `log("error", "falha na ia", { kind, leadId, httpStatus })` sem a mensagem bruta.
 

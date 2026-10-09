@@ -15,6 +15,9 @@ import type { Ctx } from "@/lib/repos/ctx";
 import { aiFailure, type AiEffort, type AiKind, type AiResult, type AiRunStatus } from "./types";
 
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
+// Cabeçalho que `client.beta.messages.parse` acrescentaria sozinho (resources/beta/messages/
+// messages.js). A chamada aqui é `create`: ver classify().
+const STRUCTURED_OUTPUTS_BETA = "structured-outputs-2025-12-15";
 
 // Cliente criado uma vez por processo e só com chave explícita: nunca `new Anthropic()` sem
 // argumento, para não ler credencial de perfil local por acidente (ADR-003, seção 9).
@@ -53,11 +56,33 @@ export type RunStructuredInput<S extends z.ZodObject<z.ZodRawShape>> = {
   data?: Record<string, unknown>;
 };
 
-function statusOf(response: { stop_reason: string | null; parsed_output: unknown }): AiRunStatus {
-  if (response.stop_reason === "refusal") return "refusal";
-  if (response.stop_reason === "max_tokens") return "max_tokens";
-  if (response.parsed_output == null) return "invalid_output";
-  return "ok";
+type Classified<T> =
+  { status: "ok"; parsed: T } | { status: Exclude<AiRunStatus, "ok" | "error">; parsed: null };
+
+// Classificação por stop_reason (ADR-003, 7.4) e validação do JSON pelo esquema feita aqui, e não
+// por `client.beta.messages.parse`: o parse do SDK lança AnthropicError (que não é APIError) quando
+// o texto vem truncado por max_tokens ou fora do esquema, e isso perderia stop_reason e usage: a
+// execução viraria "error" sem tokens em ai_runs e a tela diria "indisponível" em vez de
+// "incompleta". Nada aqui lança nem loga o texto bruto (pode citar conteúdo do lead).
+function classify<S extends z.ZodObject<z.ZodRawShape>>(
+  response: Anthropic.Beta.BetaMessage,
+  schema: S,
+): Classified<z.infer<S>> {
+  if (response.stop_reason === "refusal") return { status: "refusal", parsed: null };
+  if (response.stop_reason === "max_tokens") return { status: "max_tokens", parsed: null };
+  const text = response.content.find(
+    (block): block is Anthropic.Beta.BetaTextBlock => block.type === "text",
+  )?.text;
+  if (text == null) return { status: "invalid_output", parsed: null };
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return { status: "invalid_output", parsed: null };
+  }
+  const result = schema.safeParse(json);
+  if (!result.success) return { status: "invalid_output", parsed: null };
+  return { status: "ok", parsed: result.data as z.infer<S> };
 }
 
 export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
@@ -72,19 +97,19 @@ export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
   const model = aiModel();
   const started = performance.now();
   try {
-    const response = await api.beta.messages.parse({
+    const response = await api.beta.messages.create({
       model,
       max_tokens: AI_MAX_TOKENS,
-      betas: [FALLBACK_BETA],
+      betas: [FALLBACK_BETA, STRUCTURED_OUTPUTS_BETA],
       fallbacks: "default",
       system: [{ type: "text", text: input.system, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: input.user }],
+      // betaZodOutputFormat serve ao `create` também (só não há parse automático; ver classify).
       output_config: { effort, format: betaZodOutputFormat(input.schema) },
     });
     const durationMs = Math.round(performance.now() - started);
-    const status = statusOf(response);
+    const { status, parsed: raw } = classify(response, input.schema);
     const fallback = (response.usage.iterations ?? []).some((i) => i.type === "fallback_message");
-    const raw = (status === "ok" ? response.parsed_output : null) as z.infer<S> | null;
     const parsed = raw != null && input.normalize ? input.normalize(raw) : raw;
     const usage = response.usage;
     const run = await insertAiRun(ctx, {

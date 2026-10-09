@@ -14,7 +14,7 @@ import { createLead } from "@/lib/repos/leads";
 import { consentContato, makeTenant } from "../helpers";
 
 const session = vi.hoisted(() => ({ ctx: null as Ctx | null }));
-const sdk = vi.hoisted(() => ({ parse: vi.fn() }));
+const sdk = vi.hoisted(() => ({ create: vi.fn() }));
 
 vi.mock("@/lib/session", () => ({
   requireSession: async () => {
@@ -49,7 +49,7 @@ vi.mock("@anthropic-ai/sdk", () => {
     static AuthenticationError = AuthenticationError;
     static PermissionDeniedError = PermissionDeniedError;
     static RateLimitError = RateLimitError;
-    beta = { messages: { parse: sdk.parse } };
+    beta = { messages: { create: sdk.create } };
   }
   return {
     default: Anthropic,
@@ -82,6 +82,13 @@ const briefOutput: Brief = {
   lacunas: ["Faixa de IRPJ devido."],
 };
 
+// A saída estruturada chega como JSON num bloco de texto (client.beta.messages.create).
+const textBlock = (json: unknown) => ({
+  type: "text",
+  text: JSON.stringify(json),
+  citations: null,
+});
+
 function response(over: Record<string, unknown> = {}) {
   return {
     id: "msg_teste",
@@ -90,8 +97,7 @@ function response(over: Record<string, unknown> = {}) {
     model: "claude-opus-5-5",
     stop_reason: "end_turn",
     stop_details: null,
-    content: [],
-    parsed_output: briefOutput,
+    content: [textBlock(briefOutput)],
     usage: {
       input_tokens: 2500,
       output_tokens: 600,
@@ -149,7 +155,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  sdk.parse.mockReset();
+  sdk.create.mockReset();
   vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-teste");
   vi.stubEnv("AI_MODEL", "");
 });
@@ -169,7 +175,7 @@ describe("guarda de sessão", () => {
     try {
       const { generateBriefAction } = await loadAction();
       await expect(generateBriefAction(idle, fd(leadId))).rejects.toThrow("REDIRECT:/entrar");
-      expect(sdk.parse).not.toHaveBeenCalled();
+      expect(sdk.create).not.toHaveBeenCalled();
     } finally {
       session.ctx = ctx;
     }
@@ -179,7 +185,7 @@ describe("guarda de sessão", () => {
 describe("generateBriefAction", () => {
   it("gera o briefing: contexto redigido na mensagem, system estável, effort medium, linha em ai_runs", async () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    sdk.parse.mockResolvedValue(response());
+    sdk.create.mockResolvedValue(response());
     const { generateBriefAction } = await loadAction();
     const result = await generateBriefAction(idle, fd(leadId));
     expect(result.status).toBe("ok");
@@ -187,8 +193,8 @@ describe("generateBriefAction", () => {
     expect(result.data).toEqual(briefOutput);
     expect(result.runId).toMatch(UUID_RE);
 
-    expect(sdk.parse).toHaveBeenCalledTimes(1);
-    const params = sdk.parse.mock.calls[0][0];
+    expect(sdk.create).toHaveBeenCalledTimes(1);
+    const params = sdk.create.mock.calls[0][0];
     expect(params.model).toBe("claude-opus-5-5");
     expect(params.max_tokens).toBe(4000);
     expect(params.output_config.effort).toBe("medium");
@@ -238,24 +244,26 @@ describe("generateBriefAction", () => {
   });
 
   it("o system é byte a byte igual em duas chamadas seguidas (cache de prompt)", async () => {
-    sdk.parse.mockResolvedValue(response());
+    sdk.create.mockResolvedValue(response());
     const { generateBriefAction } = await loadAction();
     await generateBriefAction(idle, fd(leadId));
     await generateBriefAction(idle, fd(leadId));
-    const [a, b] = sdk.parse.mock.calls.map((c) => c[0].system[0].text as string);
+    const [a, b] = sdk.create.mock.calls.map((c) => c[0].system[0].text as string);
     expect(a).toBe(b);
     expect(a).toBe(BRIEF_SYSTEM);
     expect(a).not.toMatch(/Hoje é/);
   });
 
   it("normaliza a saída antes de devolver e de gravar: listas cortadas, vazios e duplicados fora", async () => {
-    sdk.parse.mockResolvedValueOnce(
+    sdk.create.mockResolvedValueOnce(
       response({
-        parsed_output: {
-          ...briefOutput,
-          pontos_atencao: ["", " Risco A ", "risco a", "B", "C", "D", "E", "F", "G"],
-          perguntas: Array.from({ length: 10 }, (_, i) => `Pergunta ${i}`),
-        },
+        content: [
+          textBlock({
+            ...briefOutput,
+            pontos_atencao: ["", " Risco A ", "risco a", "B", "C", "D", "E", "F", "G"],
+            perguntas: Array.from({ length: 10 }, (_, i) => `Pergunta ${i}`),
+          }),
+        ],
       }),
     );
     const { generateBriefAction } = await loadAction();
@@ -271,11 +279,11 @@ describe("generateBriefAction", () => {
 
   it("recusa devolve a mensagem do ADR e grava status refusal", async () => {
     const before = (await runsOfLead()).length;
-    sdk.parse.mockResolvedValueOnce(
+    sdk.create.mockResolvedValueOnce(
       response({
         stop_reason: "refusal",
         stop_details: { category: "general_harms" },
-        parsed_output: null,
+        content: [],
       }),
     );
     const { generateBriefAction } = await loadAction();
@@ -291,7 +299,9 @@ describe("generateBriefAction", () => {
   });
 
   it("resposta cortada (max_tokens) vira erro amigável", async () => {
-    sdk.parse.mockResolvedValueOnce(response({ stop_reason: "max_tokens", parsed_output: null }));
+    sdk.create.mockResolvedValueOnce(
+      response({ stop_reason: "max_tokens", content: [{ type: "text", text: '{"resumo": "Le' }] }),
+    );
     const { generateBriefAction } = await loadAction();
     const result = await generateBriefAction(idle, fd(leadId));
     expect(result).toEqual({
@@ -307,7 +317,7 @@ describe("generateBriefAction", () => {
     const { generateBriefAction } = await loadAction();
     const result = await generateBriefAction(idle, fd(leadId));
     expect(result).toEqual({ status: "error", reason: "disabled", message: "IA não configurada." });
-    expect(sdk.parse).not.toHaveBeenCalled();
+    expect(sdk.create).not.toHaveBeenCalled();
     expect(await runsOfLead()).toHaveLength(before);
   });
 
@@ -336,7 +346,7 @@ describe("generateBriefAction", () => {
       const result = await generateBriefAction(idle, fd(lead.id));
       expect(result.status).toBe("error");
       expect(result.status === "error" && result.reason).toBe("quota");
-      expect(sdk.parse).not.toHaveBeenCalled();
+      expect(sdk.create).not.toHaveBeenCalled();
     } finally {
       session.ctx = ctx;
     }
@@ -347,7 +357,7 @@ describe("generateBriefAction", () => {
     const mod = (await import("@anthropic-ai/sdk")) as unknown as {
       RateLimitError: new (status?: number, message?: string) => Error;
     };
-    sdk.parse.mockRejectedValueOnce(new mod.RateLimitError(429, "Rate limited"));
+    sdk.create.mockRejectedValueOnce(new mod.RateLimitError(429, "Rate limited"));
     const { generateBriefAction } = await loadAction();
     const result = await generateBriefAction(idle, fd(leadId));
     expect(result).toEqual({
@@ -378,6 +388,6 @@ describe("generateBriefAction", () => {
       reason: "error",
       message: "Lead não encontrado.",
     });
-    expect(sdk.parse).not.toHaveBeenCalled();
+    expect(sdk.create).not.toHaveBeenCalled();
   });
 });
