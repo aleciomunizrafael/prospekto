@@ -70,7 +70,7 @@ function response(over: Record<string, unknown> = {}) {
       input_tokens: 1200,
       output_tokens: 300,
       cache_read_input_tokens: 900,
-      cache_creation_input_tokens: 0,
+      cache_creation_input_tokens: 1200,
       iterations: null,
     },
     ...over,
@@ -185,6 +185,7 @@ describe("runStructured: forma da chamada", () => {
       fallback: false,
       stopDetailsCategory: null,
       httpStatus: 200,
+      cacheCreation: 1200,
     });
   });
 
@@ -221,6 +222,7 @@ describe("runStructured: forma da chamada", () => {
       usageInput: 1200,
       usageOutput: 300,
       usageCacheRead: 900,
+      usageCacheCreation: 1200,
       fallback: false,
     });
     expect(line).not.toContain("[redigido]");
@@ -346,6 +348,7 @@ describe("runStructured: normalize e data", () => {
       fallback: false,
       stopDetailsCategory: null,
       httpStatus: 200,
+      cacheCreation: 1200,
     });
   });
 

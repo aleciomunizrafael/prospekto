@@ -187,10 +187,10 @@ Em nenhum caso a página do lead deixa de renderizar: os cartões de IA são Cli
 | `model` | text | sim | Modelo que **respondeu** (`response.model`, que muda quando há fallback) |
 | `status` | text CHECK (`ok`, `refusal`, `max_tokens`, `invalid_output`, `error`) | sim | Seção 7.4 |
 | `input_tokens`, `output_tokens` | integer | sim, padrão 0 | `usage` da resposta |
-| `cache_read_input_tokens` | integer | sim, padrão 0 | Para conferir se o cache está funcionando |
+| `cache_read_input_tokens` | integer | sim, padrão 0 | Para conferir se o cache está funcionando; a escrita de cache (`cache_creation_input_tokens`) fica em `data.cacheCreation` |
 | `duration_ms` | integer | não | Tempo da chamada |
 | `output` | jsonb | não | A saída validada pelo esquema e normalizada (`normalize` do recurso); nula fora de `ok` |
-| `data` | jsonb | não | Metadados sem conteúdo: `{ effort, fallback, stopDetailsCategory, httpStatus, channel }` |
+| `data` | jsonb | não | Metadados sem conteúdo: `{ effort, fallback, stopDetailsCategory, httpStatus, cacheCreation, channel }` (`cacheCreation` só em sucesso; `channel` só na resposta sugerida) |
 | `created_by` | text FK `users` | não | Quem clicou |
 | `created_at` | timestamptz | sim | |
 
@@ -244,7 +244,7 @@ Preços de `claude-opus-5-5` lidos em `shared/model-migration.md` e `shared/mode
 | Organizar (`medium`) | 1.000 | 800 | 1.500 | US$ 0,033 | US$ 0,038 |
 | Resposta (`low`) | 1.200 | 1.200 | 900 | US$ 0,023 | US$ 0,029 |
 
-Conta do briefing com cache quente: 2.500 × 4 + 1.200 × 0,20 + 2.500 × 20, tudo dividido por 1 milhão, dá US$ 0,0602. Uso esperado (10 a 20 execuções por dia útil, mistas): US$ 0,40 a 0,90 por dia, cerca de **US$ 10 a 20 por mês**. Pior caso com o teto: 200 execuções por dia só de briefing, US$ 12 por dia, US$ 260 por mês de 22 dias úteis, o que é o motivo do teto. Câmbio e a fatura real ficam para a primeira revisão mensal; o painel da Anthropic e a soma de `ai_runs` por mês (`select kind, sum(input_tokens), sum(output_tokens)`) são a conferência. Modo rápido (`speed: "fast"`, dobro do preço) não é usado.
+Conta do briefing com cache quente: 2.500 × 4 + 1.200 × 0,20 + 2.500 × 20, tudo dividido por 1 milhão, dá US$ 0,0602. Uso esperado (10 a 20 execuções por dia útil, mistas): US$ 0,40 a 0,90 por dia, cerca de **US$ 10 a 20 por mês**. Pior caso com o teto: 200 execuções por dia só de briefing, US$ 12 por dia, US$ 260 por mês de 22 dias úteis, o que é o motivo do teto. Câmbio e a fatura real ficam para a primeira revisão mensal; o painel da Anthropic e a soma de `ai_runs` por mês (`select kind, sum(input_tokens), sum(cache_read_input_tokens), sum((data->>'cacheCreation')::int), sum(output_tokens)`) são a conferência: `input_tokens` da API exclui os tokens de cache, lidos e escritos, e a escrita (US$ 5/M, 1,2 a 1,6 mil tokens em toda chamada com cache frio, seis prefixos no organizar) só aparece em `data.cacheCreation`. Modo rápido (`speed: "fast"`, dobro do preço) não é usado.
 
 ## 12. Alternativas rejeitadas
 

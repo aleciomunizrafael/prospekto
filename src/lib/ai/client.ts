@@ -138,6 +138,10 @@ export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
         fallback,
         stopDetailsCategory: response.stop_details?.category ?? null,
         httpStatus: 200,
+        // Escrita de cache (US$ 5/M): `input_tokens` exclui os tokens de cache, lidos e escritos, e
+        // sem isso a conferência de custo (ADR-003, 11) subestima e não distingue cache frio de
+        // prefixo abaixo do mínimo (cache_read = 0 nos dois).
+        cacheCreation: usage.cache_creation_input_tokens ?? 0,
       },
       createdBy: ctx.userId ?? null,
     });
@@ -152,6 +156,7 @@ export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
       usageInput: usage.input_tokens,
       usageOutput: usage.output_tokens,
       usageCacheRead: usage.cache_read_input_tokens ?? 0,
+      usageCacheCreation: usage.cache_creation_input_tokens ?? 0,
       durationMs,
       fallback,
     });
