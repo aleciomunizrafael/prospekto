@@ -12,7 +12,7 @@ export const revalidate = 3600;
 
 // Data da última revisão da copy do site (estrutura-e-copy.md); a hora do build não é uma
 // modificação de conteúdo. Só exportações de configuração de segmento são permitidas aqui.
-const STATIC_PAGES_LAST_MODIFIED = new Date("2026-10-03T00:00:00-03:00");
+const STATIC_PAGES_LAST_MODIFIED = new Date("2026-10-09T00:00:00-03:00");
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = appUrl();

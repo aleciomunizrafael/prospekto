@@ -38,9 +38,10 @@ const NOT_INFORMED = "não informado";
 const EMAIL_RE = /[^\s<>@"'`(),;:]+@(?:[^\s<>@"'`(),;:.]+\.)+[\p{L}\p{N}-]{2,}/gu;
 const CNPJ_RE = /\b\d{2}\.?\d{3}\.?\d{3}\/\d{4}-?\d{2}\b|\b\d{14}\b/g;
 const CPF_RE = /\b\d{3}\.\d{3}\.\d{3}-\d{2}\b|\b\d{3}\.?\d{3}\.?\d{3}-\d{2}\b|\b\d{11}\b/g;
-// Telefone brasileiro: +55 opcional, DDD com ou sem parênteses, 8 ou 9 dígitos com separador
-// opcional ("(54) 98403-2180", "54 98403-2180", "+55 54 98403 2180", "54984032180").
-const PHONE_RE = /(?:\+?55[\s.-]?)?\(?\b\d{2}\)?[\s.-]?(?:9\s?\d{4}|\d{4})[\s.-]?\d{4}\b/g;
+// Telefone brasileiro: +55 opcional (colado ou separado), DDD com ou sem parênteses, 8 ou 9 dígitos
+// com separador opcional ("(54) 98403-2180", "54 98403-2180", "+55 54 98403 2180", "54984032180"
+// e "+5554984032180", o E.164 gravado no CRM). Nunca começa nem termina no meio de um número.
+const PHONE_RE = /(?<!\d)(?:\+?55[\s.-]?)?\(?\d{2}\)?[\s.-]?(?:9\s?\d{4}|\d{4})[\s.-]?\d{4}(?!\d)/g;
 
 export function scrubText(text: string, options: { keepCnpj?: boolean } = {}): string {
   let out = text.slice(0, SCRUB_MAX_CHARS);

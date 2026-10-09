@@ -81,7 +81,9 @@ const sections: Section[] = [
     id: "compartilhamento",
     title: "6. Com quem compartilhamos",
     paragraphs: [
-      "Com os provedores necessários ao serviço: hospedagem do site e do CRM, e-mail transacional, WhatsApp (Meta) e ferramenta de analytics agregado. Nunca vendemos dados. Patrocinador e proponente só conhecem os dados um do outro na etapa do termo de patrocínio.",
+      "Com os provedores necessários ao serviço: hospedagem do site e do CRM, e-mail transacional, WhatsApp (Meta), ferramenta de analytics agregado e inteligência artificial para apoio ao atendimento. Nunca vendemos dados. Patrocinador e proponente só conhecem os dados um do outro na etapa do termo de patrocínio.",
+      "Usamos inteligência artificial (Anthropic, fornecedora da Claude API) para resumir o histórico de contato e preparar rascunhos de resposta, sempre revisados por uma pessoa da Prospekto antes de qualquer envio. Enviamos ao fornecedor só o necessário para isso: nome, empresa, cidade, o assunto do contato e o teor das conversas registradas; nunca e-mail, telefone, CPF ou dados bancários. Esses dados não são usados para treinar modelos e são apagados pelo fornecedor em até 30 dias. O ditado de notas pela equipe usa o reconhecimento de voz do próprio navegador.",
+      "O fornecedor de inteligência artificial processa os dados fora do Brasil, sob cláusulas contratuais de proteção de dados (LGPD, art. 33, II, c) [verificar com o advogado].",
     ],
   },
   {

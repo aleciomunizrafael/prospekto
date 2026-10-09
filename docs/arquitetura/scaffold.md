@@ -464,7 +464,7 @@ export const site = {
   email: "projetos@prospekto.com.br",
   whatsappNumber: "5554984032180",
   city: "Serra Gaúcha, RS",
-  policyVersion: "2026-10-03",
+  policyVersion: "2026-10-09",
   whatsappMessages: {
     home: "Olá, Daniela. Vi o site da Prospekto e quero entender como minha empresa pode destinar parte do imposto para cultura.",
     // demais textos de docs/site/estrutura-e-copy.md, seção 10.1
@@ -810,6 +810,7 @@ Com `casing: "snake_case"` no `drizzle.config.ts` e no `drizzle()`, `stageEntere
 | `DEV_ALERT_EMAIL` | opcional | não | sim | e-mail do desenvolvedor |
 | `FORM_SECRET`, `CRON_SECRET` | sim / opcional | fictícia / não | sim | `openssl rand -base64 32` |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | não | não | quando ligar | Cloudflare |
+| `ANTHROPIC_API_KEY`, `AI_MODEL` | opcional (IA desabilitada sem a chave) | não | sim (`deploy.md`, etapa 8) | console da Anthropic (ADR-003) |
 | `DEFAULT_TENANT_ID` | `prospekto` | `prospekto` | `prospekto` | |
 | `SEED_USERS` | só para o seed | não | só no terminal, uma vez | |
 

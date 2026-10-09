@@ -113,7 +113,7 @@ describe("createLeadFromForm: sucesso (R-1)", () => {
     expect(consents.map((c) => c.purpose).sort()).toEqual(["contato_comercial", "marketing"]);
     const contact = consents.find((c) => c.purpose === "contato_comercial")!;
     expect(contact.granted).toBe(true);
-    expect(contact.policyVersion).toBe("2026-10-03");
+    expect(contact.policyVersion).toBe("2026-10-09");
     expect(contact.consentText).toMatch(/^Li a Política de Privacidade/);
     expect(contact.channels).toEqual(["email", "telefone"]);
     expect(contact.sourcePage).toBe("/contato");

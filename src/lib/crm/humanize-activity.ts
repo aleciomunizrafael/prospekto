@@ -156,3 +156,15 @@ export function humanizeSystemActivity(
 
   return { text: parts.length ? parts.join(" · ") : null, details };
 }
+
+// Atividades `email` e `whatsapp` registradas pela resposta sugerida (ADR-003) guardam data.ai
+// (rascunho da IA que a pessoa revisou) e, no e-mail, data.mode: "resend" (enviado) ou "log"
+// (ambiente sem provedor de e-mail: nada saiu). A Timeline mostra os dois fatos para ninguém
+// achar que o lead recebeu uma mensagem que não foi enviada.
+export function aiActivityText(data: Record<string, unknown> | null): string | null {
+  if (!data) return null;
+  const parts: string[] = [];
+  if (data.ai === true) parts.push("Rascunho sugerido pela IA e revisado antes do envio");
+  if (data.mode === "log") parts.push("não enviado: ambiente sem provedor de e-mail");
+  return parts.length > 0 ? parts.join(" · ") : null;
+}

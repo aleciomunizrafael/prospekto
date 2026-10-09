@@ -23,7 +23,7 @@ export const site = {
     instagram: null as string | null,
   },
   // Versão da política de privacidade exibida nos formulários (consents.policy_version).
-  policyVersion: "2026-10-03",
+  policyVersion: "2026-10-09",
   // Guia "Contabilizando Cultura" (estrutura-e-copy.md, seção 10.3). `available` vira true quando a
   // edição revisada for aprovada e o PDF estiver em src/assets/contabilizando-cultura-guia.pdf.
   guide: {

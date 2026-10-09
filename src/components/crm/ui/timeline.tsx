@@ -9,7 +9,7 @@ import {
   formatDate,
   formatDateTime,
 } from "@/lib/crm/format";
-import { humanizeSystemActivity } from "@/lib/crm/humanize-activity";
+import { aiActivityText, humanizeSystemActivity } from "@/lib/crm/humanize-activity";
 import { ACTIVITY_ICONS } from "@/lib/crm/status-tones";
 import type { ActivityType } from "@/lib/domain/enums";
 import type { Activity } from "@/lib/repos/activities";
@@ -129,6 +129,8 @@ function Item({
     details = h.details;
   } else if (a.type === "formulario") {
     detail = formActivityText(a.data);
+  } else if (a.type === "email" || a.type === "whatsapp") {
+    detail = aiActivityText(a.data);
   }
   return (
     <li className="relative flex flex-col gap-1">

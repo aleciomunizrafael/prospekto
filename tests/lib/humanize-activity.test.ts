@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { humanizeSystemActivity } from "@/lib/crm/humanize-activity";
+import { aiActivityText, humanizeSystemActivity } from "@/lib/crm/humanize-activity";
 
 const USER_A = "4z3JXEAcbd6l0ZbgqGyK2RvSCxk1F3Ul"; // 32 caracteres, como o id do better-auth
 const USER_B = "9pQ2mLkT8vWxYzA1bC3dE5fG7hJ0kLmN";
@@ -193,5 +193,22 @@ describe("humanizeSystemActivity", () => {
       users,
     );
     expect(created.text).toBe("Criado em Prospecção (LIC-RS (Pró-Cultura RS))");
+  });
+});
+
+describe("aiActivityText", () => {
+  it("avisa que o rascunho veio da IA e, em modo log, que nada foi enviado", () => {
+    expect(aiActivityText(null)).toBeNull();
+    expect(aiActivityText({})).toBeNull();
+    expect(aiActivityText({ ai: false, mode: "resend" })).toBeNull();
+    expect(aiActivityText({ ai: true, runId: "x", mode: "resend" })).toBe(
+      "Rascunho sugerido pela IA e revisado antes do envio",
+    );
+    expect(aiActivityText({ ai: true, mode: "log" })).toBe(
+      "Rascunho sugerido pela IA e revisado antes do envio · não enviado: ambiente sem provedor de e-mail",
+    );
+    expect(aiActivityText({ ai: false, mode: "log" })).toBe(
+      "não enviado: ambiente sem provedor de e-mail",
+    );
   });
 });

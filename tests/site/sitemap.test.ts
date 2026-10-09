@@ -11,7 +11,7 @@ vi.mock("@/lib/site/public-projects", () => ({
 }));
 
 const { default: sitemap, revalidate } = await import("@/app/sitemap");
-const STATIC_PAGES_LAST_MODIFIED = new Date("2026-10-03T00:00:00-03:00");
+const STATIC_PAGES_LAST_MODIFIED = new Date("2026-10-09T00:00:00-03:00");
 
 describe("sitemap", () => {
   it("lista as páginas públicas com data fixa e os projetos publicados com a data de publicação", async () => {

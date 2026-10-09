@@ -26,10 +26,10 @@ const CPF = "529.982.247-25";
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 describe("scrubText", () => {
-  it("mascara e-mail, telefone em três formatos, CPF e CNPJ", () => {
+  it("mascara e-mail, telefone em quatro formatos (inclusive o E.164 do CRM), CPF e CNPJ", () => {
     const text = [
       `Falar com ${EMAIL} ou pelo (54) 98403-2180.`,
-      "Alternativas: 54 98403-2180 e +55 54 98403 2180.",
+      `Alternativas: 54 98403-2180, +55 54 98403 2180 e ${PHONE} colado.`,
       `CPF ${CPF}, CNPJ 55.667.788/0001-86 e também ${CNPJ}.`,
     ].join(" ");
     const out = scrubText(text);
@@ -39,7 +39,7 @@ describe("scrubText", () => {
     expect(out).not.toContain("0001-86");
     expect(out).not.toContain(CNPJ);
     expect(out.match(/\[e-mail\]/g)).toHaveLength(1);
-    expect(out.match(/\[telefone\]/g)).toHaveLength(3);
+    expect(out.match(/\[telefone\]/g)).toHaveLength(4);
     expect(out.match(/\[CPF\]/g)).toHaveLength(1);
     expect(out.match(/\[CNPJ\]/g)).toHaveLength(2);
   });

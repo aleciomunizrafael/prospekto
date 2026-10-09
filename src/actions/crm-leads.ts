@@ -7,6 +7,7 @@
 import { refresh, revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { site } from "@/config/site";
 import { firstIssueByField, formDataToStrings, type CrmActionState } from "@/lib/crm/action-state";
 import { attributesFromForm } from "@/lib/crm/attributes";
 import { fromDateTimeLocal } from "@/lib/crm/format";
@@ -32,7 +33,7 @@ import {
 import { requireSession } from "@/lib/session";
 import { emailSchema, phoneSchema, ufSchema, uuidSchema } from "@/lib/validation/common";
 
-const CONSENT_POLICY_VERSION = "2026-10-03";
+const CONSENT_POLICY_VERSION = site.policyVersion;
 
 const optionalText = (max: number) =>
   z

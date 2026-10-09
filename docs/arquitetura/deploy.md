@@ -2,6 +2,10 @@
 
 > Guia operacional para colocar a Fase 1 no ar. Complementa `scaffold.md` (seções 9 e 10) e `ADR-001-stack.md`. Telas e nomes de menu dos painéis mudam com o tempo; quando divergirem, siga o painel. Validação feita em 04/10/2026: migração, seed, `vercel-build`, login, CRM e cron rodaram de ponta a ponta contra um PostgreSQL 16 real com o driver `pg` (mesmo caminho que o Neon usa).
 
+## Estado em 09/10/2026
+
+IA no CRM publicada (ADR-003): briefing antes da ligação, "Ditar" e "Organizar com IA" no registro de atividade e resposta sugerida por e-mail ou WhatsApp, tudo na página do lead. Os botões ficam desabilitados até `ANTHROPIC_API_KEY` ser cadastrada em Production (etapa 8) e o "Redeploy" ser feito; a política de privacidade passou para a versão `2026-10-09` com o texto da IA.
+
 ## Estado em 08/10/2026
 
 Projeto `prospekto` no Vercel (branch de produção `main`), Neon pelo Marketplace (Postgres 18), deploy verde, seed feito, login e e-mails de lead funcionando, backup semanal verificado, CRM redesenhado (`../design/`). Domínio próprio apontado em 08/10/2026 com o acesso à conta Hostinger da Daniela: `prospekto.com.br` em produção e `www` redirecionando (308), registros A e CNAME propagados e certificado emitido; domínio de envio `envio.prospekto.com.br` com DKIM e os dois CNAMEs de envio publicados (etapa 3). Ainda em 08/10/2026: domínio de envio verificado no Resend; `BETTER_AUTH_URL`, `NEXT_PUBLIC_APP_URL`, `EMAIL_FROM` (`Prospekto <contato@envio.prospekto.com.br>`) e `LEAD_NOTIFY_EMAIL` (`projetos@prospekto.com.br`) trocados em Production; webhook do Resend criado e `RESEND_WEBHOOK_SECRET` cadastrado (a rota responde 401 a pedido sem assinatura, conferido de fora). Teste ponta a ponta com e-mail de terceiro feito (resposta automática e aviso interno entregues). Contas da Daniela e do sócio criadas pelo workflow `seed` em 08/10/2026 (operadores; o owner é o Rafael); elas definem a senha por "Esqueci a senha". Pendente: plano Pro quando o primeiro formulário público for divulgado (etapa 6). O endereço `prospekto-sistema.vercel.app` continua respondendo, mas o login só funciona em `https://prospekto.com.br`.
@@ -37,6 +41,8 @@ openssl rand -base64 32   # CRON_SECRET
 | `DEV_ALERT_EMAIL` | e-mail do desenvolvedor |
 | `DEFAULT_TENANT_ID` | `prospekto` |
 | `RESEND_WEBHOOK_SECRET` | vazio por enquanto; preenchido na etapa 3.4 |
+| `ANTHROPIC_API_KEY` | opcional; chave da etapa 8. Sem ela, os recursos de IA do CRM aparecem desabilitados ("IA não configurada") e nada é enviado ao fornecedor |
+| `AI_MODEL` | opcional; deixe vazio para usar o modelo padrão (`src/config/ai.ts`) |
 
 Previews: o `ignoreCommand` do `vercel.json` cancela o build de qualquer branch que não seja `main` (06/10/2026). Motivo: cada push num branch de trabalho gerava um preview que falhava na validação das variáveis (Preview sem `DATABASE_URL`, `RESEND_API_KEY` e `CRON_SECRET`) e disparava e-mail de "Deployment failed". Para reativar previews, cadastre as variáveis também em Preview (o `BETTER_AUTH_URL` de preview exige tratar a URL variável do Vercel) e remova o `ignoreCommand`. Se um preview ainda for construído com o comando presente, confira em Settings, Environment Variables, se "Automatically expose System Environment Variables" está ligado.
 
@@ -98,3 +104,15 @@ O script cria o tenant `prospekto` e os usuários (a primeira pessoa é `owner`)
 | CRM | entrar, mover um lead de estágio, registrar atividade, exportar CSV |
 | Cron | `curl -H "Authorization: Bearer <CRON_SECRET>" "https://prospekto.com.br/api/cron/daily?force=1"` responde contagens em JSON |
 | Webhook | no Resend, "Send test event" para o endpoint responde 200 |
+
+## 8. IA no CRM (Claude API, opcional)
+
+Os recursos de IA (ADR-003) só funcionam com uma chave da Anthropic. Sem ela o CRM inteiro continua funcionando e os cartões de IA aparecem desabilitados com a explicação "IA não configurada".
+
+1. Conta em console.anthropic.com com a Daniela ou o Rafael como titular; em "Billing", cadastre um cartão e um crédito inicial pequeno (US$ 20 cobrem meses de uso previsto; ADR-003, seção 11) e um limite mensal de gasto.
+2. "API Keys", "Create Key" (nome `prospekto-producao`). Copie a chave uma única vez para o gerenciador de senhas; ela nunca vai para o repositório, para o chat nem para e-mail.
+3. No Vercel: Settings, Environment Variables, `ANTHROPIC_API_KEY` só em Production; "Redeploy" do último deploy. `AI_MODEL` fica vazio (modelo padrão em `src/config/ai.ts`).
+4. Conferir: abrir um lead, "Gerar briefing" responde em até um minuto; a execução aparece em `ai_runs` e no log do Vercel como "ia executada" (sem conteúdo, só contagens).
+5. Acompanhar o custo no painel "Usage" da Anthropic e, no banco, `select kind, count(*), sum(input_tokens), sum(output_tokens) from ai_runs where created_at >= date_trunc('month', now()) group by kind`. O teto é de 200 execuções por dia por tenant (`src/config/ai.ts`); passado o teto, os botões avisam e voltam no dia seguinte.
+6. Para desligar a IA: apagar a variável e fazer "Redeploy"; para trocar a chave, criar outra no console, substituir no Vercel, "Redeploy" e revogar a antiga.
+7. Em um mês, revisar o que o ADR-003, seção 13, lista: custo real, uso de cada recurso, qualidade dos rascunhos e se a Daniela quer os próximos passos (agente de voz e WhatsApp, fora de escopo até os pré-requisitos jurídicos).
