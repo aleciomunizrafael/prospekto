@@ -1,8 +1,10 @@
 "use client";
 
 import { useActionState, useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { toast } from "sonner";
 import { registerActivityAction } from "@/actions/crm-leads";
+import type { Notes } from "@/lib/ai/notes";
 import { initialCrmActionState, type CrmActionState } from "@/lib/crm/action-state";
 import { formatShortDay } from "@/lib/crm/describe-sla";
 import { fromDateTimeLocal, toDateTimeLocal } from "@/lib/crm/format";
@@ -46,11 +48,37 @@ function successMessage(type: ActivityKind, formData: FormData): string {
   return next ? `Contato registrado. Próxima ação: ${formatShortDay(next)}` : "Contato registrado.";
 }
 
+// Valores do formulário guardados antes de "Aplicar ao formulário", para o "Desfazer" (frente B).
+type FormSnapshot = { type: ActivityKind; subject: string; body: string; nextActionAt: string };
+
+type FormField = HTMLInputElement | HTMLTextAreaElement;
+
+function fieldOf(form: HTMLFormElement, name: string): FormField | null {
+  const el = form.elements.namedItem(name);
+  return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? el : null;
+}
+
+// Escreve num campo não controlado e dispara `input`: o DateHint e as DictationTools escutam.
+function writeField(form: HTMLFormElement, name: string, value: string) {
+  const el = fieldOf(form, name);
+  if (!el) return;
+  el.value = value;
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+// Texto que vai para "O que aconteceu": o resumo e, se houver, os combinados ao fim.
+export function notesBody(notes: Pick<Notes, "resumo" | "tarefas">): string {
+  if (!notes.tarefas.length) return notes.resumo;
+  return `${notes.resumo}\n\nCombinados: ${notes.tarefas.join("; ")}`;
+}
+
 // "Registrar atividade" (crm-design-system.md, seção 7.4): tipo em SegmentedControl, "O que
 // aconteceu" primeiro, datas com DateHint. Contato atualiza last_contact_at; a próxima ação é
 // sugerida pelo prazo do estágio e pode ser alterada; tarefa pede vencimento. `autoFocus` vem de
 // `?registrar=1`; `#registrar` na URL e o evento da ActionBarMobile também abrem a seção dobrada
-// (<details> do FormSection no celular) e focam o campo.
+// (<details> do FormSection no celular) e focam o campo. As DictationTools (ditar e organizar com
+// IA) só sugerem: "Aplicar ao formulário" preenche os campos para revisão e o registro continua
+// pelo botão "Registrar" (registerActivityAction).
 export function ActivityForm({
   leadId,
   segment,
@@ -79,6 +107,9 @@ export function ActivityForm({
   // Fixo por montagem: um defaultValue que muda a cada render faz o base-ui avisar e não ajuda.
   const [nowLocal] = useState(() => toDateTimeLocal(new Date(now)));
   const formRef = useRef<HTMLFormElement>(null);
+  // Remonta as DictationTools depois de registrar, para a sugestão anterior sumir com o formulário.
+  const [toolsKey, setToolsKey] = useState(0);
+  const snapshot = useRef<FormSnapshot | null>(null);
   const e = state.fieldErrors ?? {};
 
   useEffect(() => {
@@ -86,6 +117,8 @@ export function ActivityForm({
     const form = formRef.current;
     if (!form) return;
     form.reset();
+    snapshot.current = null;
+    setToolsKey((k) => k + 1);
     // Depois do reset, "Data e hora" volta para agora (sem trocar o defaultValue no React).
     const occurred = form.elements.namedItem("occurredAt");
     if (occurred instanceof HTMLInputElement) occurred.value = toDateTimeLocal(new Date());
@@ -121,6 +154,43 @@ export function ActivityForm({
     };
   }, [autoFocus, focusBody]);
 
+  // "Aplicar ao formulário": guarda o que estava preenchido, troca o tipo e escreve assunto, texto
+  // e próxima ação (09:00 do dia calculado no servidor, decisão P5). O tipo muda com flushSync
+  // porque o campo "Próxima ação" remonta ao alternar entre contato e nota.
+  const applyNotes = useCallback(
+    (notes: Notes) => {
+      const form = formRef.current;
+      if (!form) return;
+      snapshot.current ??= {
+        type,
+        subject: fieldOf(form, "subject")?.value ?? "",
+        body: fieldOf(form, "body")?.value ?? "",
+        nextActionAt: fieldOf(form, "nextActionAt")?.value ?? "",
+      };
+      flushSync(() => setType(notes.tipo));
+      writeField(form, "subject", notes.assunto);
+      writeField(form, "body", notesBody(notes));
+      if (notes.proximaAcao) {
+        writeField(form, "nextActionAt", toDateTimeLocal(new Date(notes.proximaAcao.at)));
+      }
+      fieldOf(form, "body")?.focus();
+    },
+    [type],
+  );
+
+  // "Desfazer": restaura o texto ditado ou colado e os demais campos como estavam.
+  const undoNotes = useCallback(() => {
+    const form = formRef.current;
+    const previous = snapshot.current;
+    if (!form || !previous) return;
+    snapshot.current = null;
+    flushSync(() => setType(previous.type));
+    writeField(form, "subject", previous.subject);
+    writeField(form, "body", previous.body);
+    writeField(form, "nextActionAt", previous.nextActionAt);
+    fieldOf(form, "body")?.focus();
+  }, []);
+
   const isContact = CONTACT_TYPES.has(type);
   const isTask = type === "tarefa";
   const suggested = suggestedNextActionAt ? toDateTimeLocal(new Date(suggestedNextActionAt)) : "";
@@ -130,10 +200,13 @@ export function ActivityForm({
       <input type="hidden" name="leadId" value={leadId} />
       <FormMessage status={state.status === "error" ? "error" : "idle"} message={state.message} />
       <DictationTools
+        key={toolsKey}
         leadId={leadId}
         segment={segment}
         enabled={aiEnabled}
         textareaId={ids("body").id}
+        onOrganized={applyNotes}
+        onUndo={undoNotes}
       />
       <SegmentedControl
         name="type"
