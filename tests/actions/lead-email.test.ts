@@ -222,6 +222,42 @@ describe("sendLeadReplyAction", () => {
     }
   });
 
+  it("o mesmo rascunho com o mesmo texto não sai duas vezes; editado, sai", async () => {
+    const lead = await makeLead(ctx, { email: "reenvio@example.test", consent: true });
+    const [run] = await db
+      .insert(aiRuns)
+      .values({
+        tenantId: ctx.tenantId,
+        kind: "reply",
+        leadId: lead.id,
+        model: "claude-opus-5-5",
+        status: "ok",
+        output: { assunto: "x", texto: TEXT, perguntas_incluidas: [], horarios_incluidos: [] },
+      })
+      .returning();
+    const send = (text: string) =>
+      sendLeadReplyAction(
+        initialCrmActionState,
+        fd({ leadId: lead.id, subject: "Assunto", text, slotIso: SLOT, runId: run.id }),
+      );
+    expect((await send(TEXT)).status).toBe("ok");
+    email.last = null;
+
+    // Segundo clique (ou recarregamento da página) com o texto idêntico, inclusive espaços.
+    expect(await send(`  ${TEXT}\n`)).toEqual({
+      status: "error",
+      message:
+        "Este e-mail já foi enviado para o lead. Edite o texto ou gere de novo para enviar outro.",
+    });
+    expect(email.last).toBeNull();
+    expect(await listActivities(ctx, { leadId: lead.id, type: "email" })).toHaveLength(1);
+
+    // Texto revisado é outro e-mail.
+    expect((await send(`${TEXT} Obrigada.`)).status).toBe("ok");
+    expect(email.last).not.toBeNull();
+    expect(await listActivities(ctx, { leadId: lead.id, type: "email" })).toHaveLength(2);
+  });
+
   it("sem runId a atividade fica como escrita à mão (ai: false) e sem próxima ação", async () => {
     const lead = await makeLead(ctx, { email: "manual@example.test", consent: true });
     const result = await sendLeadReplyAction(

@@ -213,6 +213,36 @@ export function proposeSlots(now: Date, config: Partial<SlotConfig> = {}): AiSlo
   return slots;
 }
 
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Rascunho gravado em outro dia: ai_runs guarda só os rótulos que entraram no texto
+// (horarios_incluidos), não os ISO. Para o texto, a linha "Horários propostos" e a próxima ação
+// baterem, troca cada rótulo antigo pelo de hoje, na mesma posição, numa passagem só e sem
+// distinguir caixa (como ensureSlots em reply.ts). Só troca quando há o mesmo número de rótulos e
+// todos estão no texto; senão devolve o texto intacto com replaced = false, e o cartão avisa que
+// os horários podem ter passado em vez de marcar uma hora que não está no texto.
+export function refreshSlotLabels(
+  texto: string,
+  oldLabels: string[],
+  slots: AiSlot[],
+): { texto: string; horarios: string[]; replaced: boolean } {
+  const keep = { texto, horarios: oldLabels, replaced: false };
+  if (!oldLabels.length || oldLabels.length !== slots.length) return keep;
+  const lower = texto.toLocaleLowerCase("pt-BR");
+  const byLabel = new Map<string, string>();
+  for (const [i, old] of oldLabels.entries()) {
+    const key = old.toLocaleLowerCase("pt-BR");
+    if (!key || !lower.includes(key)) return keep;
+    byLabel.set(key, slots[i].label);
+  }
+  const pattern = new RegExp(oldLabels.map(escapeRegExp).join("|"), "gi");
+  const replaced = texto.replace(
+    pattern,
+    (match) => byLabel.get(match.toLocaleLowerCase("pt-BR")) ?? match,
+  );
+  return { texto: replaced, horarios: slots.map((s) => s.label), replaced: true };
+}
+
 // Texto fixo (sem data, nome ou id) que entra no system prompt dos recursos: mecanismos,
 // desqualificações, ressalvas e objeções com resposta curta (personas-e-funis.md, 3.1 e 5.1).
 export function qualificationRules(): string {

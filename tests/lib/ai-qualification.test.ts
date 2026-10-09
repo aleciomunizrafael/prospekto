@@ -2,7 +2,12 @@
 // propostos em America/Sao_Paulo e o texto fixo de regras.
 import { describe, expect, it } from "vitest";
 import { LEAD_SEGMENTS } from "@/lib/domain/enums";
-import { proposeSlots, qualificationQuestions, qualificationRules } from "@/lib/ai/qualification";
+import {
+  proposeSlots,
+  qualificationQuestions,
+  qualificationRules,
+  refreshSlotLabels,
+} from "@/lib/ai/qualification";
 
 const SP = "America/Sao_Paulo";
 
@@ -108,5 +113,56 @@ describe("qualificationRules", () => {
     expect(text).toMatch(/retorno financeiro/);
     expect(text).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
     expect(text).not.toMatch(/Hoje é/);
+  });
+});
+
+describe("refreshSlotLabels", () => {
+  // Rascunho de sexta 09/10/2026 aberto na segunda 12/10 às 11h de São Paulo.
+  const OLD = ["segunda-feira, 12 de outubro, às 10h", "terça-feira, 13 de outubro, às 15h"];
+  const slots = proposeSlots(new Date("2026-10-12T14:00:00Z"));
+  const NEW = ["terça-feira, 13 de outubro, às 10h", "quarta-feira, 14 de outubro, às 15h"];
+  const texto = `Olá.\n\nTenho horários ${OLD[0]} e ${OLD[1]}. Qual prefere?\n\nDaniela`;
+
+  it("troca cada rótulo antigo pelo de hoje na mesma posição", () => {
+    expect(slots.map((s) => s.label)).toEqual(NEW);
+    const out = refreshSlotLabels(texto, OLD, slots);
+    expect(out.replaced).toBe(true);
+    expect(out.texto).toBe(
+      `Olá.\n\nTenho horários ${NEW[0]} e ${NEW[1]}. Qual prefere?\n\nDaniela`,
+    );
+    expect(out.horarios).toEqual(NEW);
+  });
+
+  it("não distingue caixa e troca todas as ocorrências numa passagem só", () => {
+    const upper = `Confirmo ${OLD[0].toUpperCase()}? Ou ${OLD[1]}; repito: ${OLD[0]}.`;
+    const out = refreshSlotLabels(upper, OLD, slots);
+    expect(out.replaced).toBe(true);
+    expect(out.texto).toBe(`Confirmo ${NEW[0]}? Ou ${NEW[1]}; repito: ${NEW[0]}.`);
+    // Quando um rótulo novo coincide com um antigo (quinta → sexta propõe segunda 13 às 15h e o
+    // texto antigo tinha segunda 13 às 15h), a troca não encadeia.
+    const chained = refreshSlotLabels(
+      `Tenho ${NEW[0]} e ${OLD[1]}.`,
+      [NEW[0], OLD[1]],
+      [
+        { iso: "x", label: OLD[1] },
+        { iso: "y", label: "quinta-feira, 15 de outubro, às 15h" },
+      ],
+    );
+    expect(chained.texto).toBe(`Tenho ${OLD[1]} e quinta-feira, 15 de outubro, às 15h.`);
+  });
+
+  it("sem todos os rótulos no texto, ou com contagem diferente, devolve o texto intacto", () => {
+    const missing = refreshSlotLabels("Podemos falar amanhã às 10h?", OLD, slots);
+    expect(missing).toEqual({
+      texto: "Podemos falar amanhã às 10h?",
+      horarios: OLD,
+      replaced: false,
+    });
+    const partial = refreshSlotLabels(`Tenho ${OLD[0]}.`, OLD, slots);
+    expect(partial.replaced).toBe(false);
+    expect(partial.texto).toBe(`Tenho ${OLD[0]}.`);
+    expect(refreshSlotLabels(texto, [OLD[0]], slots).replaced).toBe(false);
+    expect(refreshSlotLabels(texto, [], slots)).toEqual({ texto, horarios: [], replaced: false });
+    expect(refreshSlotLabels(texto, OLD, []).replaced).toBe(false);
   });
 });

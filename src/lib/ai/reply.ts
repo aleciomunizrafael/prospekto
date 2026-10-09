@@ -278,3 +278,20 @@ export function normalizeReply(
     horarios_incluidos: cleanList(r.horarios_incluidos),
   };
 }
+
+// Atividade de e-mail que já saiu com este rascunho: sendLeadReplyAction grava data.runId na
+// atividade `email` (lead-email.ts). A página passa o instante ao cartão para "Enviar por e-mail"
+// não voltar habilitado depois de recarregar. `activities` vem do repositório, mais recentes
+// primeiro; devolve o `occurredAt` da mais recente com o mesmo runId, ou null.
+export function replySentAt(
+  activities: { type: string; data: Record<string, unknown> | null; occurredAt: Date }[],
+  runId: string | null,
+): Date | null {
+  if (!runId) return null;
+  let latest: Date | null = null;
+  for (const a of activities) {
+    if (a.type !== "email" || a.data?.runId !== runId) continue;
+    if (!latest || a.occurredAt.getTime() > latest.getTime()) latest = a.occurredAt;
+  }
+  return latest;
+}

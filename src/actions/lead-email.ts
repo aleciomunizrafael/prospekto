@@ -15,6 +15,7 @@ import { formDataToStrings, type CrmActionState } from "@/lib/crm/action-state";
 import { sendEmail } from "@/lib/email/send";
 import { renderLeadReply } from "@/lib/email/templates/lead-reply";
 import { log } from "@/lib/log";
+import { listActivities } from "@/lib/repos/activities";
 import { consentAllows, getCurrentConsent } from "@/lib/repos/consents";
 import { getLeadDetail, recordLeadActivity } from "@/lib/repos/leads";
 import { requireSession } from "@/lib/session";
@@ -79,6 +80,17 @@ export async function sendLeadReplyAction(
   if (!consentAllows(consent, "email")) return fail(EMAIL_BLOCK_MESSAGES.no_email_channel);
   if (lead.emailStatus === "bounced") return fail(EMAIL_BLOCK_MESSAGES.email_bounced);
   if (lead.emailStatus === "complained") return fail(EMAIL_BLOCK_MESSAGES.email_complained);
+  // O mesmo rascunho (runId) com o mesmo texto já saiu: o cartão esconde o botão depois do envio
+  // e ao recarregar, mas a guarda que vale é esta. Texto editado é outro e-mail.
+  if (d.runId) {
+    const sent = await listActivities(ctx, { leadId: lead.id, type: "email", limit: 50 });
+    const same = sent.some((a) => a.data?.runId === d.runId && (a.body ?? "").trim() === d.text);
+    if (same) {
+      return fail(
+        "Este e-mail já foi enviado para o lead. Edite o texto ou gere de novo para enviar outro.",
+      );
+    }
+  }
 
   const rendered = renderLeadReply({ subject: d.subject, body: d.text });
   // sendEmail registra só templateId e leadId no log, nunca o endereço nem o assunto (R-16).

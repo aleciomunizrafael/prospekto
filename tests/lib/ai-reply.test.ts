@@ -13,6 +13,7 @@ import {
   WHATSAPP_SIGNATURE,
   normalizeReply,
   replySchema,
+  replySentAt,
   replyUserMessage,
   stripUrls,
   type Reply,
@@ -338,5 +339,56 @@ describe("stripUrls", () => {
       "Pode ver no App.Me amanhã, p.ex. na Ltda.ME.",
     );
     expect(stripUrls("Acesse HTTPS://Exemplo.COM/x agora.")).toBe("Acesse agora.");
+  });
+});
+
+describe("replySentAt", () => {
+  const RUN = "00000000-0000-4000-8000-0000000000aa";
+  const OTHER = "00000000-0000-4000-8000-0000000000bb";
+  const at = (iso: string) => new Date(iso);
+  const activities = [
+    { type: "whatsapp", data: { ai: true, runId: RUN }, occurredAt: at("2026-10-09T16:00:00Z") },
+    {
+      type: "email",
+      data: { ai: true, runId: OTHER, mode: "log" },
+      occurredAt: at("2026-10-09T15:00:00Z"),
+    },
+    {
+      type: "email",
+      data: { ai: true, runId: RUN, mode: "resend" },
+      occurredAt: at("2026-10-09T14:00:00Z"),
+    },
+    { type: "email", data: null, occurredAt: at("2026-10-09T13:00:00Z") },
+    {
+      type: "email",
+      data: { ai: true, runId: RUN, mode: "log" },
+      occurredAt: at("2026-10-08T10:00:00Z"),
+    },
+  ];
+
+  it("devolve o instante da atividade de e-mail mais recente com o runId", () => {
+    expect(replySentAt(activities, RUN)?.toISOString()).toBe("2026-10-09T14:00:00.000Z");
+    // Ordem do repositório não é pré-requisito.
+    expect(replySentAt([...activities].reverse(), RUN)?.toISOString()).toBe(
+      "2026-10-09T14:00:00.000Z",
+    );
+  });
+
+  it("ignora outro runId, atividade sem data e WhatsApp; null sem runId", () => {
+    expect(replySentAt(activities, "00000000-0000-4000-8000-0000000000cc")).toBeNull();
+    expect(
+      replySentAt(
+        activities.filter((a) => a.type === "whatsapp"),
+        RUN,
+      ),
+    ).toBeNull();
+    expect(
+      replySentAt(
+        activities.filter((a) => a.data === null),
+        RUN,
+      ),
+    ).toBeNull();
+    expect(replySentAt(activities, null)).toBeNull();
+    expect(replySentAt([], RUN)).toBeNull();
   });
 });

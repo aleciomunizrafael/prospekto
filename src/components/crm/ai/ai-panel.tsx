@@ -24,6 +24,8 @@ export type AiPanelProps = {
   lead: AiPanelLead;
   initialBrief: AiRunSnapshot | null;
   initialReply: AiRunSnapshot | null;
+  // Instante (ISO) em que `initialReply` já saiu por e-mail (replySentAt na página), ou null.
+  initialReplySentAt: string | null;
   slots: AiSlot[];
   canEmail: boolean;
   emailBlockReason: EmailBlockReason;
@@ -42,6 +44,7 @@ export function AiPanel({
   lead,
   initialBrief,
   initialReply,
+  initialReplySentAt,
   slots,
   canEmail,
   emailBlockReason,
@@ -64,6 +67,7 @@ export function AiPanel({
         lead={lead}
         enabled={enabled}
         initial={initialReply}
+        initialSentAt={initialReplySentAt}
         slots={slots}
         canEmail={canEmail}
         emailBlockReason={emailBlockReason}

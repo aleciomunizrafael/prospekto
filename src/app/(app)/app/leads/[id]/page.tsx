@@ -36,6 +36,7 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/componen
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { isAiEnabled } from "@/lib/ai/client";
 import { proposeSlots } from "@/lib/ai/qualification";
+import { replySentAt } from "@/lib/ai/reply";
 import type { AiRunSnapshot, EmailBlockReason } from "@/lib/ai/types";
 import { ATTRIBUTE_FIELDS, type AttributeField } from "@/lib/crm/attributes";
 import {
@@ -198,6 +199,8 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
   // contato comercial que inclua o canal e-mail e endereço com status ok (decisão P6).
   const aiEnabled = isAiEnabled();
   const slots = proposeSlots(now);
+  // E-mail que já saiu com o último rascunho: o cartão não oferece o mesmo envio de novo.
+  const latestReplySentAt = latestReply ? replySentAt(activities, latestReply.id) : null;
   const emailBlockReason: EmailBlockReason = !consentAllows(contactConsent)
     ? "no_consent"
     : !consentAllows(contactConsent, "email")
@@ -545,6 +548,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
         lead={aiLead}
         initialBrief={aiSnapshot(latestBrief)}
         initialReply={aiSnapshot(latestReply)}
+        initialReplySentAt={latestReplySentAt ? latestReplySentAt.toISOString() : null}
         slots={slots}
         canEmail={emailBlockReason === null}
         emailBlockReason={emailBlockReason}
