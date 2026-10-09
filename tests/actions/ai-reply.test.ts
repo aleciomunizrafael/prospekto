@@ -3,7 +3,7 @@
 // pelo teste; a chave entra por vi.stubEnv e o módulo é recarregado (src/env.ts lê process.env ao
 // importar), como em tests/lib/ai-client.test.ts.
 import { eq } from "drizzle-orm";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AI_MAX_TOKENS } from "@/config/ai";
 import { proposeSlots } from "@/lib/ai/qualification";
 import {
@@ -81,8 +81,13 @@ const PHONE_DISPLAY = "(54) 98403-2180";
 const CNPJ = "55667788000186";
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
-// Os horários que a action vai propor (mesmo dia civil do teste).
-const slots = proposeSlots(new Date());
+// Relógio fixo, só Date (setTimeout e afins seguem reais para o PGlite e o SDK simulado): a
+// action chama proposeSlots(new Date()) a cada execução e os rótulos abaixo entram nos textos de
+// exemplo, então uma virada do dia civil em São Paulo entre a importação e o teste trocaria os
+// horários. Mesma data de tests/lib/ai-reply.test.ts.
+const NOW = new Date("2026-10-09T19:00:00Z"); // sexta-feira, 16:00 em São Paulo
+vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+const slots = proposeSlots(NOW);
 const [A, B] = slots.map((s) => s.label);
 
 const emailOutput: Reply = {
@@ -170,6 +175,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+afterAll(() => {
+  vi.useRealTimers();
+});
+
 async function runsOfLead() {
   return db.select().from(aiRuns).where(eq(aiRuns.leadId, leadId));
 }
@@ -218,7 +227,8 @@ describe("generateReplyAction", () => {
     expect(params.messages).toHaveLength(1);
     expect(params.messages[0].role).toBe("user");
     const user: string = params.messages[0].content;
-    expect(user.startsWith("Hoje é ")).toBe(true);
+    // A action usou o relógio fixo: a data da mensagem e, logo, os horários batem com `slots`.
+    expect(user.startsWith("Hoje é sexta-feira, 09/10/2026.")).toBe(true);
     expect(user).toContain("CANAL: e-mail");
     // Lead novo e sem contato: o prompt pede a apresentação.
     expect(user).toContain("PRIMEIRO CONTATO: sim");
