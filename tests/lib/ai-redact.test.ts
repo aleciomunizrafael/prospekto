@@ -54,10 +54,28 @@ describe("scrubText", () => {
     expect(scrubText(`CNPJ ${CNPJ}`, { keepCnpj: true })).toContain(CNPJ);
   });
 
-  it("não mexe em valores e datas comuns e corta em 8.000 caracteres", () => {
-    expect(scrubText("R$ 30.000,00 em 20/10/2026, processo 2026-1234")).toBe(
-      "R$ 30.000,00 em 20/10/2026, processo 2026-1234",
+  it("mascara telefone sem DDD e com ponto depois do 9", () => {
+    expect(scrubText("me liga no 98403-2180 depois das 14h")).toBe(
+      "me liga no [telefone] depois das 14h",
     );
+    expect(scrubText("celular 984032180 ou fixo 3221-4567")).toBe(
+      "celular [telefone] ou fixo [telefone]",
+    );
+    expect(scrubText("whats 54 9.8403.2180")).toBe("whats [telefone]");
+  });
+
+  it("não mexe em valores e datas comuns e corta em 8.000 caracteres", () => {
+    for (const text of [
+      "R$ 30.000,00 em 20/10/2026, processo 2026-1234",
+      "R$ 1.500.000,00",
+      "2026-10-09 10:30",
+      "entre 2026-2027",
+      "pedido 12345678",
+      "CEP 95020-170",
+      "nota fiscal 1234-5678",
+    ]) {
+      expect(scrubText(text)).toBe(text);
+    }
     expect(scrubText("x".repeat(9000))).toHaveLength(8000);
   });
 });
@@ -273,6 +291,8 @@ describe("renderLeadContext", () => {
     const text = renderLeadContext(buildLeadContext(input), "brief");
     expect(text).toContain("LEAD\nNome: Rodrigo Pasqualotto");
     expect(text).toContain("Responsável: Daniela");
+    expect(text).toContain("Próxima ação marcada:");
+    expect(text).toContain("Último contato:");
     expect(text).toContain("CAMPOS DO SEGMENTO");
     expect(text).toContain("MENSAGEM DO FORMULÁRIO");
     expect(text).toContain("HISTÓRICO (mais recente primeiro)");
@@ -305,6 +325,8 @@ describe("renderLeadContext", () => {
     expect(text).toContain("SIMULAÇÃO MAIS RECENTE");
     expect(text).not.toContain("APORTES");
     expect(text).not.toContain("Responsável");
+    expect(text).not.toContain("Próxima ação marcada");
+    expect(text).not.toContain("Último contato");
     expect(text.match(/^- \d{2}\/\d{2}\/\d{4}/gm)).toHaveLength(5);
   });
 
@@ -321,6 +343,7 @@ describe("renderLeadContext", () => {
     expect(text).toContain("MENSAGEM DO FORMULÁRIO\nnão informado");
     expect(text).toContain("nenhuma simulação");
     expect(text).toContain("APORTES EM ABERTO\nnenhum");
+    expect(text).toContain("Próxima ação marcada: não informado");
     expect(text).toContain("Responsável: não informado");
   });
 });

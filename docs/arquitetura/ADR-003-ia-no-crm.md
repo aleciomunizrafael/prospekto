@@ -60,6 +60,7 @@ A montagem do contexto é uma função pura, `buildLeadContext(detail, extras)` 
 | Consentimentos | estado vigente por finalidade | sim | não | sim | "contato comercial: autorizado em 06/10/2026 por e-mail; marketing: nunca registrado" (sem o texto integral) |
 | Aportes abertos | `contributions` do lead | sim | não | não | projeto, status e valor proposto |
 | Nome do responsável | `users.name` | primeiro nome | não | não | texto |
+| Próxima ação marcada e último contato | `leads.next_action_at`, `leads.last_contact_at` | sim | não | não | data e hora (`formatDateTime`) |
 | Data de hoje e dia da semana | servidor | sim | sim | sim | sempre na mensagem de usuário, nunca no system prompt (cache) |
 | Horários propostos | `proposeSlots()` em `qualification.ts` | não | não | sim | dois horários prontos, por extenso |
 | Texto ditado ou colado | textarea | não | sim, depois de `scrubText` com CNPJ **preservado** | não | texto |

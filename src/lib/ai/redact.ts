@@ -38,10 +38,16 @@ const NOT_INFORMED = "não informado";
 const EMAIL_RE = /[^\s<>@"'`(),;:]+@(?:[^\s<>@"'`(),;:.]+\.)+[\p{L}\p{N}-]{2,}/gu;
 const CNPJ_RE = /\b\d{2}\.?\d{3}\.?\d{3}\/\d{4}-?\d{2}\b|\b\d{14}\b/g;
 const CPF_RE = /\b\d{3}\.\d{3}\.\d{3}-\d{2}\b|\b\d{3}\.?\d{3}\.?\d{3}-\d{2}\b|\b\d{11}\b/g;
-// Telefone brasileiro: +55 opcional (colado ou separado), DDD com ou sem parênteses, 8 ou 9 dígitos
-// com separador opcional ("(54) 98403-2180", "54 98403-2180", "+55 54 98403 2180", "54984032180"
-// e "+5554984032180", o E.164 gravado no CRM). Nunca começa nem termina no meio de um número.
-const PHONE_RE = /(?<!\d)(?:\+?55[\s.-]?)?\(?\d{2}\)?[\s.-]?(?:9\s?\d{4}|\d{4})[\s.-]?\d{4}(?!\d)/g;
+// Telefone brasileiro, em três formas. (a) Com DDD: +55 opcional (colado ou separado), DDD com ou
+// sem parênteses, 8 ou 9 dígitos com separador opcional, inclusive depois do 9 ("(54) 98403-2180",
+// "54 98403-2180", "+55 54 98403 2180", "54 9.8403.2180", "54984032180" e "+5554984032180", o E.164
+// gravado no CRM). (b) Sem DDD, celular de 9 dígitos iniciado por 9 ("98403-2180", "984032180"),
+// comum em mensagem de lead da mesma região. (c) Sem DDD, fixo de 8 dígitos só com hífen e iniciado
+// por 3 a 5 ("3221-4567"): deixa passar anos e intervalos ("2026-1234", "2026-2027"), notas fiscais
+// ("1234-5678") e fixos sem separador ("32214567", ambíguos com pedidos e valores). Nunca começa
+// nem termina no meio de um número.
+const PHONE_RE =
+  /(?<!\d)(?:(?:\+?55[\s.-]?)?\(?\d{2}\)?[\s.-]?(?:9[\s.-]?\d{4}|\d{4})[\s.-]?\d{4}|9[\s.-]?\d{4}[\s.-]?\d{4}|[3-5]\d{3}-\d{4})(?!\d)/g;
 
 export function scrubText(text: string, options: { keepCnpj?: boolean } = {}): string {
   let out = text.slice(0, SCRUB_MAX_CHARS);
@@ -292,11 +298,17 @@ export function renderLeadContext(ctx: LeadContext, mode: LeadContextMode): stri
       line("Origem", ctx.origem),
       line("Temperatura e score", `${ctx.temperatura}, score ${ctx.score}`),
       line("Tags", ctx.tags.length ? ctx.tags.join(", ") : "nenhuma"),
-      line("Próxima ação marcada", ctx.proximaAcao),
-      line("Último contato", ctx.ultimoContato),
     );
   }
-  if (mode === "brief") identity.push(line("Responsável", ctx.responsavel));
+  // Datas de agenda só no briefing (ADR-003, 5.1): na resposta ao lead os horários vêm prontos de
+  // proposeSlots e a frase de primeiro contato é garantida no código, não pelo modelo.
+  if (mode === "brief") {
+    identity.push(
+      line("Próxima ação marcada", ctx.proximaAcao),
+      line("Último contato", ctx.ultimoContato),
+      line("Responsável", ctx.responsavel),
+    );
+  }
   blocks.push(`LEAD\n${identity.join("\n")}`);
 
   const campos = ctx.campos.length
