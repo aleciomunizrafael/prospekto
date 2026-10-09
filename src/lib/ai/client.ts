@@ -10,9 +10,9 @@ import type { z } from "zod";
 import { AI_DAILY_LIMIT, AI_DEADLINE_MS, AI_DEFAULT_MODEL, AI_MAX_TOKENS } from "@/config/ai";
 import { env } from "@/env";
 import { log } from "@/lib/log";
-import { countAiRunsToday, insertAiRun } from "@/lib/repos/ai-runs";
+import { finishAiRun, reserveAiRun } from "@/lib/repos/ai-runs";
 import type { Ctx } from "@/lib/repos/ctx";
-import { aiFailure, type AiEffort, type AiKind, type AiResult, type AiRunStatus } from "./types";
+import { aiFailure, type AiEffort, type AiKind, type AiResult } from "./types";
 
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 // Cabeçalho que `client.beta.messages.parse` acrescentaria sozinho (resources/beta/messages/
@@ -60,7 +60,8 @@ export type RunStructuredInput<S extends z.ZodObject<z.ZodRawShape>> = {
 };
 
 type Classified<T> =
-  { status: "ok"; parsed: T } | { status: Exclude<AiRunStatus, "ok" | "error">; parsed: null };
+  | { status: "ok"; parsed: T }
+  | { status: "refusal" | "max_tokens" | "invalid_output"; parsed: null };
 
 // Classificação por stop_reason (ADR-003, 7.4) e validação do JSON pelo esquema feita aqui, e não
 // por `client.beta.messages.parse`: o parse do SDK lança AnthropicError (que não é APIError) quando
@@ -95,9 +96,19 @@ export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
   const api = getClient();
   if (!api) return aiFailure("disabled");
   const { kind, leadId, effort } = input;
-  if ((await countAiRunsToday(ctx, new Date())) >= AI_DAILY_LIMIT) return aiFailure("quota");
-
   const model = aiModel();
+  // Reserva atômica dentro do teto diário, antes da chamada (linha "pending"): checar a contagem e
+  // só gravar depois deixava uma rajada concorrente passar inteira no limite (ADR-003, 7.2).
+  const runId = await reserveAiRun(ctx, {
+    kind,
+    leadId,
+    model,
+    limit: AI_DAILY_LIMIT,
+    now: new Date(),
+    createdBy: ctx.userId ?? null,
+  });
+  if (!runId) return aiFailure("quota");
+
   const started = performance.now();
   try {
     const response = await api.beta.messages.create(
@@ -122,9 +133,7 @@ export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
     const fallback = (response.usage.iterations ?? []).some((i) => i.type === "fallback_message");
     const parsed = raw != null && input.normalize ? input.normalize(raw) : raw;
     const usage = response.usage;
-    const run = await insertAiRun(ctx, {
-      kind,
-      leadId,
+    await finishAiRun(ctx, runId, {
       model: response.model,
       status,
       inputTokens: usage.input_tokens,
@@ -143,7 +152,6 @@ export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
         // prefixo abaixo do mínimo (cache_read = 0 nos dois).
         cacheCreation: usage.cache_creation_input_tokens ?? 0,
       },
-      createdBy: ctx.userId ?? null,
     });
     // Contagens de tokens com chaves sem "token": src/lib/log.ts redige toda chave que contenha
     // essa palavra (R-16), e aqui são só números de uso.
@@ -162,7 +170,7 @@ export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
     });
     if (status !== "ok" || parsed == null)
       return aiFailure(status === "ok" ? "invalid_output" : status);
-    return { ok: true, data: parsed, runId: run.id, model: response.model };
+    return { ok: true, data: parsed, runId, model: response.model };
   } catch (error) {
     const durationMs = Math.round(performance.now() - started);
     // Classes tipadas do SDK por instanceof, nunca por texto da mensagem; a mensagem bruta não
@@ -177,14 +185,11 @@ export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
       log("error", "falha na ia", { tenantId: ctx.tenantId, kind, leadId, httpStatus, durationMs });
     }
     try {
-      await insertAiRun(ctx, {
-        kind,
-        leadId,
+      await finishAiRun(ctx, runId, {
         model,
         status: "error",
         durationMs,
         data: { ...input.data, effort, fallback: false, stopDetailsCategory: null, httpStatus },
-        createdBy: ctx.userId ?? null,
       });
     } catch {
       log("error", "falha ao registrar a execução da ia", { tenantId: ctx.tenantId, kind, leadId });

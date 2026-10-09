@@ -21,7 +21,7 @@ export const aiRuns = pgTable(
     kind: text().notNull(), // brief | notes | reply
     leadId: uuid().references(() => leads.id),
     model: text().notNull(), // o modelo que respondeu (muda quando há fallback)
-    status: text().notNull(), // ok | refusal | max_tokens | invalid_output | error
+    status: text().notNull(), // pending (reservada) | ok | refusal | max_tokens | invalid_output | error
     inputTokens: integer().notNull().default(0),
     outputTokens: integer().notNull().default(0),
     cacheReadInputTokens: integer().notNull().default(0),

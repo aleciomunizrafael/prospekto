@@ -5,8 +5,17 @@ import { AI_DAILY_LIMIT } from "@/config/ai";
 export const AI_KINDS = ["brief", "notes", "reply"] as const;
 export type AiKind = (typeof AI_KINDS)[number];
 
-// Estado gravado em ai_runs.status (seção 7.4).
-export const AI_RUN_STATUSES = ["ok", "refusal", "max_tokens", "invalid_output", "error"] as const;
+// Estado gravado em ai_runs.status (seção 7.4). "pending" é a linha reservada dentro do teto diário
+// antes da chamada ao modelo (reserveAiRun); finishAiRun a troca por um dos outros. Nunca é motivo
+// de falha para a tela (AiFailureReason), e getLatestAiRun só lê "ok".
+export const AI_RUN_STATUSES = [
+  "pending",
+  "ok",
+  "refusal",
+  "max_tokens",
+  "invalid_output",
+  "error",
+] as const;
 export type AiRunStatus = (typeof AI_RUN_STATUSES)[number];
 
 export type AiEffort = "low" | "medium";

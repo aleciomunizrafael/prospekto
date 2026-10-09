@@ -380,20 +380,37 @@ describe("runStructured: normalize e data", () => {
 });
 
 describe("runStructured: teto diário", () => {
+  const row = (ctx: Ctx, createdAt: Date) => ({
+    tenantId: ctx.tenantId,
+    kind: "brief",
+    leadId: null,
+    model: "claude-opus-5-5",
+    status: "ok",
+    createdAt,
+  });
+
+  it("a linha é reservada como pending antes da chamada e completada depois", async () => {
+    const own = await makeTenant();
+    let duringCall: string[] = [];
+    sdk.create.mockImplementation(async () => {
+      duringCall = (await runsOf(own)).map((r) => r.status);
+      return response();
+    });
+    const { runStructured } = await loadClient();
+    const result = await runStructured(own, { ...baseInput, leadId: null });
+    expect(duringCall).toEqual(["pending"]);
+    const runs = await runsOf(own);
+    expect(runs).toHaveLength(1);
+    expect(runs[0].status).toBe("ok");
+    expect(result.ok && result.runId).toBe(runs[0].id);
+  });
+
   it("200 execuções de hoje bloqueiam sem chamar; as de ontem não contam", async () => {
     const own = await makeTenant();
     const now = new Date();
     const yesterday = new Date(now.getTime() - 24 * 60 * 60_000);
-    const row = (createdAt: Date) => ({
-      tenantId: own.tenantId,
-      kind: "brief",
-      leadId: null,
-      model: "claude-opus-5-5",
-      status: "ok",
-      createdAt,
-    });
-    await db.insert(aiRuns).values(Array.from({ length: 199 }, () => row(now)));
-    await db.insert(aiRuns).values(Array.from({ length: 5 }, () => row(yesterday)));
+    await db.insert(aiRuns).values(Array.from({ length: 199 }, () => row(own, now)));
+    await db.insert(aiRuns).values(Array.from({ length: 5 }, () => row(own, yesterday)));
     sdk.create.mockResolvedValue(response());
     const { runStructured } = await loadClient();
     const first = await runStructured(own, { ...baseInput, leadId: null });
@@ -407,6 +424,27 @@ describe("runStructured: teto diário", () => {
     });
     expect(sdk.create).toHaveBeenCalledTimes(1);
     expect(await runsOf(own)).toHaveLength(205);
+  });
+
+  it("teto diário segura rajada concorrente: no limite, só uma de cinco chamadas simultâneas passa", async () => {
+    const own = await makeTenant();
+    await db.insert(aiRuns).values(Array.from({ length: 199 }, () => row(own, new Date())));
+    // Chamada lenta: antes da reserva atômica, as cinco passavam pela contagem e o parse era
+    // chamado cinco vezes (204 linhas).
+    sdk.create.mockImplementation(
+      () => new Promise((resolve) => setTimeout(() => resolve(response()), 50)),
+    );
+    const { runStructured } = await loadClient();
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => runStructured(own, { ...baseInput, leadId: null })),
+    );
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.filter((r) => !r.ok && r.reason === "quota")).toHaveLength(4);
+    expect(sdk.create).toHaveBeenCalledTimes(1);
+    const runs = await runsOf(own);
+    expect(runs).toHaveLength(200);
+    expect(runs.filter((r) => r.status === "pending")).toHaveLength(0);
+    expect(runs.filter((r) => r.status === "ok")).toHaveLength(200);
   });
 });
 

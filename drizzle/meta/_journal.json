@@ -15,6 +15,13 @@
       "when": 1791571744396,
       "tag": "0001_ambitious_eternals",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791584618106,
+      "tag": "0002_awesome_katie_power",
+      "breakpoints": true
     }
   ]
 }

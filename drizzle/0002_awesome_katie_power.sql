@@ -1,0 +1,2 @@
+ALTER TABLE "ai_runs" DROP CONSTRAINT "ai_runs_status_check";--> statement-breakpoint
+ALTER TABLE "ai_runs" ADD CONSTRAINT "ai_runs_status_check" CHECK ("ai_runs"."status" in ('pending', 'ok', 'refusal', 'max_tokens', 'invalid_output', 'error'));

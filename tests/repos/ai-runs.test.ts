@@ -4,8 +4,16 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { aiRuns } from "@/lib/db/schema";
 import type { Ctx } from "@/lib/repos/ctx";
-import { countAiRunsToday, getLatestAiRun, insertAiRun, listAiRuns } from "@/lib/repos/ai-runs";
+import {
+  countAiRunsToday,
+  finishAiRun,
+  getLatestAiRun,
+  insertAiRun,
+  listAiRuns,
+  reserveAiRun,
+} from "@/lib/repos/ai-runs";
 import { createLead } from "@/lib/repos/leads";
+import { eq } from "drizzle-orm";
 import { makeTenant, uniqueEmail } from "../helpers";
 
 let ctx: Ctx;
@@ -72,6 +80,73 @@ describe("countAiRunsToday", () => {
     await db.insert(aiRuns).values([row(new Date("2026-10-10T03:10:00Z"))]);
     expect(await countAiRunsToday(own, new Date("2026-10-10T03:30:00Z"))).toBe(1);
     expect(await countAiRunsToday(own, new Date("2026-10-11T12:00:00Z"))).toBe(0);
+  });
+});
+
+describe("reserveAiRun e finishAiRun", () => {
+  const reserve = (ctx: Ctx, limit: number) =>
+    reserveAiRun(ctx, { kind: "brief", leadId: null, model: "claude-opus-5-5", limit });
+
+  it("reserva linhas pending abaixo do teto e devolve null ao atingi-lo", async () => {
+    const own = await makeTenant();
+    expect(await reserve(own, 2)).toMatch(/^[0-9a-f-]{36}$/);
+    expect(await reserve(own, 2)).toMatch(/^[0-9a-f-]{36}$/);
+    expect(await reserve(own, 2)).toBeNull();
+    expect(await countAiRunsToday(own)).toBe(2);
+    const rows = await db.select().from(aiRuns).where(eq(aiRuns.tenantId, own.tenantId));
+    expect(rows.map((r) => r.status)).toEqual(["pending", "pending"]);
+    expect(rows[0].createdBy).toBe(own.userId);
+    expect(rows[0].inputTokens).toBe(0);
+    // A linha pending nunca aparece como último resultado.
+    expect(await getLatestAiRun(own, { leadId: leadId, kind: "brief" })).toBeNull();
+  });
+
+  it("conta só o dia civil em São Paulo: as de ontem não ocupam o teto", async () => {
+    const own = await makeTenant();
+    // A linha reservada recebe created_at do banco (agora), por isso datas relativas ao relógio real.
+    await db.insert(aiRuns).values({
+      tenantId: own.tenantId,
+      kind: "brief",
+      leadId: null,
+      model: "m",
+      status: "ok",
+      createdAt: new Date(Date.now() - 24 * 60 * 60_000),
+    });
+    expect(await reserve(own, 1)).not.toBeNull();
+    expect(await reserve(own, 1)).toBeNull();
+    expect(await countAiRunsToday(own)).toBe(1);
+  });
+
+  it("finishAiRun completa a linha do próprio tenant e não altera a de outro", async () => {
+    const a = await makeTenant();
+    const b = await makeTenant();
+    const id = (await reserve(a, 5))!;
+    const done = { model: "claude-opus-4-8", status: "ok" as const, output: { resumo: "x" } };
+    expect(await finishAiRun(b, id, done)).toBeNull();
+    const [untouched] = await db.select().from(aiRuns).where(eq(aiRuns.id, id));
+    expect(untouched.status).toBe("pending");
+    expect(untouched.output).toBeNull();
+    const row = await finishAiRun(a, id, {
+      ...done,
+      inputTokens: 10,
+      outputTokens: 5,
+      cacheReadInputTokens: 3,
+      durationMs: 1200,
+      data: { effort: "low", cacheCreation: 7 },
+    });
+    expect(row).toMatchObject({
+      id,
+      tenantId: a.tenantId,
+      model: "claude-opus-4-8",
+      status: "ok",
+      inputTokens: 10,
+      outputTokens: 5,
+      cacheReadInputTokens: 3,
+      durationMs: 1200,
+      output: { resumo: "x" },
+      data: { effort: "low", cacheCreation: 7 },
+    });
+    expect(await countAiRunsToday(a)).toBe(1);
   });
 });
 

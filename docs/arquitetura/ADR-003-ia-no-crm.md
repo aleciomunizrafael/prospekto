@@ -141,7 +141,7 @@ runStructured(ctx, {
 }) => Promise<AiResult<T>>
 ```
 
-Por dentro, na ordem: `isAiEnabled()` (sem chave devolve `{ ok: false, reason: "disabled" }` sem tocar o banco); teto diário (`countAiRunsToday(ctx) >= AI_DAILY_LIMIT` devolve `reason: "quota"`); a chamada:
+Por dentro, na ordem: `isAiEnabled()` (sem chave devolve `{ ok: false, reason: "disabled" }` sem tocar o banco); reserva atômica dentro do teto diário (`reserveAiRun(ctx, { kind, leadId, model, limit: AI_DAILY_LIMIT })`: numa transação sob uma trava consultiva do tenant, `pg_advisory_xact_lock`, conta as execuções do dia civil, inclusive `pending`, e insere a linha com `status = "pending"`; devolve `null` no teto, que vira `reason: "quota"` sem chamada. Checar a contagem e só gravar depois da chamada deixava uma rajada concorrente passar inteira no limite); a chamada:
 
 ```ts
 const response = await client.beta.messages.create({
@@ -155,7 +155,7 @@ const response = await client.beta.messages.create({
 });
 ```
 
-Depois: classificação por `stop_reason` e validação do JSON do bloco `text` pelo esquema (7.4; nenhum ramo lança), gravação em `ai_runs` (seção 8), log com `kind`, `leadId`, `model: response.model`, `inputTokens`, `outputTokens`, `cacheReadInputTokens`, `durationMs` e `fallback` (verdadeiro quando `usage.iterations` contém uma entrada `fallback_message`), nunca o conteúdo.
+Depois: classificação por `stop_reason` e validação do JSON do bloco `text` pelo esquema (7.4; nenhum ramo lança), `finishAiRun(ctx, runId, …)` completa a linha reservada em `ai_runs` (seção 8; também em exceção do SDK, com `status = "error"`), log com `kind`, `leadId`, `model: response.model`, `inputTokens`, `outputTokens`, `cacheReadInputTokens`, `durationMs` e `fallback` (verdadeiro quando `usage.iterations` contém uma entrada `fallback_message`), nunca o conteúdo.
 
 ### 7.3 Prompts
 
@@ -169,7 +169,8 @@ Os textos completos estão em `ia-plano.md`, por frente. Regras comuns: portugu�
 | Recusa | `stop_reason = "refusal"` (inclusive depois do fallback) | `Callout warning`: "A IA não conseguiu gerar este conteúdo. Escreva manualmente." Sem botão de repetir automático | `status = "refusal"`, `output = null`, `stop_details.category` em `data` |
 | Corte por tamanho | `stop_reason = "max_tokens"`; ou bloco `text` ausente, JSON inválido ou fora do esquema (`safeParse` reprova) | `Callout warning`: "A resposta veio incompleta. Tente de novo." com "Gerar de novo" | `status = "max_tokens"` ou `"invalid_output"`, sempre com os tokens de `usage` (a chamada foi cobrada) |
 | Sem chave | `isAiEnabled() = false` | Botões desabilitados e a frase "IA não configurada" | nada |
-| Teto diário | contagem ≥ 200 | "Limite diário de IA atingido (200 execuções). Volta a funcionar amanhã." | nada |
+| Teto diário | `reserveAiRun` devolve `null` (contagem do dia civil, inclusive `pending`, ≥ 200, dentro da trava por tenant) | "Limite diário de IA atingido (200 execuções). Volta a funcionar amanhã." | nada |
+| Processo morto durante a chamada (não deve acontecer: o prazo total de 50 s fica abaixo do `maxDuration`, 7.1) | — | A página de erro do Next | A linha reservada fica `pending` e conta no teto do dia; `getLatestAiRun` só lê `ok` |
 | Erro da API (`Anthropic.APIError`: 401, 429, 5xx, timeout) | `instanceof` das classes do SDK | "A IA está indisponível agora. Tente em instantes." | `status = "error"` com `data.status` (código HTTP) e sem mensagem de erro bruta |
 
 Em nenhum caso a página do lead deixa de renderizar: os cartões de IA são Client Components que chamam Server Actions; a página em si nunca chama o modelo.
@@ -185,7 +186,7 @@ Em nenhum caso a página do lead deixa de renderizar: os cartões de IA são Cli
 | `kind` | text CHECK (`brief`, `notes`, `reply`) | sim | Recurso |
 | `lead_id` | uuid FK `leads` | não | Nulo quando o organizar roda sem lead (não acontece na Fase 1, mas o núcleo de qualificação da seção 10 vai precisar) |
 | `model` | text | sim | Modelo que **respondeu** (`response.model`, que muda quando há fallback) |
-| `status` | text CHECK (`ok`, `refusal`, `max_tokens`, `invalid_output`, `error`) | sim | Seção 7.4 |
+| `status` | text CHECK (`pending`, `ok`, `refusal`, `max_tokens`, `invalid_output`, `error`) | sim | Seção 7.4; `pending` é a linha reservada por `reserveAiRun` antes da chamada, que `finishAiRun` completa (migração `drizzle/0002_*.sql`) |
 | `input_tokens`, `output_tokens` | integer | sim, padrão 0 | `usage` da resposta |
 | `cache_read_input_tokens` | integer | sim, padrão 0 | Para conferir se o cache está funcionando; a escrita de cache (`cache_creation_input_tokens`) fica em `data.cacheCreation` |
 | `duration_ms` | integer | não | Tempo da chamada |
@@ -194,7 +195,7 @@ Em nenhum caso a página do lead deixa de renderizar: os cartões de IA são Cli
 | `created_by` | text FK `users` | não | Quem clicou |
 | `created_at` | timestamptz | sim | |
 
-Índices: `(tenant_id, created_at desc)` para o teto diário; `(tenant_id, lead_id, kind, created_at desc)` para carregar o último briefing e o último rascunho ao abrir a página. Nunca `DELETE` na Fase 1 (regra de exclusão da seção 1 do modelo). Repositório: `src/lib/repos/ai-runs.ts` com `insertAiRun`, `countAiRunsToday` (dia civil em `America/Sao_Paulo`) e `getLatestAiRun(ctx, { leadId, kind })`; `tests/isolation.test.ts` passa a cobrir `getLatestAiRun` e `countAiRunsToday` com dois tenants.
+Índices: `(tenant_id, created_at desc)` para o teto diário; `(tenant_id, lead_id, kind, created_at desc)` para carregar o último briefing e o último rascunho ao abrir a página. Nunca `DELETE` na Fase 1 (regra de exclusão da seção 1 do modelo). Repositório: `src/lib/repos/ai-runs.ts` com `reserveAiRun` (reserva atômica por tenant dentro do teto, 7.2), `finishAiRun(ctx, id, …)` (completa a linha, filtrando por tenant), `insertAiRun`, `countAiRunsToday` (dia civil em `America/Sao_Paulo`) e `getLatestAiRun(ctx, { leadId, kind })`; `tests/isolation.test.ts` passa a cobrir `getLatestAiRun` e `countAiRunsToday` com dois tenants.
 
 ## 9. Estados sem chave e variáveis
 
