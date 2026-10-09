@@ -78,6 +78,14 @@ describe("REPLY_SYSTEM e replyUserMessage", () => {
     expect(REPLY_SYSTEM).toContain(WHATSAPP_EXIT_SENTENCE);
     expect(REPLY_SYSTEM).toContain("3,6% com a LC 224/2025");
     expect(REPLY_SYSTEM.endsWith(qualificationRules())).toBe(true);
+    // Uma assinatura só por canal: o template do e-mail acrescenta o bloco completo (F45).
+    expect(EMAIL_SIGNATURE).toBe("Daniela");
+    expect(REPLY_SYSTEM).toContain(`assinatura só "${EMAIL_SIGNATURE}" no e-mail`);
+    expect(REPLY_SYSTEM).not.toContain("a Daniela assina como");
+    // A apresentação e a frase de saída dependem da linha PRIMEIRO CONTATO da mensagem (F43).
+    expect(REPLY_SYSTEM).toContain("diz se é o PRIMEIRO CONTATO");
+    expect(REPLY_SYSTEM).toContain("quando PRIMEIRO CONTATO é sim");
+    expect(REPLY_SYSTEM).not.toContain("primeira resposta");
     expect(REPLY_SYSTEM).not.toMatch(/Hoje é/);
     expect(REPLY_SYSTEM).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
     expect(REPLY_SYSTEM).not.toContain("Rodrigo");
@@ -85,9 +93,18 @@ describe("REPLY_SYSTEM e replyUserMessage", () => {
 
   it("a mensagem começa com a data, traz canal, contexto, perguntas na ordem e os dois horários", () => {
     const questions = ["Pergunta um?", "Pergunta dois?"];
-    const user = replyUserMessage(context, { channel: "email", questions, slots, now: NOW });
+    const user = replyUserMessage(context, {
+      channel: "email",
+      questions,
+      slots,
+      now: NOW,
+      isFirstContact: true,
+    });
     expect(user.startsWith("Hoje é sexta-feira, 09/10/2026.")).toBe(true);
     expect(user).toContain("CANAL: e-mail");
+    expect(user).toContain("\nPRIMEIRO CONTATO: sim\n");
+    expect(user.indexOf("CANAL:")).toBeLessThan(user.indexOf("PRIMEIRO CONTATO"));
+    expect(user.indexOf("PRIMEIRO CONTATO")).toBeLessThan(user.indexOf("DADOS DO LEAD"));
     expect(user).toContain("Nome: Rodrigo Pasqualotto");
     expect(user).toContain("Empresa ou organização: Rede Farmácias Vale");
     expect(user).toContain("Regime tributário: Lucro real");
@@ -103,9 +120,29 @@ describe("REPLY_SYSTEM e replyUserMessage", () => {
   });
 
   it("WhatsApp muda o canal; sem perguntas, avisa que o CRM já tem as respostas", () => {
-    const user = replyUserMessage(context, { channel: "whatsapp", questions: [], slots, now: NOW });
+    const user = replyUserMessage(context, {
+      channel: "whatsapp",
+      questions: [],
+      slots,
+      now: NOW,
+      isFirstContact: true,
+    });
     expect(user).toContain("CANAL: WhatsApp");
     expect(user).toContain("(nenhuma: o CRM já tem as respostas");
+  });
+
+  it("fora do primeiro contato, a mensagem manda retomar a conversa sem apresentação nem saída", () => {
+    const user = replyUserMessage(context, {
+      channel: "whatsapp",
+      questions: [],
+      slots,
+      now: NOW,
+      isFirstContact: false,
+    });
+    expect(user).toContain("PRIMEIRO CONTATO: não");
+    expect(user).not.toContain("PRIMEIRO CONTATO: sim");
+    expect(user).toContain("não se apresente de novo");
+    expect(user).toContain("não use a frase de saída");
   });
 });
 
@@ -133,6 +170,23 @@ describe("normalizeReply: e-mail", () => {
     const long = "a".repeat(REPLY_LIMITS.subjectChars + 40);
     expect(normalizeReply({ ...emailReply, assunto: long }, input).assunto).toHaveLength(
       REPLY_LIMITS.subjectChars,
+    );
+  });
+
+  it("o assunto passa pelo mesmo filtro de URL do texto, menos prospekto.com.br", () => {
+    expect(
+      normalizeReply({ ...emailReply, assunto: "Pague em https://evil.com/pix agora" }, input)
+        .assunto,
+    ).toBe("Pague em agora");
+    expect(
+      normalizeReply({ ...emailReply, assunto: "Confira em bit.ly/3xyz hoje" }, input).assunto,
+    ).toBe("Confira em hoje");
+    expect(
+      normalizeReply({ ...emailReply, assunto: "Veja prospekto.com.br/guia" }, input).assunto,
+    ).toBe("Veja prospekto.com.br/guia");
+    // Só URL no assunto: cai no padrão, em vez de ficar vazio.
+    expect(normalizeReply({ ...emailReply, assunto: "https://evil.com" }, input).assunto).toBe(
+      DEFAULT_EMAIL_SUBJECT,
     );
   });
 
@@ -186,21 +240,46 @@ describe("normalizeReply: WhatsApp", () => {
     horarios_incluidos: [A, B],
   };
 
-  it("assunto é sempre null e a primeira mensagem termina com a frase de saída", () => {
+  // A frase de saída fecha a mensagem em parágrafo próprio, depois da assinatura.
+  const closing = `${WHATSAPP_SIGNATURE}\n\n${WHATSAPP_EXIT_SENTENCE}`;
+
+  it("assunto é sempre null e a primeira mensagem termina com a frase de saída em parágrafo próprio", () => {
     const out = normalizeReply(base, { channel: "whatsapp", slots, isFirstContact: true });
     expect(out.assunto).toBeNull();
     expect(out.texto.endsWith(WHATSAPP_EXIT_SENTENCE)).toBe(true);
+    expect(out.texto.endsWith(closing)).toBe(true);
     expect(out.texto.split(WHATSAPP_EXIT_SENTENCE)).toHaveLength(2);
     expect(out.texto).toContain(WHATSAPP_SIGNATURE);
   });
 
-  it("quando a frase de saída já veio, não duplica; fora do primeiro contato, não acrescenta", () => {
+  it("quando a frase de saída já veio, não duplica e vai para o parágrafo final", () => {
     const withExit = { ...base, texto: `${base.texto} ${WHATSAPP_EXIT_SENTENCE}` };
     const first = normalizeReply(withExit, { channel: "whatsapp", slots, isFirstContact: true });
     expect(first.texto.split(WHATSAPP_EXIT_SENTENCE)).toHaveLength(2);
+    expect(first.texto.endsWith(closing)).toBe(true);
+    // Já formatada pelo modelo: sai igual.
+    const formatted = { ...base, texto: `${base.texto}\n\n${WHATSAPP_EXIT_SENTENCE}` };
+    expect(
+      normalizeReply(formatted, { channel: "whatsapp", slots, isFirstContact: true }).texto,
+    ).toBe(formatted.texto);
+  });
+
+  it("fora do primeiro contato, não acrescenta a frase de saída e remove a que o modelo escreveu", () => {
     const later = normalizeReply(base, { channel: "whatsapp", slots, isFirstContact: false });
     expect(later.texto).not.toContain(WHATSAPP_EXIT_SENTENCE);
     expect(later.texto).toBe(base.texto);
+    const atEnd = { ...base, texto: `${base.texto}\n\n${WHATSAPP_EXIT_SENTENCE}` };
+    const inMiddle = {
+      ...base,
+      texto: base.texto.replace("Qual prefere?", `Qual prefere? ${WHATSAPP_EXIT_SENTENCE}`),
+    };
+    for (const raw of [atEnd, inMiddle]) {
+      const out = normalizeReply(raw, { channel: "whatsapp", slots, isFirstContact: false });
+      expect(out.texto).not.toContain(WHATSAPP_EXIT_SENTENCE);
+      expect(out.texto).not.toContain("SAIR");
+      expect(out.texto.endsWith(WHATSAPP_SIGNATURE)).toBe(true);
+      expect(out.texto).toContain(`Qual prefere?\n\n${WHATSAPP_SIGNATURE}`);
+    }
   });
 
   it("limita a 900 caracteres sem perder a frase de saída", () => {
@@ -210,7 +289,7 @@ describe("normalizeReply: WhatsApp", () => {
     };
     const out = normalizeReply(long, { channel: "whatsapp", slots, isFirstContact: true });
     expect(out.texto.length).toBeLessThanOrEqual(REPLY_LIMITS.whatsappChars);
-    expect(out.texto.endsWith(WHATSAPP_EXIT_SENTENCE)).toBe(true);
+    expect(out.texto.endsWith(`\n\n${WHATSAPP_EXIT_SENTENCE}`)).toBe(true);
     expect(out.texto.startsWith("Uma frase comprida")).toBe(true);
   });
 
@@ -234,5 +313,30 @@ describe("stripUrls", () => {
     expect(stripUrls("Lei 8.313/1991, art. 18, e a LC 224/2025.")).toBe(
       "Lei 8.313/1991, art. 18, e a LC 224/2025.",
     );
+  });
+
+  it("pega encurtadores e TLDs fora da lista quando há caminho ou TLD de país", () => {
+    expect(stripUrls("Pague em bit.ly/3xyz ou cutt.ly/abc.")).toBe("Pague em ou.");
+    expect(stripUrls("veja golpe.online/pagar e golpe.shop/x")).toBe("veja e");
+    expect(stripUrls("Entre em golpe.ru ou em t.co/abc agora.")).toBe("Entre em ou em agora.");
+    expect(stripUrls("Veja prospekto.com.br.evil.com/x e evil-prospekto.com.br.")).toBe("Veja e.");
+    // Sem caminho e com TLD desconhecido não é tratado como link.
+    expect(stripUrls("Falamos disso.depois, combinado?")).toBe("Falamos disso.depois, combinado?");
+  });
+
+  it("não apaga abreviações, números de lei nem palavras coladas ao ponto que parecem TLD", () => {
+    expect(stripUrls("Olá, Sr.João. A Lei 8.313/91 e a LC 224/2025.")).toBe(
+      "Olá, Sr.João. A Lei 8.313/91 e a LC 224/2025.",
+    );
+    expect(
+      stripUrls("Obrigada pela conversa.Me avise. Vou mandar a proposta.Co isso resolvemos."),
+    ).toBe("Obrigada pela conversa.Me avise. Vou mandar a proposta.Co isso resolvemos.");
+    expect(
+      stripUrls("Falamos disso.Com certeza. Veja exemplo.com/pagina e WWW.Site.ORG hoje."),
+    ).toBe("Falamos disso.Com certeza. Veja e hoje.");
+    expect(stripUrls("Pode ver no App.Me amanhã, p.ex. na Ltda.ME.")).toBe(
+      "Pode ver no App.Me amanhã, p.ex. na Ltda.ME.",
+    );
+    expect(stripUrls("Acesse HTTPS://Exemplo.COM/x agora.")).toBe("Acesse agora.");
   });
 });

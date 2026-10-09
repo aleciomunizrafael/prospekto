@@ -294,6 +294,11 @@ export function ReplyCard({
               rows={8}
               value={text}
               onChange={(event) => updateDraft({ text: event.target.value })}
+              help={
+                channel === "email"
+                  ? "O CRM acrescenta nome completo, empresa e contatos ao enviar."
+                  : undefined
+              }
             />
             {horariosLine}
 

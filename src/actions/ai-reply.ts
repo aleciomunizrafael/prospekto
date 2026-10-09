@@ -76,6 +76,8 @@ export async function generateReplyAction(
     });
     const slots = proposeSlots(now);
     const questions = qualificationQuestions(lead.segment, lead.attributes);
+    // Primeiro contato (estágio inicial e sem contato): o prompt pede apresentação e, no WhatsApp,
+    // a frase de saída; fora dele, retoma a conversa. O mesmo valor vai à normalização.
     const isFirstContact =
       isInitialStage(lead.pipeline as Pipeline, lead.stage) && !lead.lastContactAt;
     // A normalização roda dentro de runStructured, antes de gravar: o rascunho reaberto da página
@@ -85,7 +87,7 @@ export async function generateReplyAction(
       kind: "reply",
       leadId,
       system: REPLY_SYSTEM,
-      user: replyUserMessage(context, { channel, questions, slots, now }),
+      user: replyUserMessage(context, { channel, questions, slots, now, isFirstContact }),
       schema: replySchema,
       effort: "low",
       normalize: (reply) => normalizeReply(reply, { channel, slots, isFirstContact }),

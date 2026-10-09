@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { site } from "@/config/site";
 import { renderLeadReply } from "@/lib/email/templates/lead-reply";
 
-const body = `Olá, Maria.\n\nVi o seu pedido pelo site. Posso explicar em 5 linhas <como> funciona?\nLinha dentro do parágrafo.\n\nTenho horários segunda-feira, 12 de outubro, às 10h e terça-feira, 13 de outubro, às 15h. Qual prefere?\n\nDaniela Sandrin Copat · Prospekto Consultoria & Projetos`;
+const body = `Olá, Maria.\n\nVi o seu pedido pelo site. Posso explicar em 5 linhas <como> funciona?\nLinha dentro do parágrafo.\n\nTenho horários segunda-feira, 12 de outubro, às 10h e terça-feira, 13 de outubro, às 15h. Qual prefere?\n\nDaniela`;
 
 describe("renderLeadReply", () => {
   const rendered = renderLeadReply({ subject: "Sobre o seu contato & a Prospekto", body });
@@ -12,6 +12,10 @@ describe("renderLeadReply", () => {
     expect(rendered.text.startsWith("Olá, Maria.")).toBe(true);
     expect(rendered.text).toContain("Posso explicar em 5 linhas <como> funciona?");
     expect(rendered.text).toContain(`${site.owner}\n${site.name}\n${site.email} · WhatsApp`);
+    // O corpo assina só "Daniela"; nome completo e empresa aparecem uma vez, no bloco do CRM.
+    expect(rendered.text).toContain("Qual prefere?\n\nDaniela\n\nDaniela Sandrin Copat\n");
+    expect(rendered.text.split("Daniela Sandrin Copat")).toHaveLength(2);
+    expect(rendered.text.split(site.name)).toHaveLength(2);
     expect(rendered.text).toContain("Serra Gaúcha, RS");
     expect(rendered.text).toContain("O cálculo final do limite é feito pelo contador");
     expect(rendered.text).not.toContain("você recebe este e-mail");
@@ -29,6 +33,8 @@ describe("renderLeadReply", () => {
     expect(rendered.html).toContain("funciona?<br>Linha dentro do parágrafo.");
     expect((rendered.html.match(/<p style="margin:0 0 16px">/g) ?? []).length).toBe(4);
     expect(rendered.html).toContain(`mailto:${site.email}`);
+    expect(rendered.html).toContain('<p style="margin:0 0 16px">Daniela</p>');
+    expect(rendered.html.split("Daniela Sandrin Copat")).toHaveLength(2);
     expect(rendered.html).toContain("Serra Gaúcha, RS");
     expect(rendered.html).toContain("O cálculo final do limite");
     expect(rendered.html).not.toContain("Cancelar o recebimento");

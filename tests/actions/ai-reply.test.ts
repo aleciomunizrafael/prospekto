@@ -17,7 +17,7 @@ import {
 import type { AiActionState } from "@/lib/ai/types";
 import { initialCrmActionState } from "@/lib/crm/action-state";
 import { db } from "@/lib/db";
-import { aiRuns } from "@/lib/db/schema";
+import { aiRuns, leads } from "@/lib/db/schema";
 import { listActivities } from "@/lib/repos/activities";
 import type { Ctx } from "@/lib/repos/ctx";
 import { createLead, getLead } from "@/lib/repos/leads";
@@ -218,6 +218,8 @@ describe("generateReplyAction", () => {
     const user: string = params.messages[0].content;
     expect(user.startsWith("Hoje é ")).toBe(true);
     expect(user).toContain("CANAL: e-mail");
+    // Lead novo e sem contato: o prompt pede a apresentação.
+    expect(user).toContain("PRIMEIRO CONTATO: sim");
     expect(user).toContain("Nome: Rodrigo Pasqualotto");
     expect(user).toContain("Empresa ou organização: Rede Farmácias Vale");
     expect(user).toContain(`1. ${A}`);
@@ -291,7 +293,9 @@ describe("generateReplyAction", () => {
     if (result.status !== "ok") return;
     expect(result.data.channel).toBe("whatsapp");
     expect(result.data.assunto).toBeNull();
-    expect(result.data.texto.endsWith(WHATSAPP_EXIT_SENTENCE)).toBe(true);
+    expect(result.data.texto.endsWith(`${WHATSAPP_SIGNATURE}\n\n${WHATSAPP_EXIT_SENTENCE}`)).toBe(
+      true,
+    );
     expect(result.data.texto.length).toBeLessThanOrEqual(900);
     // A linha gravada é o que a página reabre depois de um F5: mesma frase de saída, assunto
     // null (WhatsApp) e o canal em data.
@@ -301,6 +305,36 @@ describe("generateReplyAction", () => {
     expect(output.texto.endsWith(WHATSAPP_EXIT_SENTENCE)).toBe(true);
     expect(output.assunto).toBeNull();
     expect(run?.data).toMatchObject({ channel: "whatsapp" });
+  });
+
+  it("lead já contatado: a mensagem diz PRIMEIRO CONTATO: não e a frase de saída sai do texto", async () => {
+    const { lead } = await createLead(ctx, {
+      segment: "PJ",
+      interest: "rouanet",
+      name: "Lead Contatado",
+      email: "lead.contatado@example.test",
+      phone: PHONE,
+      source: "linkedin",
+      attributes: { empresa: "Empresa Contatada" },
+    });
+    await db.update(leads).set({ lastContactAt: new Date() }).where(eq(leads.id, lead.id));
+    sdk.parse.mockResolvedValueOnce(
+      response({
+        ...whatsappOutput,
+        texto: `Olá, Rodrigo. Retomando a nossa conversa: quem decide o patrocínio na empresa? Tenho horários ${A} e ${B}. Qual prefere?\n\n${WHATSAPP_SIGNATURE}\n\n${WHATSAPP_EXIT_SENTENCE}`,
+      }),
+    );
+    const { generateReplyAction } = await loadActions();
+    const result = await generateReplyAction(idle, fd({ leadId: lead.id, channel: "whatsapp" }));
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    const user: string = sdk.parse.mock.calls[0][0].messages[0].content;
+    expect(user).toContain("PRIMEIRO CONTATO: não");
+    expect(user).not.toContain("PRIMEIRO CONTATO: sim");
+    expect(result.data.texto).not.toContain(WHATSAPP_EXIT_SENTENCE);
+    expect(result.data.texto.endsWith(WHATSAPP_SIGNATURE)).toBe(true);
+    // O system continua o mesmo (cache de prompt): a diferença vai na mensagem de usuário.
+    expect(sdk.parse.mock.calls[0][0].system[0].text).toBe(REPLY_SYSTEM);
   });
 
   it("URL e e-mail inventados saem antes de gravar: ai_runs.output é o texto normalizado", async () => {

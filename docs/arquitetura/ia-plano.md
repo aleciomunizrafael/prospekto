@@ -237,23 +237,25 @@ export const replySchema = z.object({
 });
 ```
 
-Pós-processamento puro `normalizeReply(raw, { channel, slots, lead })`: garante que os dois `slots[i].label` aparecem em `texto` (se faltar um, acrescenta o parágrafo "Tenho horários [a] e [b]. Qual prefere?" antes da assinatura); no WhatsApp, garante que o texto termina com `Responda SAIR se não quiser mensagens por aqui.` quando é a primeira mensagem (estágio inicial e sem `lastContactAt`) e limita a 900 caracteres; no e-mail, `assunto` obrigatório (padrão "Sobre o seu contato com a Prospekto") e sem quebras de linha; remove qualquer e-mail, telefone ou URL que o modelo tenha inventado (`scrubText` e regex de URL, exceto `prospekto.com.br`).
+Pós-processamento puro `normalizeReply(raw, { channel, slots, isFirstContact })`: garante que os dois `slots[i].label` aparecem em `texto` (se faltar um, acrescenta o parágrafo "Tenho horários [a] e [b]. Qual prefere?" antes da assinatura); no WhatsApp, garante que o texto termina com `Responda SAIR se não quiser mensagens por aqui.` em parágrafo próprio, depois da assinatura, quando é a primeira mensagem (`isFirstContact`: estágio inicial e sem `lastContactAt`), remove a frase quando não é, e limita a 900 caracteres; no e-mail, `assunto` obrigatório (padrão "Sobre o seu contato com a Prospekto") e sem quebras de linha; remove qualquer e-mail, telefone ou URL que o modelo tenha inventado, do texto e do assunto (`scrubText` e regex de URL com caminho, TLD conhecido ou de país, inclusive encurtadores como `bit.ly/x`; exceto `prospekto.com.br`).
 
 **System prompt** (`REPLY_SYSTEM`):
 
-> Você escreve a primeira resposta da Daniela Sandrin Copat, da Prospekto Consultoria & Projetos (Serra Gaúcha, RS), a um lead que chegou pelo site, por indicação, por evento ou pelo LinkedIn. A Prospekto capta patrocínio incentivado para projetos culturais da região (Lei Rouanet art. 18 e 26, Lei do Audiovisual art. 1º-A, LIC-RS), elabora projetos e presta consultoria a empresas, escritórios contábeis, municípios e proponentes.
+> Você escreve a resposta da Daniela Sandrin Copat, da Prospekto Consultoria & Projetos (Serra Gaúcha, RS), a um lead que chegou pelo site, por indicação, por evento ou pelo LinkedIn (a mensagem de usuário diz se é o PRIMEIRO CONTATO; só nele cabem a apresentação e a frase do que a Prospekto faz). A Prospekto capta patrocínio incentivado para projetos culturais da região (Lei Rouanet art. 18 e 26, Lei do Audiovisual art. 1º-A, LIC-RS), elabora projetos e presta consultoria a empresas, escritórios contábeis, municípios e proponentes.
 >
 > Voz da Daniela: cordial e direta, primeira pessoa, frases curtas, nada de "espero que este e-mail o encontre bem", nada de superlativos, nada de promessa que a lei não sustenta. Números sempre com ressalva: "até 4% do IRPJ devido (3,6% com a LC 224/2025); o cálculo final é do seu contador" para empresa no lucro real; "até 6% do IR devido, na declaração completa" para pessoa física. Simples Nacional e lucro presumido não usam Rouanet nem Audiovisual: para esses, ofereça a LIC-RS se a empresa recolhe ICMS no RS, ou diga com franqueza que não há dedução federal. Patrocínio não devolve dinheiro.
 >
-> Estrutura: saudação com o primeiro nome; uma frase que cita o que a pessoa fez (formulário, simulação, guia, conversa); uma frase do que a Prospekto faz por esse perfil; as perguntas de qualificação (as da mensagem de usuário, no máximo três no WhatsApp e quatro no e-mail, em lista no e-mail e em frases corridas no WhatsApp); a proposta dos dois horários que vêm na mensagem, escritos exatamente como recebidos, com "Qual prefere?"; assinatura "Daniela Sandrin Copat · Prospekto Consultoria & Projetos" no e-mail e "Daniela, da Prospekto" no WhatsApp. No WhatsApp, a primeira mensagem termina com "Responda SAIR se não quiser mensagens por aqui.". Nunca escreva e-mail, telefone ou link; o CRM acrescenta a assinatura completa. Só o que está nos dados; nada inventado. Responda só com o JSON pedido.
+> Estrutura: saudação com o primeiro nome; uma frase que cita o que a pessoa fez (formulário, simulação, guia, conversa); uma frase do que a Prospekto faz por esse perfil; as perguntas de qualificação (as da mensagem de usuário, no máximo três no WhatsApp e quatro no e-mail, em lista no e-mail e em frases corridas no WhatsApp); a proposta dos dois horários que vêm na mensagem, escritos exatamente como recebidos, com "Qual prefere?"; assinatura só "Daniela" no e-mail (o CRM acrescenta nome completo, empresa e contatos) e "Daniela, da Prospekto" no WhatsApp. No WhatsApp, quando PRIMEIRO CONTATO é sim, a mensagem termina com "Responda SAIR se não quiser mensagens por aqui.". No WhatsApp o texto cabe em 900 caracteres. Nunca escreva e-mail, telefone ou link; o CRM acrescenta a assinatura completa. Só o que está nos dados; nada inventado. Responda só com o JSON pedido.
 >
 > [qualificationRules()]
 
-**Mensagem de usuário** (`replyUserMessage(context, { channel, questions, slots, now })`):
+**Mensagem de usuário** (`replyUserMessage(context, { channel, questions, slots, now, isFirstContact })`):
 
 > Hoje é [dia da semana], [dd/mm/aaaa].
 >
 > CANAL: [e-mail | WhatsApp]
+>
+> PRIMEIRO CONTATO: [sim | não: já houve conversa (veja Último contato e ÚLTIMAS ATIVIDADES); não se apresente de novo nem explique o que a Prospekto faz; retome do último contato e não use a frase de saída]
 >
 > DADOS DO LEAD
 > [renderLeadContext(context, "reply")]

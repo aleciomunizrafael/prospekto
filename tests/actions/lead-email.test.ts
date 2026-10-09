@@ -51,7 +51,7 @@ vi.mock("@/lib/email/send", async (importOriginal) => {
 import { sendLeadReplyAction } from "@/actions/lead-email";
 
 const EMAIL = "rodrigo.pasqualotto@example.test";
-const TEXT = `Olá, Rodrigo.\n\nVi o seu pedido pelo site. Tenho horários segunda-feira, 12 de outubro, às 10h e terça-feira, 13 de outubro, às 15h. Qual prefere?\n\nDaniela Sandrin Copat · Prospekto Consultoria & Projetos`;
+const TEXT = `Olá, Rodrigo.\n\nVi o seu pedido pelo site. Tenho horários segunda-feira, 12 de outubro, às 10h e terça-feira, 13 de outubro, às 15h. Qual prefere?\n\nDaniela`;
 const SLOT = "2026-10-12T13:00:00.000Z";
 
 function fd(fields: Record<string, string>): FormData {
@@ -197,6 +197,8 @@ describe("sendLeadReplyAction", () => {
     expect(email.last?.unsubscribeUrl).toBeUndefined();
     expect(email.last?.text).toContain(TEXT);
     expect(email.last?.text).toContain("Serra Gaúcha, RS");
+    // Assinatura curta no corpo, bloco completo do template uma vez só.
+    expect(email.last?.text.split(site.owner)).toHaveLength(2);
     expect(email.last?.html).toContain("Sobre o seu pedido de diagnóstico");
 
     const [activity] = await listActivities(ctx, { leadId: lead.id, type: "email" });
