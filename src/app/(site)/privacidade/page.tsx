@@ -3,6 +3,8 @@ import { SectionHeader } from "@/components/site/section-header";
 import { site } from "@/config/site";
 
 // Política de privacidade (docs/site/estrutura-e-copy.md, seção 5.7). Base: Lei 13.709/2018 (LGPD).
+// A seção 6 enumera o que vai ao fornecedor de IA conforme a lista fechada de src/lib/ai/redact.ts
+// (ADR-003, seção 5); tests/site/privacidade.test.ts confere. CNPJ só no ditado (src/lib/ai/notes.ts).
 // Os trechos [verificar] dependem de confirmação da Daniela e de revisão por advogado antes de
 // publicar (seção 11, perguntas 5 e 6).
 export const metadata: Metadata = {
@@ -82,7 +84,7 @@ const sections: Section[] = [
     title: "6. Com quem compartilhamos",
     paragraphs: [
       "Com os provedores necessários ao serviço: hospedagem do site e do CRM, e-mail transacional, WhatsApp (Meta), ferramenta de analytics agregado e inteligência artificial para apoio ao atendimento. Nunca vendemos dados. Patrocinador e proponente só conhecem os dados um do outro na etapa do termo de patrocínio.",
-      "Usamos inteligência artificial (Anthropic, fornecedora da Claude API) para resumir o histórico de contato e preparar rascunhos de resposta, sempre revisados por uma pessoa da Prospekto antes de qualquer envio. Enviamos ao fornecedor só o necessário para isso: nome, empresa, cidade, o assunto do contato e o teor das conversas registradas; nunca e-mail, telefone, CPF ou dados bancários. Esses dados não são usados para treinar modelos e são apagados pelo fornecedor em até 30 dias. O ditado de notas pela equipe usa o reconhecimento de voz do próprio navegador.",
+      "Usamos inteligência artificial (Anthropic, fornecedora da Claude API) para resumir o histórico de contato e preparar rascunhos de resposta, sempre revisados por uma pessoa da Prospekto antes de qualquer envio. Enviamos ao fornecedor só o necessário para isso: nome, empresa ou escritório, cidade, segmento e etapa do atendimento, a origem e a classificação interna do contato, os dados de qualificação que você informou (como regime tributário, faixa de imposto, cargo ou profissão), o resultado estimado e arredondado do simulador, a mensagem enviada pelo formulário, o assunto e o teor das conversas registradas, o estado e a data das suas autorizações, o projeto, a situação e o valor aproximado dos patrocínios em andamento e, quando a equipe o dita nas notas, o CNPJ da empresa; nunca e-mail, telefone, CPF, os valores exatos informados no simulador, dados bancários ou identificadores internos. Esses dados não são usados para treinar modelos e são apagados pelo fornecedor em até 30 dias. O ditado de notas pela equipe usa o reconhecimento de voz do próprio navegador.",
       "O fornecedor de inteligência artificial processa os dados fora do Brasil, sob cláusulas contratuais de proteção de dados (LGPD, art. 33, II, c) [verificar com o advogado].",
     ],
   },
