@@ -1,6 +1,8 @@
 // "Ditar e organizar", parte pura (src/lib/ai/notes.ts): esquema por segmento, pós-processamento
 // e prompts. Sem SDK, sem rede.
+import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   NOTES_SYSTEM,
   attributeKeysFor,
@@ -47,23 +49,84 @@ describe("attributeKeysFor e notesSchemaFor", () => {
     ]);
   });
 
-  it('o esquema de CONT não aceita chave "regime_tributario"; o de PJ aceita', () => {
+  it("a chave não é fechada pelo esquema (o SDK não envia enum): normalizeNotes recusa a de outro segmento e a do art. 27", () => {
     const item = { chave: "regime_tributario", valor: "lucro_real" };
-    expect(notesSchemaFor("CONT").safeParse(raw({ campos_extraidos: [item] })).success).toBe(false);
-    expect(notesSchemaFor("PJ").safeParse(raw({ campos_extraidos: [item] })).success).toBe(true);
-    expect(
-      notesSchemaFor("PJ").safeParse(
-        raw({ campos_extraidos: [{ ...item, chave: "vinculo_art27_checado" }] }),
-      ).success,
-    ).toBe(false);
+    // A API só impõe `string`; a lista de chaves do segmento vai na description e no system.
+    expect(notesSchemaFor("CONT").safeParse(raw({ campos_extraidos: [item] })).success).toBe(true);
+    const chaveDe = (segment: "PJ" | "CONT") =>
+      notesSchemaFor(segment).shape.campos_extraidos.element.shape.chave.description ?? "";
+    expect(chaveDe("PJ")).toContain("regime_tributario");
+    expect(chaveDe("PJ")).not.toContain("vinculo_art27");
+    expect(chaveDe("CONT")).not.toContain("regime_tributario");
+    const cont = normalizeNotes(raw({ campos_extraidos: [item] }), "CONT", now);
+    expect(cont.campos).toEqual([]);
+    expect(cont.incertezas).toEqual(["Campo não reconhecido: 'regime_tributario'"]);
+    expect(normalizeNotes(raw({ campos_extraidos: [item] }), "PJ", now).campos).toHaveLength(1);
+    const art27 = normalizeNotes(
+      raw({ campos_extraidos: [{ ...item, chave: "vinculo_art27_checado" }] }),
+      "PJ",
+      now,
+    );
+    expect(art27.campos).toEqual([]);
+    expect(art27.incertezas).toEqual(["Campo não reconhecido: 'vinculo_art27_checado'"]);
   });
 
-  it("recusa tipo fora do canal (tarefa) e exige proxima_acao nula ou completa", () => {
-    expect(notesSchemaFor("PF").safeParse(raw({ tipo: "tarefa" as never })).success).toBe(false);
+  it("canal fora da lista não derruba a execução: o esquema aceita e normalizeNotes fecha em NOTES_TYPES", () => {
+    // O SDK não envia `enum`: "Ligação" (como a regra 2 escrevia) chegava ao Zod e a execução
+    // inteira virava invalid_output. O esquema aceita a string e o código resolve a chave.
+    expect(notesSchemaFor("PF").safeParse(raw({ tipo: "tarefa" })).success).toBe(true);
+    const ligacao = normalizeNotes(raw({ tipo: "Ligação" }), "PF", now);
+    expect(ligacao.tipo).toBe("ligacao");
+    expect(ligacao.incertezas).toEqual([]);
+    expect(normalizeNotes(raw({ tipo: "e-mail" }), "PF", now).tipo).toBe("email");
+    expect(normalizeNotes(raw({ tipo: " WhatsApp " }), "PF", now).tipo).toBe("whatsapp");
+    expect(normalizeNotes(raw({ tipo: "reunião" }), "PF", now).tipo).toBe("reuniao");
+    const tarefa = normalizeNotes(raw({ tipo: "tarefa" }), "PF", now);
+    expect(tarefa.tipo).toBe("nota");
+    expect(tarefa.incertezas).toEqual(["Canal não reconhecido: 'tarefa'"]);
+    // Rótulo no lugar da chave não é mapeado às cegas: vira aviso.
+    const rotulo = normalizeNotes(
+      raw({ campos_extraidos: [{ chave: "Regime tributário", valor: "lucro real" }] }),
+      "PJ",
+      now,
+    );
+    expect(rotulo.campos).toEqual([]);
+    expect(rotulo.incertezas).toEqual(["Campo não reconhecido: 'Regime tributário'"]);
+  });
+
+  it("exige proxima_acao nula ou completa", () => {
     expect(notesSchemaFor("PF").safeParse(raw({ proxima_acao: null })).success).toBe(true);
     expect(
       notesSchemaFor("PF").safeParse(raw({ proxima_acao: { descricao: "x" } as never })).success,
     ).toBe(false);
+  });
+
+  it("o esquema enviado à API não tem enum, minimum nem maximum (o SDK os colaria na description)", () => {
+    const json = JSON.stringify(z.toJSONSchema(notesSchemaFor("PJ")));
+    for (const key of ["enum", "minimum", "maximum", "minLength", "maxLength", "pattern"]) {
+      expect(json).not.toContain(`"${key}"`);
+    }
+    // O que vai mesmo no pedido (betaZodOutputFormat, como em src/lib/ai/client.ts): o SDK só
+    // preserva type/properties/required/items/description e serializa o resto na description.
+    type JsonSchema = {
+      type?: string;
+      description?: string;
+      properties?: Record<string, JsonSchema>;
+      anyOf?: JsonSchema[];
+    };
+    const sent = (betaZodOutputFormat(notesSchemaFor("PJ")) as unknown as { schema: JsonSchema })
+      .schema;
+    const props = JSON.stringify(sent.properties);
+    for (const noise of ["enum", "minimum", "maximum"]) expect(props).not.toContain(noise);
+    expect(sent.properties?.proxima_acao?.anyOf?.[0]?.properties?.em_dias).toEqual({
+      type: "integer",
+      description: "0 = hoje, 1 = amanhã; dias corridos.",
+    });
+    expect(sent.properties?.tipo).toEqual({
+      type: "string",
+      description:
+        "Uma destas chaves exatas, sem acento: ligacao, reuniao, email, whatsapp, visita, nota.",
+    });
   });
 });
 
@@ -164,7 +227,7 @@ describe("normalizeNotes", () => {
     });
   });
 
-  it("CNPJ só com 14 dígitos; número em reais; data; valor vazio é descartado", () => {
+  it("CNPJ só com 14 dígitos; número em reais; valor vazio e chave de outro segmento viram avisos", () => {
     const out = normalizeNotes(
       raw({
         campos_extraidos: [
@@ -177,7 +240,7 @@ describe("normalizeNotes", () => {
       "PROP",
       now,
     );
-    // cnpj não é campo de PROP: ignorado sem incerteza (o esquema já não o aceitaria).
+    // cnpj não é campo de PROP: não grava e a pessoa fica sabendo (o esquema não fecha a chave).
     expect(out.campos).toEqual([
       {
         chave: "valor_aprovado",
@@ -187,6 +250,7 @@ describe("normalizeNotes", () => {
       },
     ]);
     expect(out.incertezas).toEqual([
+      "Campo não reconhecido: 'cnpj'",
       "Valor não reconhecido para Saldo a captar (R$): 'muito'",
       "Valor não reconhecido para Prazo de captação: ''",
     ]);
@@ -197,6 +261,61 @@ describe("normalizeNotes", () => {
     );
     expect(cnpj.campos).toEqual([]);
     expect(cnpj.incertezas).toEqual(["Valor não reconhecido para CNPJ: '123'"]);
+  });
+
+  it("número aceita vírgula decimal, ponto decimal e ponto de milhar sem multiplicar por 100", () => {
+    const money = (valor: string, chave = "valor_aprovado") =>
+      normalizeNotes(raw({ campos_extraidos: [{ chave, valor }] }), "PROP", now);
+    // "1500.50" virava 150050 (todos os pontos apagados antes de olhar a vírgula).
+    expect(money("1500.50").campos[0]?.valor).toBe(1500.5);
+    expect(money("25000.00").campos[0]?.valor).toBe(25000);
+    expect(money("1.500", "saldo_a_captar").campos[0]?.valor).toBe(1500);
+    expect(money("R$ 1.250.000,50").campos[0]?.valor).toBe(1_250_000.5);
+    expect(money("R$1500.50").incertezas).toEqual([]);
+    const negativo = money("-10");
+    expect(negativo.campos).toEqual([]);
+    expect(negativo.incertezas).toEqual(["Valor não reconhecido para Valor aprovado (R$): '-10'"]);
+  });
+
+  it("campo de data só grava AAAA-MM-DD; dd/mm/aaaa é convertido; outro texto vira incerteza", () => {
+    const date = (valor: string) =>
+      normalizeNotes(
+        raw({ campos_extraidos: [{ chave: "acordo_assinado_em", valor }] }),
+        "CONT",
+        now,
+      );
+    const expected = [
+      {
+        chave: "acordo_assinado_em",
+        rotulo: "Acordo assinado em",
+        valor: "2026-10-10",
+        valorRotulo: "2026-10-10",
+      },
+    ];
+    expect(date("10/10/2026").campos).toEqual(expected);
+    expect(date("10/10/2026").incertezas).toEqual([]);
+    expect(date("2026-10-10").campos).toEqual(expected);
+    for (const valor of ["10 de outubro", "2026-13-40", "31/02/2026", "2026-10-10T00:00"]) {
+      const out = date(valor);
+      expect(out.campos).toEqual([]);
+      expect(out.incertezas).toEqual([`Valor não reconhecido para Acordo assinado em: '${valor}'`]);
+    }
+  });
+
+  it("rejeições de campo têm prioridade sobre as incertezas do modelo no corte em 8", () => {
+    const out = normalizeNotes(
+      raw({
+        campos_extraidos: [{ chave: "regime_tributario", valor: "lucro real" }],
+        incertezas: Array.from({ length: 8 }, (_, i) => `dúvida ${i}`),
+      }),
+      "PJ",
+      now,
+    );
+    expect(out.campos).toEqual([]);
+    expect(out.incertezas).toHaveLength(8);
+    expect(out.incertezas[0]).toBe("Valor não reconhecido para Regime tributário: 'lucro real'");
+    expect(out.incertezas).toContain("dúvida 6");
+    expect(out.incertezas).not.toContain("dúvida 7");
   });
 });
 
@@ -210,6 +329,9 @@ describe("prompts", () => {
       "contador_participa (Contador participa da conversa): 'true' ou 'false'",
     );
     expect(system).toContain("cnpj (CNPJ): só os 14 dígitos");
+    expect(NOTES_SYSTEM).toContain(
+      "chaves exatas, sem acento: ligacao, reuniao, email, whatsapp, visita",
+    );
     expect(system).not.toContain("vinculo_art27");
     expect(system).not.toMatch(/\d{2}\/\d{2}\/\d{4}/);
     expect(system).not.toMatch(/Hoje é/);

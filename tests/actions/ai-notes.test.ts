@@ -207,11 +207,12 @@ describe("organizeNotesAction", () => {
     expect(user).toContain("Nome: Rodrigo\n");
     expect(user).not.toContain("Pasqualotto");
     expect(user).toContain("Empresa ou organização: Rede Farmácias Vale");
-    // Esquema dinâmico: só as chaves de PJ sem o art. 27.
+    // Esquema dinâmico: a description de `chave` lista só as chaves de PJ sem o art. 27 (o SDK
+    // não envia enum; a lista fechada vale no prompt e em normalizeNotes).
     const schema = params.output_config.format.schema;
-    const keys: string[] = schema.shape.campos_extraidos.element.shape.chave.options;
-    expect(keys).toContain("regime_tributario");
-    expect(keys.some((k) => k.startsWith("vinculo_art27"))).toBe(false);
+    const chave: string = schema.shape.campos_extraidos.element.shape.chave.description;
+    expect(chave).toContain("regime_tributario");
+    expect(chave).not.toContain("vinculo_art27");
     // Execução registrada em ai_runs com o lead.
     const runs = await db.select().from(aiRuns).where(eq(aiRuns.leadId, lead.id));
     expect(runs).toHaveLength(1);
@@ -264,9 +265,10 @@ describe("organizeNotesAction", () => {
     expect(state.status).toBe("ok");
     if (state.status !== "ok") return;
     expect(state.data.campos).toEqual([]);
+    // Rejeições do CRM na frente das incertezas do modelo (não somem no corte em 8).
     expect(state.data.incertezas).toEqual([
-      "Não ficou claro se o contador participa",
       "Valor não reconhecido para Regime tributário: 'lucro real'",
+      "Não ficou claro se o contador participa",
     ]);
   });
 

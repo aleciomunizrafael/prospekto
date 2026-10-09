@@ -63,17 +63,31 @@ describe("briefSchema", () => {
     expect(briefSchema.safeParse(example).success).toBe(true);
   });
 
-  it("recusa prazo fora do enum e campos faltando", () => {
-    const badDeadline = { ...example, proximo_passo: { acao: "Ligar.", prazo: "mes_que_vem" } };
-    expect(briefSchema.safeParse(badDeadline).success).toBe(false);
+  it("aceita prazo fora da lista (o SDK não envia enum) e normalizeBrief fecha em BriefDeadline; recusa campos faltando", () => {
+    // "amanhã" chegava ao Zod como enum inválido e a execução inteira virava invalid_output.
+    const withDeadline = (prazo: string) => ({
+      ...example,
+      proximo_passo: { acao: "Ligar.", prazo },
+    });
+    expect(briefSchema.safeParse(withDeadline("mes_que_vem")).success).toBe(true);
+    expect(normalizeBrief(withDeadline("amanhã")).proximo_passo.prazo).toBe("amanha");
+    expect(normalizeBrief(withDeadline("Esta semana")).proximo_passo.prazo).toBe("esta_semana");
+    expect(normalizeBrief(withDeadline("próxima semana")).proximo_passo.prazo).toBe(
+      "proxima_semana",
+    );
+    expect(normalizeBrief(withDeadline("hoje.")).proximo_passo.prazo).toBe("hoje");
+    expect(normalizeBrief(withDeadline("mes_que_vem")).proximo_passo.prazo).toBe("esta_semana");
     const missing: Partial<Brief> = { ...example };
     delete missing.lacunas;
     expect(briefSchema.safeParse(missing).success).toBe(false);
   });
 
-  it("não usa min, max, minLength nem regex (subconjunto das saídas estruturadas, decisão P3)", () => {
+  it("não usa min, max, minLength, regex nem enum (subconjunto das saídas estruturadas, decisão P3)", () => {
+    // `enum` entra na lista porque o SDK o descarta do JSON Schema enviado (vira texto na
+    // description): a lista fechada de `prazo` vale no prompt e em normalizeBrief.
     const json = JSON.stringify(z.toJSONSchema(briefSchema));
-    for (const key of ["minLength", "maxLength", "minItems", "maxItems", "pattern", "minimum"]) {
+    const keys = ["minLength", "maxLength", "minItems", "maxItems", "pattern", "minimum", "enum"];
+    for (const key of keys) {
       expect(json).not.toContain(`"${key}"`);
     }
   });
@@ -87,6 +101,9 @@ describe("BRIEF_SYSTEM e briefUserMessage", () => {
     expect(BRIEF_SYSTEM).not.toContain("Rodrigo");
     expect(BRIEF_SYSTEM.endsWith(qualificationRules())).toBe(true);
     expect(BRIEF_SYSTEM).toContain("Responda só com o JSON pedido.");
+    expect(BRIEF_SYSTEM).toContain(
+      "chaves exatas, sem acento: hoje, amanha, esta_semana, proxima_semana",
+    );
     expect(BRIEF_SYSTEM).toContain("3,6% com a LC 224/2025");
   });
 

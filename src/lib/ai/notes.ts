@@ -3,9 +3,16 @@
 // (decisão P3). O componente de tela importa só tipos deste módulo (zod não vai ao navegador).
 import { z } from "zod";
 import { ATTRIBUTE_FIELDS, type AttributeField } from "@/lib/crm/attributes";
-import { addCalendarDays, calendarDateInSaoPaulo, fromDateTimeLocal } from "@/lib/crm/format";
+import {
+  addCalendarDays,
+  calendarDateInSaoPaulo,
+  fromDateTimeLocal,
+  parseDecimalBr,
+  slugify,
+} from "@/lib/crm/format";
 import { SEGMENT_LABELS, enumLabel } from "@/lib/crm/labels";
 import type { LeadSegment } from "@/lib/domain/enums";
+import { calendarDateSchema } from "@/lib/validation/common";
 import { parseAttributes } from "@/lib/validation/lead-attributes";
 import { formatTodayLine, renderLeadContext, scrubText, type LeadContext } from "./redact";
 
@@ -33,12 +40,14 @@ export function attributeKeysFor(segment: LeadSegment): string[] {
   return attributeFieldsFor(segment).map((f) => f.key);
 }
 
-// Esquema dinâmico por segmento. Sem min/max/minLength/regex (subconjunto de JSON Schema das
-// saídas estruturadas); os limites ficam no prompt e em normalizeNotes.
+// Esquema dinâmico por segmento. Sem min/max/minLength/regex nem enum (subconjunto de JSON Schema
+// das saídas estruturadas; o SDK descarta `enum` e só colaria a lista na description, então a API
+// não garantiria o valor): `tipo` e `chave` são strings descritas, e a lista fechada vale no prompt
+// e em normalizeNotes. Os demais limites também ficam no prompt e em normalizeNotes.
 export function notesSchemaFor(segment: LeadSegment) {
-  const keys = attributeKeysFor(segment) as [string, ...string[]];
+  const keys = attributeKeysFor(segment);
   return z.object({
-    tipo: z.enum(NOTES_TYPES),
+    tipo: z.string().describe(`Uma destas chaves exatas, sem acento: ${NOTES_TYPES.join(", ")}.`),
     assunto: z.string().describe("Até 80 caracteres, sem ponto final."),
     resumo: z
       .string()
@@ -48,7 +57,13 @@ export function notesSchemaFor(segment: LeadSegment) {
     proxima_acao: z
       .object({
         descricao: z.string(),
-        em_dias: z.number().int().describe("0 = hoje, 1 = amanhã; dias corridos."),
+        // Zod 4 emite minimum/maximum de inteiro seguro para .int() e o SDK os colaria na
+        // description; mantém "type": "integer" e só apaga os limites do JSON Schema.
+        em_dias: z
+          .number()
+          .int()
+          .describe("0 = hoje, 1 = amanhã; dias corridos.")
+          .meta({ minimum: undefined, maximum: undefined }),
       })
       .nullable(),
     tarefas: z
@@ -56,7 +71,7 @@ export function notesSchemaFor(segment: LeadSegment) {
       .describe("Compromissos assumidos por qualquer das partes, um por item."),
     campos_extraidos: z.array(
       z.object({
-        chave: z.enum(keys),
+        chave: z.string().describe(`Uma das chaves listadas no system prompt: ${keys.join(", ")}.`),
         valor: z
           .string()
           .describe(
@@ -106,6 +121,13 @@ function trimList(items: string[]): string[] {
   return out;
 }
 
+// Canal devolvido pelo modelo na chave de NOTES_TYPES ("Ligação" → "ligacao", "e-mail" → "email"):
+// a API só impõe `string` (ver notesSchemaFor), então a lista fechada se resolve aqui.
+function canonicalType(raw: string): NotesType | null {
+  const key = slugify(raw).replace(/-/g, "");
+  return NOTES_TYPES.find((t) => t === key) ?? null;
+}
+
 // Converte o texto devolvido pelo modelo no tipo do campo antes da validação do segmento.
 // Devolve undefined quando a forma não serve (vira incerteza).
 function coerceValue(field: AttributeField, raw: string): unknown {
@@ -118,13 +140,16 @@ function coerceValue(field: AttributeField, raw: string): unknown {
     return undefined;
   }
   if (field.type === "number") {
-    const n = Number(
-      value
-        .replace(/[R$\s]/g, "")
-        .replace(/\./g, "")
-        .replace(",", "."),
-    );
-    return Number.isFinite(n) ? n : undefined;
+    // "1.250.000,50", "1500.50" e "1.500" (parseDecimalBr, o mesmo do formulário manual): apagar
+    // todos os pontos antes de olhar a vírgula multiplicava "1500.50" por 100.
+    return parseDecimalBr(value) ?? undefined;
+  }
+  if (field.type === "date") {
+    // Só AAAA-MM-DD chega ao atributo (a página do lead e o <input type="date"> esperam esse
+    // formato): dd/mm/aaaa é convertido; outro texto ou data impossível vira incerteza.
+    const br = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+    const iso = br ? `${br[3]}-${br[2]}-${br[1]}` : value;
+    return calendarDateSchema.safeParse(iso).success ? iso : undefined;
   }
   if (field.key === "cnpj") {
     const digits = value.replace(/\D/g, "");
@@ -137,19 +162,30 @@ export function notesAttributes(notes: Pick<Notes, "campos">): Record<string, un
   return Object.fromEntries(notes.campos.map((c) => [c.chave, c.valor]));
 }
 
-// Pós-processamento puro: corta assunto e listas, valida cada campo pelo schema do segmento
-// (o que não valida vira incerteza, nunca grava) e calcula a data da próxima ação.
+// Pós-processamento puro: fecha o canal na lista, corta assunto e listas, valida cada campo pelo
+// schema do segmento (o que não valida vira incerteza, nunca grava) e calcula a data da próxima
+// ação.
 export function normalizeNotes(raw: NotesRaw, segment: LeadSegment, now: Date): Notes {
   const fields = attributeFieldsFor(segment);
-  const incertezas = trimList(raw.incertezas);
+  // Avisos gerados aqui (canal ou campo não reconhecido, valor recusado) vão na frente das
+  // incertezas do modelo: são a parte acionável de "Ficou em aberto" e não podem sumir no corte
+  // em LIST_MAX quando o modelo já devolveu a lista cheia.
+  const avisos: string[] = [];
+  const tipo = canonicalType(raw.tipo);
+  if (!tipo) avisos.push(`Canal não reconhecido: '${raw.tipo.trim()}'`);
   const campos: NotesField[] = [];
   const seen = new Set<string>();
   for (const item of raw.campos_extraidos) {
-    const field = fields.find((f) => f.key === item.chave);
-    if (!field || seen.has(field.key)) continue;
+    const chave = item.chave.trim();
+    const field = fields.find((f) => f.key === chave);
+    if (!field) {
+      avisos.push(`Campo não reconhecido: '${chave}'`);
+      continue;
+    }
+    if (seen.has(field.key)) continue;
     seen.add(field.key);
     const rejected = () =>
-      incertezas.push(`Valor não reconhecido para ${field.label}: '${item.valor.trim()}'`);
+      avisos.push(`Valor não reconhecido para ${field.label}: '${item.valor.trim()}'`);
     const coerced = coerceValue(field, item.valor);
     if (coerced === undefined) {
       rejected();
@@ -181,7 +217,7 @@ export function normalizeNotes(raw: NotesRaw, segment: LeadSegment, now: Date): 
       : null;
 
   return {
-    tipo: raw.tipo,
+    tipo: tipo ?? "nota",
     assunto: raw.assunto
       .trim()
       .replace(/[.\s]+$/, "")
@@ -190,7 +226,7 @@ export function normalizeNotes(raw: NotesRaw, segment: LeadSegment, now: Date): 
     proximaAcao,
     tarefas: trimList(raw.tarefas),
     campos,
-    incertezas: incertezas.slice(0, LIST_MAX),
+    incertezas: trimList([...avisos, ...raw.incertezas]),
   };
 }
 
@@ -198,7 +234,7 @@ export function normalizeNotes(raw: NotesRaw, segment: LeadSegment, now: Date): 
 export const NOTES_SYSTEM = [
   "Você organiza as anotações que a Daniela Sandrin Copat, consultora da Prospekto (captação de patrocínio cultural incentivado e consultoria em leis de incentivo, Serra Gaúcha, RS), ditou ou colou depois de uma conversa com um lead. O relato é falado: pode ter repetições, hesitações, frases incompletas e erros de reconhecimento de voz.",
   "",
-  'Sua tarefa: devolver, em português do Brasil, o registro pronto para o CRM. Regras: 1) Só o que está no relato; nada de inferir dados que não foram ditos. Dúvida vai em "incertezas". 2) "tipo" é o canal da conversa (ligação, reunião, e-mail, WhatsApp, visita); use "nota" quando não houve contato com o lead. 3) "assunto" resume em poucas palavras ("Ligação: contador confirma lucro real"). 4) "resumo" é escrito na voz da Daniela, em primeira pessoa, sem floreio, mantendo nomes, valores e datas exatamente como ditos; não corrija números. 5) "proxima_acao" é a ação seguinte combinada ou implícita, com o prazo em dias corridos a partir de hoje; se nada foi combinado, null. 6) "campos_extraidos" só com informação explícita da conversa, usando as chaves e os valores permitidos; nunca invente. CNPJ só se foi dito, com 14 dígitos. 7) Nunca escreva e-mail, telefone ou CPF no resumo; se aparecerem no relato, escreva "[contato informado]". 8) Responda só com o JSON pedido.',
+  'Sua tarefa: devolver, em português do Brasil, o registro pronto para o CRM. Regras: 1) Só o que está no relato; nada de inferir dados que não foram ditos. Dúvida vai em "incertezas". 2) "tipo" é o canal da conversa, com uma destas chaves exatas, sem acento: ligacao, reuniao, email, whatsapp, visita; use "nota" quando não houve contato com o lead. 3) "assunto" resume em poucas palavras ("Ligação: contador confirma lucro real"). 4) "resumo" é escrito na voz da Daniela, em primeira pessoa, sem floreio, mantendo nomes, valores e datas exatamente como ditos; não corrija números. 5) "proxima_acao" é a ação seguinte combinada ou implícita, com o prazo em dias corridos a partir de hoje; se nada foi combinado, null. 6) "campos_extraidos" só com informação explícita da conversa, usando as chaves e os valores permitidos; nunca invente. CNPJ só se foi dito, com 14 dígitos. 7) Nunca escreva e-mail, telefone ou CPF no resumo; se aparecerem no relato, escreva "[contato informado]". 8) Responda só com o JSON pedido.',
 ].join("\n");
 
 function describeField(field: AttributeField): string {

@@ -41,7 +41,7 @@ export function aiModel(): string {
   return env.AI_MODEL ?? AI_DEFAULT_MODEL;
 }
 
-export type RunStructuredInput<S extends z.ZodObject<z.ZodRawShape>> = {
+export type RunStructuredInput<S extends z.ZodObject<z.ZodRawShape>, T = z.infer<S>> = {
   kind: AiKind;
   leadId: string | null;
   // Estável por recurso: sem data, nome ou id, para o cache de prompt valer (decisão P4).
@@ -53,8 +53,9 @@ export type RunStructuredInput<S extends z.ZodObject<z.ZodRawShape>> = {
   // Pós-processamento puro da saída validada (normalizeBrief, normalizeReply). Roda antes de
   // gravar: ai_runs.output é o que o cartão mostra, hoje e depois de recarregar a página, e as
   // defesas da normalização (mascarar, remover URL, horários, SAIR, limite) valem também para o
-  // rascunho reaberto. Nunca lança.
-  normalize?: (parsed: z.infer<S>) => z.infer<S>;
+  // rascunho reaberto. Pode fechar o tipo da saída (ex.: `prazo` de string para BriefDeadline em
+  // normalizeBrief), por isso o resultado é AiResult<T>. Nunca lança.
+  normalize?: (parsed: z.infer<S>) => T;
   // Metadados sem conteúdo que o recurso acrescenta a ai_runs.data (ex.: `channel` na resposta).
   data?: Record<string, unknown>;
 };
@@ -89,10 +90,10 @@ function classify<S extends z.ZodObject<z.ZodRawShape>>(
   return { status: "ok", parsed: result.data as z.infer<S> };
 }
 
-export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
+export async function runStructured<S extends z.ZodObject<z.ZodRawShape>, T = z.infer<S>>(
   ctx: Ctx,
-  input: RunStructuredInput<S>,
-): Promise<AiResult<z.infer<S>>> {
+  input: RunStructuredInput<S, T>,
+): Promise<AiResult<T>> {
   const api = getClient();
   if (!api) return aiFailure("disabled");
   const { kind, leadId, effort } = input;
@@ -131,7 +132,9 @@ export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
     const durationMs = Math.round(performance.now() - started);
     const { status, parsed: raw } = classify(response, input.schema);
     const fallback = (response.usage.iterations ?? []).some((i) => i.type === "fallback_message");
-    const parsed = raw != null && input.normalize ? input.normalize(raw) : raw;
+    // Sem `normalize`, T é z.infer<S> (padrão do genérico); a asserção só diz isso ao TypeScript.
+    const parsed: T | null =
+      raw != null && input.normalize ? input.normalize(raw) : (raw as T | null);
     const usage = response.usage;
     await finishAiRun(ctx, runId, {
       model: response.model,

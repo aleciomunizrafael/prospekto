@@ -3,6 +3,7 @@
 // action (src/actions/ai-brief.ts) só orquestra; o cartão (brief-card.tsx) só importa tipos daqui
 // (zod não vai ao navegador).
 import { z } from "zod";
+import { slugify } from "@/lib/crm/format";
 import { qualificationRules } from "./qualification";
 import { formatTodayLine, renderLeadContext, type LeadContext } from "./redact";
 
@@ -10,8 +11,10 @@ import { formatTodayLine, renderLeadContext, type LeadContext } from "./redact";
 export const BRIEF_DEADLINES = ["hoje", "amanha", "esta_semana", "proxima_semana"] as const;
 export type BriefDeadline = (typeof BRIEF_DEADLINES)[number];
 
-// Esquema sem min/max/minLength/regex (subconjunto de JSON Schema das saídas estruturadas,
-// decisão P3); os limites das listas valem no prompt e em normalizeBrief.
+// Esquema sem min/max/minLength/regex nem enum (subconjunto de JSON Schema das saídas estruturadas,
+// decisão P3; o SDK descarta `enum` e só colaria a lista na description, então a API não
+// garantiria o valor): `prazo` é string descrita e normalizeBrief fecha em BriefDeadline. Os
+// limites das listas valem no prompt e em normalizeBrief.
 export const briefSchema = z.object({
   resumo: z.string().describe("Três a cinco frases: quem é, o que pediu, em que ponto está."),
   gancho_abertura: z
@@ -30,14 +33,21 @@ export const briefSchema = z.object({
     .describe("Até cinco."),
   proximo_passo: z.object({
     acao: z.string().describe("Uma frase imperativa."),
-    prazo: z.enum(BRIEF_DEADLINES),
+    prazo: z
+      .string()
+      .describe(`Uma destas chaves exatas, sem acento: ${BRIEF_DEADLINES.join(", ")}.`),
   }),
   lacunas: z
     .array(z.string())
     .describe("Até seis dados que faltam no CRM e que mudariam a abordagem."),
 });
 
-export type Brief = z.infer<typeof briefSchema>;
+// O que a API devolve validado (`prazo` ainda string) e o briefing fechado que a action e o cartão
+// usam (`prazo: BriefDeadline`, garantido por normalizeBrief; o cartão indexa os rótulos por ele).
+export type BriefRaw = z.infer<typeof briefSchema>;
+export type Brief = Omit<BriefRaw, "proximo_passo"> & {
+  proximo_passo: { acao: string; prazo: BriefDeadline };
+};
 
 export const BRIEF_LIMITS = {
   pontos_atencao: 6,
@@ -50,7 +60,7 @@ export const BRIEF_LIMITS = {
 // leads e entre dias. Termina com as regras fixas de qualificação.
 export const BRIEF_SYSTEM = [
   "Você prepara a Daniela Sandrin Copat, consultora da Prospekto Consultoria & Projetos (Serra Gaúcha, RS), para uma ligação ou reunião com um lead do CRM. A Prospekto capta patrocínio incentivado para projetos culturais (Lei Rouanet art. 18 e 26, Lei do Audiovisual art. 1º-A, LIC-RS), elabora projetos e presta consultoria a empresas, escritórios contábeis, municípios e proponentes.",
-  'Sua tarefa: a partir dos dados do CRM que vêm na mensagem, devolver um briefing curto e útil, em português do Brasil, só com o que está nos dados. Regras: 1) Nunca invente fato, número, nome ou data; quando faltar, escreva "não informado" e inclua o item em "lacunas". 2) Nunca prometa dedução, valor ou prazo: use "até 4% do IRPJ devido (3,6% com a LC 224/2025); o cálculo final é do contador" para PJ e "até 6% do IR devido, declaração completa" para PF. 3) Respeite as regras de desqualificação: Simples Nacional ou lucro presumido não usam Rouanet nem Audiovisual (ofereça LIC-RS se contribuinte de ICMS no RS); PF com declaração simplificada está fora. 4) Patrocínio não devolve dinheiro ao patrocinador; vínculo entre patrocinador e proponente (art. 27) bloqueia a combinação. 5) Tom: direto, cordial, sem jargão, sem adjetivos vazios; frases curtas. 6) As perguntas devem ser as que ainda não foram respondidas no CRM, na ordem em que a Daniela faria numa conversa de 15 a 30 minutos. 7) O gancho de abertura cita um fato concreto do histórico (o formulário preenchido, a simulação, a última conversa) e termina com uma pergunta aberta. 8) Responda só com o JSON pedido.',
+  'Sua tarefa: a partir dos dados do CRM que vêm na mensagem, devolver um briefing curto e útil, em português do Brasil, só com o que está nos dados. Regras: 1) Nunca invente fato, número, nome ou data; quando faltar, escreva "não informado" e inclua o item em "lacunas". 2) Nunca prometa dedução, valor ou prazo: use "até 4% do IRPJ devido (3,6% com a LC 224/2025); o cálculo final é do contador" para PJ e "até 6% do IR devido, declaração completa" para PF. 3) Respeite as regras de desqualificação: Simples Nacional ou lucro presumido não usam Rouanet nem Audiovisual (ofereça LIC-RS se contribuinte de ICMS no RS); PF com declaração simplificada está fora. 4) Patrocínio não devolve dinheiro ao patrocinador; vínculo entre patrocinador e proponente (art. 27) bloqueia a combinação. 5) Tom: direto, cordial, sem jargão, sem adjetivos vazios; frases curtas. 6) As perguntas devem ser as que ainda não foram respondidas no CRM, na ordem em que a Daniela faria numa conversa de 15 a 30 minutos. 7) O gancho de abertura cita um fato concreto do histórico (o formulário preenchido, a simulação, a última conversa) e termina com uma pergunta aberta. 8) O "prazo" do próximo passo é uma destas chaves exatas, sem acento: hoje, amanha, esta_semana, proxima_semana. 9) Responda só com o JSON pedido.',
   qualificationRules(),
 ].join("\n\n");
 
@@ -101,9 +111,12 @@ function cleanObjections(raw: unknown): Brief["objecoes_provaveis"] {
   return out;
 }
 
+// "amanhã", "Esta semana" ou "proxima_semana" viram a chave; fora da lista, "esta_semana". A API
+// só impõe `string` (ver briefSchema), então a lista fechada se resolve aqui.
 function cleanDeadline(raw: unknown): BriefDeadline {
-  return (BRIEF_DEADLINES as readonly string[]).includes(String(raw))
-    ? (raw as BriefDeadline)
+  const key = typeof raw === "string" ? slugify(raw).replace(/-/g, "_") : "";
+  return (BRIEF_DEADLINES as readonly string[]).includes(key)
+    ? (key as BriefDeadline)
     : "esta_semana";
 }
 
