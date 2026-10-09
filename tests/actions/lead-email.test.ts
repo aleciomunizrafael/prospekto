@@ -8,6 +8,7 @@ import { EMAIL_BLOCK_MESSAGES } from "@/lib/ai/types";
 import { initialCrmActionState } from "@/lib/crm/action-state";
 import { db } from "@/lib/db";
 import { aiRuns, leads } from "@/lib/db/schema";
+import type { ConsentChannel } from "@/lib/domain/enums";
 import type { EmailMessage, SendEmailResult } from "@/lib/email/send";
 import { listActivities } from "@/lib/repos/activities";
 import type { Ctx } from "@/lib/repos/ctx";
@@ -63,7 +64,12 @@ let ctx: Ctx;
 
 async function makeLead(
   own: Ctx,
-  input: { email: string; consent: boolean; emailStatus?: "ok" | "bounced" | "complained" },
+  input: {
+    email: string;
+    consent: boolean;
+    channels?: ConsentChannel[];
+    emailStatus?: "ok" | "bounced" | "complained";
+  },
 ) {
   const { lead } = await createLead(own, {
     segment: "PJ",
@@ -72,7 +78,13 @@ async function makeLead(
     email: input.email,
     // Origem fora do site: createLead só exige consentimento para leads vindos de formulário.
     source: "linkedin",
-    consents: input.consent ? [consentContato] : [],
+    consents: input.consent
+      ? [
+          input.channels
+            ? { ...consentContato, channels: input.channels, sourcePage: "crm" }
+            : consentContato,
+        ]
+      : [],
     attributes: { empresa: "Rede Farmácias Vale" },
   });
   if (input.emailStatus && input.emailStatus !== "ok") {
@@ -116,6 +128,36 @@ describe("sendLeadReplyAction", () => {
     expect(email.last).toBeNull();
     expect(await listActivities(ctx, { leadId: lead.id, type: "email" })).toHaveLength(0);
     expect((await getLead(ctx, lead.id))?.lastContactAt).toBeNull();
+  });
+
+  it("consentimento só por WhatsApp: erro no_email_channel, nenhuma atividade e nada enviado", async () => {
+    const lead = await makeLead(ctx, {
+      email: "so.whatsapp@example.test",
+      consent: true,
+      channels: ["whatsapp"],
+    });
+    const result = await sendLeadReplyAction(
+      initialCrmActionState,
+      fd({ leadId: lead.id, subject: "Sobre o seu contato", text: TEXT, slotIso: SLOT }),
+    );
+    expect(result).toEqual({ status: "error", message: EMAIL_BLOCK_MESSAGES.no_email_channel });
+    expect(email.last).toBeNull();
+    expect(await listActivities(ctx, { leadId: lead.id, type: "email" })).toHaveLength(0);
+    expect((await getLead(ctx, lead.id))?.lastContactAt).toBeNull();
+  });
+
+  it("consentimento do CRM sem canal marcado (registro antigo) não bloqueia o e-mail", async () => {
+    const lead = await makeLead(ctx, {
+      email: "sem.canal@example.test",
+      consent: true,
+      channels: [],
+    });
+    const result = await sendLeadReplyAction(
+      initialCrmActionState,
+      fd({ leadId: lead.id, subject: "Assunto", text: TEXT }),
+    );
+    expect(result).toEqual({ status: "ok", message: "E-mail enviado e registrado." });
+    expect(await listActivities(ctx, { leadId: lead.id, type: "email" })).toHaveLength(1);
   });
 
   it("com consentimento e e-mail ok: envia (modo log), registra a atividade e atualiza o lead", async () => {

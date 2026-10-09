@@ -3,7 +3,8 @@
 // Envio da primeira resposta por e-mail a partir do CRM (ADR-003, frente 3; ia-plano.md, Frente C).
 // Toda função começa com requireSession() (AGENTS.md; tests/auth-guard.test.ts). Nada sai sem um
 // clique da pessoa: o assunto e o corpo chegam revisados do cartão. Exige consentimento de contato
-// comercial vigente e e-mail com status ok (decisão P6); nunca é marketing (sem List-Unsubscribe).
+// comercial vigente que inclua o canal e-mail e e-mail com status ok (decisão P6); nunca é
+// marketing (sem List-Unsubscribe).
 // O envio vai por sendEmail (única porta de saída de e-mail) com reply-to no endereço da Prospekto
 // e fica registrado na linha do tempo pelo repositório, que também atualiza o último contato.
 import { refresh } from "next/cache";
@@ -14,7 +15,7 @@ import { formDataToStrings, type CrmActionState } from "@/lib/crm/action-state";
 import { sendEmail } from "@/lib/email/send";
 import { renderLeadReply } from "@/lib/email/templates/lead-reply";
 import { log } from "@/lib/log";
-import { hasConsent } from "@/lib/repos/consents";
+import { consentAllows, getCurrentConsent } from "@/lib/repos/consents";
 import { getLeadDetail, recordLeadActivity } from "@/lib/repos/leads";
 import { requireSession } from "@/lib/session";
 import { uuidSchema } from "@/lib/validation/common";
@@ -73,9 +74,9 @@ export async function sendLeadReplyAction(
 
   const lead = await getLeadDetail(ctx, d.leadId);
   if (!lead) return fail("Lead não encontrado.");
-  if (!(await hasConsent(ctx, lead.id, "contato_comercial"))) {
-    return fail(EMAIL_BLOCK_MESSAGES.no_consent);
-  }
+  const consent = await getCurrentConsent(ctx, lead.id, "contato_comercial");
+  if (!consentAllows(consent)) return fail(EMAIL_BLOCK_MESSAGES.no_consent);
+  if (!consentAllows(consent, "email")) return fail(EMAIL_BLOCK_MESSAGES.no_email_channel);
   if (lead.emailStatus === "bounced") return fail(EMAIL_BLOCK_MESSAGES.email_bounced);
   if (lead.emailStatus === "complained") return fail(EMAIL_BLOCK_MESSAGES.email_complained);
 

@@ -2,7 +2,7 @@ import "server-only";
 import { and, desc, eq } from "drizzle-orm";
 import { db, type Db } from "@/lib/db";
 import { consents, leads } from "@/lib/db/schema";
-import type { ConsentPurpose } from "@/lib/domain/enums";
+import type { ConsentChannel, ConsentPurpose } from "@/lib/domain/enums";
 import { NotFoundError } from "@/lib/errors";
 import { consentInputSchema, type ConsentInput } from "@/lib/validation/leads";
 import type { Ctx } from "./ctx";
@@ -94,13 +94,21 @@ export async function getCurrentConsent(
   return row ?? null;
 }
 
+// Consentimento vigente e, quando informado, canal dentro dos "canais autorizados" registrados.
+// Lista de canais vazia não restringe: só surge do formulário do CRM com todas as caixas
+// desmarcadas, e os registros antigos continuam valendo como antes.
+export function consentAllows(consent: Consent | null, channel?: ConsentChannel): boolean {
+  if (consent?.granted !== true) return false;
+  return !channel || consent.channels.length === 0 || consent.channels.includes(channel);
+}
+
 export async function hasConsent(
   ctx: Ctx,
   leadId: string,
   purpose: ConsentPurpose,
+  channel?: ConsentChannel,
 ): Promise<boolean> {
-  const current = await getCurrentConsent(ctx, leadId, purpose);
-  return current?.granted === true;
+  return consentAllows(await getCurrentConsent(ctx, leadId, purpose), channel);
 }
 
 export async function listConsents(ctx: Ctx, leadId: string): Promise<Consent[]> {

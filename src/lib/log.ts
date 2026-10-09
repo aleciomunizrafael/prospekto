@@ -17,6 +17,19 @@ export const REDACTED = "[redigido]";
 export function redact(value: unknown, depth = 0): unknown {
   if (depth > 8) return "[profundidade]";
   if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
+  // DrizzleQueryError (drizzle-orm/errors): a message e o stack embutem a SQL e os parâmetros da
+  // consulta (corpo de e-mail, attributes com CNPJ, telefone). A classe não define `name`, então o
+  // reconhecimento é pelas propriedades `query`/`params`. Só o erro do driver interessa, e dele só a
+  // mensagem e o código: `detail`, `query` e `params` do pg trazem valores da linha.
+  if (value instanceof Error && "query" in value && "params" in value) {
+    const cause = (value as { cause?: unknown }).cause as
+      { message?: unknown; code?: unknown } | undefined;
+    return {
+      name: "DrizzleQueryError",
+      message: typeof cause?.message === "string" ? cause.message : "falha na consulta",
+      code: typeof cause?.code === "string" ? cause.code : null,
+    };
+  }
   if (value instanceof Error) {
     return { name: value.name, message: value.message, stack: value.stack };
   }

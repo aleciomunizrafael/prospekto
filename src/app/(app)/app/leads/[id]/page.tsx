@@ -67,7 +67,7 @@ import { isInitialStage, stageSla, type Pipeline } from "@/lib/domain/pipelines"
 import { slaBusinessDays, slaDeadline } from "@/lib/domain/sla";
 import { listActivities } from "@/lib/repos/activities";
 import { getLatestAiRun, type AiRun } from "@/lib/repos/ai-runs";
-import { hasConsent, listConsents } from "@/lib/repos/consents";
+import { consentAllows, getCurrentConsent, listConsents } from "@/lib/repos/consents";
 import { listContributionSummaries } from "@/lib/repos/contributions";
 import { getLeadDetail } from "@/lib/repos/leads";
 import { listOrganizations } from "@/lib/repos/organizations";
@@ -170,7 +170,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
     sponsors ? listOrganizations(ctx, { type: "empresa", limit: 500 }) : Promise.resolve([]),
     getLatestAiRun(ctx, { leadId: lead.id, kind: "brief" }),
     getLatestAiRun(ctx, { leadId: lead.id, kind: "reply" }),
-    hasConsent(ctx, lead.id, "contato_comercial"),
+    getCurrentConsent(ctx, lead.id, "contato_comercial"),
   ]);
   const projectNames = new Map(projects.map((p) => [p.id, p.name]));
   const userNames = new Map(users.map((u) => [u.id, u.name]));
@@ -193,16 +193,18 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
   const userOptions = users.map((u) => ({ id: u.id, name: u.name }));
 
   // Painel de IA (ADR-003): sem chave, cartões desabilitados; e-mail só com consentimento de
-  // contato comercial e endereço com status ok (decisão P6).
+  // contato comercial que inclua o canal e-mail e endereço com status ok (decisão P6).
   const aiEnabled = isAiEnabled();
   const slots = proposeSlots(now);
-  const emailBlockReason: EmailBlockReason = !contactConsent
+  const emailBlockReason: EmailBlockReason = !consentAllows(contactConsent)
     ? "no_consent"
-    : lead.emailStatus === "bounced"
-      ? "email_bounced"
-      : lead.emailStatus === "complained"
-        ? "email_complained"
-        : null;
+    : !consentAllows(contactConsent, "email")
+      ? "no_email_channel"
+      : lead.emailStatus === "bounced"
+        ? "email_bounced"
+        : lead.emailStatus === "complained"
+          ? "email_complained"
+          : null;
   const aiLead: AiPanelLead = {
     id: lead.id,
     name: lead.name,

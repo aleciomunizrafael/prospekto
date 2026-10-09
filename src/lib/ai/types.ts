@@ -63,11 +63,14 @@ export type AiRunSnapshot<T = Record<string, unknown>> = {
 // Horário proposto por proposeSlots: ISO em UTC e rótulo por extenso em português.
 export type AiSlot = { iso: string; label: string };
 
-// Motivo de "Enviar por e-mail" desabilitado (decisão P6); null quando pode enviar.
-export type EmailBlockReason = "no_consent" | "email_bounced" | "email_complained" | null;
+// Motivo de "Enviar por e-mail" desabilitado (decisão P6); null quando pode enviar. O consentimento
+// precisa estar vigente e, quando registra canais, incluir o e-mail.
+export type EmailBlockReason =
+  "no_consent" | "no_email_channel" | "email_bounced" | "email_complained" | null;
 
 export const EMAIL_BLOCK_MESSAGES: Record<Exclude<EmailBlockReason, null>, string> = {
   no_consent: "Sem consentimento de contato comercial registrado para este lead.",
+  no_email_channel: "O consentimento deste lead não inclui e-mail.",
   email_bounced: "O e-mail deste lead foi devolvido.",
   email_complained: "Este lead marcou nossos e-mails como spam.",
 };

@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { MissingFieldsError, ValidationError } from "@/lib/errors";
 import type { Ctx } from "@/lib/repos/ctx";
 import { listActivities } from "@/lib/repos/activities";
-import { getCurrentConsent, listConsents, revokeConsent } from "@/lib/repos/consents";
+import { getCurrentConsent, hasConsent, listConsents, revokeConsent } from "@/lib/repos/consents";
 import { createContact } from "@/lib/repos/contacts";
 import {
   createLead,
@@ -541,5 +541,35 @@ describe("updateLead e consentimentos", () => {
     expect((await getCurrentConsent(ctx, lead.id, "marketing"))?.granted).toBe(false);
     expect(await listConsents(ctx, lead.id)).toHaveLength(3);
     expect((await getCurrentConsent(ctx, lead.id, "contato_comercial"))?.granted).toBe(true);
+  });
+
+  it("hasConsent com canal respeita os canais autorizados; lista vazia não restringe", async () => {
+    const make = async (channels: ("email" | "whatsapp" | "telefone")[]) =>
+      (
+        await createLead(ctx, {
+          segment: "PJ",
+          interest: "rouanet",
+          name: "Canais",
+          email: uniqueEmail("canais"),
+          source: "linkedin",
+          consents: [{ ...consentContato, channels, sourcePage: "crm" }],
+        })
+      ).lead;
+    const byEmail = await make(["email"]);
+    expect(await hasConsent(ctx, byEmail.id, "contato_comercial", "email")).toBe(true);
+    expect(await hasConsent(ctx, byEmail.id, "contato_comercial", "whatsapp")).toBe(false);
+    const byWhatsapp = await make(["whatsapp"]);
+    expect(await hasConsent(ctx, byWhatsapp.id, "contato_comercial")).toBe(true);
+    expect(await hasConsent(ctx, byWhatsapp.id, "contato_comercial", "email")).toBe(false);
+    const noChannel = await make([]);
+    expect(await hasConsent(ctx, noChannel.id, "contato_comercial", "email")).toBe(true);
+    await revokeConsent(ctx, {
+      leadId: noChannel.id,
+      purpose: "contato_comercial",
+      policyVersion: "2026-10-03",
+      sourcePage: "crm",
+    });
+    expect(await hasConsent(ctx, noChannel.id, "contato_comercial")).toBe(false);
+    expect(await hasConsent(ctx, noChannel.id, "contato_comercial", "email")).toBe(false);
   });
 });
