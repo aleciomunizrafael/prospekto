@@ -59,6 +59,21 @@ vi.mock("next/cache", () => ({
   updateTag: () => undefined,
 }));
 
+// Falha simulada do banco na leitura do contexto: o repositório real continua respondendo (a
+// fábrica reexecuta a cada vi.resetModules() de loadActions) e só listActivities rejeita quando a
+// bandeira está ligada.
+const repos = vi.hoisted(() => ({ failActivities: false }));
+vi.mock("@/lib/repos/activities", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@/lib/repos/activities")>();
+  return {
+    ...mod,
+    listActivities: async (...args: Parameters<typeof mod.listActivities>) => {
+      if (repos.failActivities) throw new Error("falha simulada do banco");
+      return mod.listActivities(...args);
+    },
+  };
+});
+
 const EMAIL = "contador@example.test";
 const RELATO = `Liguei para o Rodrigo hoje à tarde. O contador dele, que atende no ${EMAIL} ou no (54) 98403-2180, confirmou que a empresa está no lucro real e apura trimestral. CNPJ da empresa 55.667.788/0001-86. Combinamos que mando a proposta em três dias e ele conversa com o sócio.`;
 
@@ -284,6 +299,35 @@ describe("organizeNotesAction", () => {
       session.ctx = ctx;
     }
     expect(sdk.create).not.toHaveBeenCalled();
+  });
+
+  it("falha do banco ao carregar o contexto vira estado de erro (Callout), não rejeição", async () => {
+    const lead = await newLead("PJ");
+    const { organizeNotesAction } = await loadActions();
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    repos.failActivities = true;
+    try {
+      const state = await organizeNotesAction(
+        initialAiActionState,
+        fd({ leadId: lead.id, text: RELATO }),
+      );
+      // Rejeitar aqui derrubaria a página do lead (error boundary) e perderia o relato ditado.
+      expect(state).toEqual({
+        status: "error",
+        reason: "error",
+        message: "Não foi possível organizar o relato. Tente de novo em instantes.",
+      });
+    } finally {
+      repos.failActivities = false;
+    }
+    expect(sdk.create).not.toHaveBeenCalled();
+    // Log sem conteúdo do relato (R-16): só ids e o erro.
+    expect(errorLog).toHaveBeenCalledTimes(1);
+    const line = String(errorLog.mock.calls[0][0]);
+    expect(line).toContain("falha ao organizar o relato");
+    expect(line).toContain(lead.id);
+    expect(line).not.toContain("Rodrigo");
+    expect(line).not.toContain(EMAIL);
   });
 
   it("sem chave devolve disabled sem chamar o SDK; recusa vira refusal com mensagem pronta", async () => {

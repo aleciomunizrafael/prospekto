@@ -59,35 +59,43 @@ export async function organizeNotesAction(
     return aiError(parsed.error.issues[0]?.message ?? "Confira o relato.");
   }
   const { leadId, text } = parsed.data;
-  const lead = await getLeadDetail(ctx, leadId);
-  if (!lead) return aiError("Lead não encontrado.");
-  const now = new Date();
-  const activities = await listActivities(ctx, { leadId, limit: CONTEXT_ACTIVITIES });
-  // Só o que o modo "notes" usa (ADR-003, 5.1): o resto do LeadContextInput fica vazio.
-  const context = buildLeadContext({
-    lead,
-    activities,
-    consents: [],
-    simulations: [],
-    contributions: [],
-    ownerName: null,
-    projectNames: new Map(),
-    now,
-  });
-  const result = await runStructured(ctx, {
-    kind: "notes",
-    leadId,
-    system: notesSystemFor(lead.segment),
-    user: notesUserMessage(context, text, now),
-    schema: notesSchemaFor(lead.segment),
-    effort: "medium",
-  });
-  if (!result.ok) return { status: "error", reason: result.reason, message: result.message };
-  return {
-    status: "ok",
-    data: normalizeNotes(result.data, lead.segment, now),
-    runId: result.runId,
-  };
+  try {
+    const lead = await getLeadDetail(ctx, leadId);
+    if (!lead) return aiError("Lead não encontrado.");
+    const now = new Date();
+    const activities = await listActivities(ctx, { leadId, limit: CONTEXT_ACTIVITIES });
+    // Só o que o modo "notes" usa (ADR-003, 5.1): o resto do LeadContextInput fica vazio.
+    const context = buildLeadContext({
+      lead,
+      activities,
+      consents: [],
+      simulations: [],
+      contributions: [],
+      ownerName: null,
+      projectNames: new Map(),
+      now,
+    });
+    const result = await runStructured(ctx, {
+      kind: "notes",
+      leadId,
+      system: notesSystemFor(lead.segment),
+      user: notesUserMessage(context, text, now),
+      schema: notesSchemaFor(lead.segment),
+      effort: "medium",
+    });
+    if (!result.ok) return { status: "error", reason: result.reason, message: result.message };
+    return {
+      status: "ok",
+      data: normalizeNotes(result.data, lead.segment, now),
+      runId: result.runId,
+    };
+  } catch (error) {
+    // Falha ao carregar os dados (a chamada ao modelo já trata as suas por dentro), como em
+    // ai-brief.ts e ai-reply.ts: uma rejeição aqui cairia no limite de erro da página e perderia o
+    // relato ditado; como estado, vira o Callout do cartão. Sem conteúdo no log (R-16).
+    log("error", "falha ao organizar o relato", { tenantId: ctx.tenantId, leadId, error });
+    return aiError("Não foi possível organizar o relato. Tente de novo em instantes.");
+  }
 }
 
 const applySchema = z.object({
