@@ -88,3 +88,36 @@ describe("variáveis de ambiente: EMAIL_FROM", () => {
     }
   });
 });
+
+describe("variáveis de ambiente: IA (opcionais)", () => {
+  it("ANTHROPIC_API_KEY e AI_MODEL são opcionais", () => {
+    const result = envSchema.safeParse(base);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.ANTHROPIC_API_KEY).toBeUndefined();
+      expect(result.data.AI_MODEL).toBeUndefined();
+    }
+  });
+
+  it.each([
+    ["vazia", ""],
+    ["só espaços", "  "],
+  ])("string %s vira ausente (o Vercel grava vazio ao criar a variável)", (_rotulo, value) => {
+    const result = envSchema.safeParse({ ...base, ANTHROPIC_API_KEY: value, AI_MODEL: value });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.ANTHROPIC_API_KEY).toBeUndefined();
+      expect(result.data.AI_MODEL).toBeUndefined();
+    }
+  });
+
+  it("aceita chave e modelo informados", () => {
+    const result = envSchema.safeParse({
+      ...base,
+      ANTHROPIC_API_KEY: "sk-ant-teste",
+      AI_MODEL: "claude-sonnet-5-5",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.AI_MODEL).toBe("claude-sonnet-5-5");
+  });
+});

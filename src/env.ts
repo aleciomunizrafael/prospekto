@@ -29,6 +29,13 @@ const senderAddress = (name: string) =>
       .default("Prospekto <onboarding@resend.dev>"),
   );
 
+// Variável opcional cujo valor em branco (vazio ou só espaços) conta como ausente.
+const blankToUndefined = <T extends z.ZodTypeAny>(inner: T) =>
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    inner,
+  );
+
 const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   // Implantado: obrigatório (sem ele o app subiria num PGlite descartável). Local: ausente = PGlite.
@@ -48,6 +55,10 @@ const schema = z.object({
   TURNSTILE_SECRET_KEY: z.string().optional(),
   DEFAULT_TENANT_ID: z.string().default("prospekto"),
   SEED_USERS: z.string().optional(), // "Nome <email>;Nome <email>" só para scripts/seed.ts
+  // IA (ADR-003, seção 9): sem a chave, os recursos aparecem desabilitados e nenhuma chamada é feita.
+  // String vazia vira ausente (o Vercel grava "" quando a variável é criada sem valor).
+  ANTHROPIC_API_KEY: blankToUndefined(z.string().min(1).optional()),
+  AI_MODEL: blankToUndefined(z.string().min(1).optional()),
 });
 
 const parsed = schema.safeParse(process.env);

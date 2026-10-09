@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { AiPanel, type AiPanelLead } from "@/components/crm/ai/ai-panel";
 import { NewContributionDialog } from "@/components/crm/contribution-dialogs";
 import { ContributionTable } from "@/components/crm/contribution-table";
 import { ActivityForm } from "@/components/crm/forms/activity-form";
@@ -33,6 +34,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { isAiEnabled } from "@/lib/ai/client";
+import { proposeSlots } from "@/lib/ai/qualification";
+import type { AiRunSnapshot, EmailBlockReason } from "@/lib/ai/types";
 import { ATTRIBUTE_FIELDS, type AttributeField } from "@/lib/crm/attributes";
 import {
   formatCalendarDate,
@@ -62,7 +66,8 @@ import { allowedContributionMechanisms } from "@/lib/domain/mechanisms";
 import { isInitialStage, stageSla, type Pipeline } from "@/lib/domain/pipelines";
 import { slaBusinessDays, slaDeadline } from "@/lib/domain/sla";
 import { listActivities } from "@/lib/repos/activities";
-import { listConsents } from "@/lib/repos/consents";
+import { getLatestAiRun, type AiRun } from "@/lib/repos/ai-runs";
+import { hasConsent, listConsents } from "@/lib/repos/consents";
 import { listContributionSummaries } from "@/lib/repos/contributions";
 import { getLeadDetail } from "@/lib/repos/leads";
 import { listOrganizations } from "@/lib/repos/organizations";
@@ -74,6 +79,21 @@ import { parseSimulatorInput, simulate, type SimulatorResult } from "@/lib/simul
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Lead" };
+
+// A geração de briefing ou rascunho pela IA pode passar de 10 s; em Next 16 o maxDuration da
+// página vale para as Server Actions usadas nela (route-segment-config/maxDuration.md). 60 s cabe
+// no Hobby e no Pro do Vercel com Fluid compute (ADR-003, seção 7.1).
+export const maxDuration = 60;
+
+function aiSnapshot(run: AiRun | null): AiRunSnapshot | null {
+  if (!run || !run.output) return null;
+  return {
+    runId: run.id,
+    output: run.output,
+    model: run.model,
+    createdAt: run.createdAt.toISOString(),
+  };
+}
 
 function looksLikeResult(value: unknown): value is SimulatorResult {
   return (
@@ -129,16 +149,29 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
   const now = new Date();
   const pipeline = lead.pipeline as Pipeline;
   const sponsors = pipeline === "patrocinadores";
-  const [consents, simulations, activities, users, contributions, projects, sponsorOrgs] =
-    await Promise.all([
-      listConsents(ctx, lead.id),
-      listSimulations(ctx, { leadId: lead.id, limit: 10 }),
-      listActivities(ctx, { leadId: lead.id, limit: 300 }),
-      listTenantUsers(ctx),
-      sponsors ? listContributionSummaries(ctx, { leadId: lead.id }) : Promise.resolve([]),
-      sponsors ? listProjects(ctx, { limit: 500 }) : Promise.resolve([]),
-      sponsors ? listOrganizations(ctx, { type: "empresa", limit: 500 }) : Promise.resolve([]),
-    ]);
+  const [
+    consents,
+    simulations,
+    activities,
+    users,
+    contributions,
+    projects,
+    sponsorOrgs,
+    latestBrief,
+    latestReply,
+    contactConsent,
+  ] = await Promise.all([
+    listConsents(ctx, lead.id),
+    listSimulations(ctx, { leadId: lead.id, limit: 10 }),
+    listActivities(ctx, { leadId: lead.id, limit: 300 }),
+    listTenantUsers(ctx),
+    sponsors ? listContributionSummaries(ctx, { leadId: lead.id }) : Promise.resolve([]),
+    sponsors ? listProjects(ctx, { limit: 500 }) : Promise.resolve([]),
+    sponsors ? listOrganizations(ctx, { type: "empresa", limit: 500 }) : Promise.resolve([]),
+    getLatestAiRun(ctx, { leadId: lead.id, kind: "brief" }),
+    getLatestAiRun(ctx, { leadId: lead.id, kind: "reply" }),
+    hasConsent(ctx, lead.id, "contato_comercial"),
+  ]);
   const projectNames = new Map(projects.map((p) => [p.id, p.name]));
   const userNames = new Map(users.map((u) => [u.id, u.name]));
   const info = stageInfo(lead, now);
@@ -158,6 +191,28 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
   const nextStep = nextStepForLead(lead, tasks, plans, now);
   const whatsappHref = whatsappHrefFor({ ...lead, company });
   const userOptions = users.map((u) => ({ id: u.id, name: u.name }));
+
+  // Painel de IA (ADR-003): sem chave, cartões desabilitados; e-mail só com consentimento de
+  // contato comercial e endereço com status ok (decisão P6).
+  const aiEnabled = isAiEnabled();
+  const slots = proposeSlots(now);
+  const emailBlockReason: EmailBlockReason = !contactConsent
+    ? "no_consent"
+    : lead.emailStatus === "bounced"
+      ? "email_bounced"
+      : lead.emailStatus === "complained"
+        ? "email_complained"
+        : null;
+  const aiLead: AiPanelLead = {
+    id: lead.id,
+    name: lead.name,
+    segment: lead.segment,
+    pipeline: lead.pipeline,
+    stage: lead.stage,
+    emailStatus: lead.emailStatus,
+    hasPhone: whatsappHref !== null,
+    isFirstContact: isInitialStage(pipeline, lead.stage) && !lead.lastContactAt,
+  };
 
   const stageProps: LeadStageProps = {
     leadId: lead.id,
@@ -482,6 +537,16 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
   const main = (
     <>
       <NextStepCard step={nextStep} action={stepAction(nextStep)} className="max-lg:order-1" />
+      <AiPanel
+        enabled={aiEnabled}
+        lead={aiLead}
+        initialBrief={aiSnapshot(latestBrief)}
+        initialReply={aiSnapshot(latestReply)}
+        slots={slots}
+        canEmail={emailBlockReason === null}
+        emailBlockReason={emailBlockReason}
+        whatsappHref={whatsappHref}
+      />
       <FormSection
         id="registrar"
         title="Registrar atividade"
@@ -490,6 +555,8 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
       >
         <ActivityForm
           leadId={lead.id}
+          segment={lead.segment}
+          aiEnabled={aiEnabled}
           suggestedNextActionAt={suggestedNext ? suggestedNext.toISOString() : null}
           now={now.toISOString()}
           autoFocus={registrar === "1"}

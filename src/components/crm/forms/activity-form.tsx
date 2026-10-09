@@ -8,6 +8,8 @@ import { formatShortDay } from "@/lib/crm/describe-sla";
 import { fromDateTimeLocal, toDateTimeLocal } from "@/lib/crm/format";
 import { ACTIVITY_TYPE_LABELS, MEETING_KINDS } from "@/lib/crm/labels";
 import { ACTIVITY_ICONS } from "@/lib/crm/status-tones";
+import type { LeadSegment } from "@/lib/domain/enums";
+import { DictationTools } from "../ai/dictation";
 import { SegmentedControl } from "../ui/segmented-control";
 import { FormMessage, SelectField, TextField, TextareaField, ids } from "./fields";
 import { SubmitButton } from "./submit-button";
@@ -51,11 +53,16 @@ function successMessage(type: ActivityKind, formData: FormData): string {
 // (<details> do FormSection no celular) e focam o campo.
 export function ActivityForm({
   leadId,
+  segment,
+  aiEnabled,
   suggestedNextActionAt,
   now,
   autoFocus = false,
 }: {
   leadId: string;
+  // Segmento do lead e estado da IA: alimentam "Ditar" e "Organizar com IA" (DictationTools).
+  segment: LeadSegment;
+  aiEnabled: boolean;
   suggestedNextActionAt: string | null;
   // Instante do servidor (ISO): o "Data e hora" padrão e o DateHint usam o mesmo valor no SSR e
   // na hidratação. `new Date()` no cliente mudava de minuto entre os dois e quebrava a hidratação.
@@ -122,6 +129,12 @@ export function ActivityForm({
     <form ref={formRef} action={action} className="flex flex-col gap-4" noValidate>
       <input type="hidden" name="leadId" value={leadId} />
       <FormMessage status={state.status === "error" ? "error" : "idle"} message={state.message} />
+      <DictationTools
+        leadId={leadId}
+        segment={segment}
+        enabled={aiEnabled}
+        textareaId={ids("body").id}
+      />
       <SegmentedControl
         name="type"
         label="Tipo de atividade"

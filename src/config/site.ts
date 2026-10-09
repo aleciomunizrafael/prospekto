@@ -56,7 +56,7 @@ export const site = {
     marketing:
       "Quero receber materiais da Prospekto sobre incentivo fiscal à cultura por e-mail e WhatsApp. Posso cancelar quando quiser.",
     footer:
-      "Seus dados ficam no CRM da Prospekto e não são vendidos nem compartilhados com terceiros, exceto os provedores necessários ao serviço (hospedagem, e-mail, WhatsApp). Você pode pedir acesso, correção ou exclusão pelo e-mail projetos@prospekto.com.br.",
+      "Seus dados ficam no CRM da Prospekto e não são vendidos nem compartilhados com terceiros, exceto os provedores necessários ao serviço (hospedagem, e-mail, WhatsApp e inteligência artificial para apoio ao atendimento). Você pode pedir acesso, correção ou exclusão pelo e-mail projetos@prospekto.com.br.",
   },
   // Menu principal (estrutura-e-copy.md, seção 3). As páginas de segmento são da próxima onda.
   nav: [

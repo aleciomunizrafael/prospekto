@@ -2,6 +2,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Ctx } from "@/lib/repos/ctx";
 import { createActivity, listActivities, listOpenTasks } from "@/lib/repos/activities";
+import { countAiRunsToday, getLatestAiRun, insertAiRun } from "@/lib/repos/ai-runs";
 import { getCurrentConsent, listConsents } from "@/lib/repos/consents";
 import { createContact, getContact, listContacts } from "@/lib/repos/contacts";
 import { createContribution, getContribution, listContributions } from "@/lib/repos/contributions";
@@ -59,6 +60,13 @@ async function seedTenant(ctx: Ctx, label: string) {
     subject: `Tarefa ${label}`,
     leadId: lead.id,
     dueAt: new Date(),
+  });
+  await insertAiRun(ctx, {
+    kind: "brief",
+    leadId: lead.id,
+    model: "claude-opus-5-5",
+    status: "ok",
+    output: { resumo: `Briefing ${label}` },
   });
   const simulation = await createSimulation(ctx, {
     leadId: lead.id,
@@ -118,6 +126,16 @@ describe("isolamento entre tenants", () => {
     expect((await listOpenTasks(b)).map((t) => t.subject)).toEqual(["Tarefa b"]);
     expect((await listSimulations(a)).map((s) => s.id)).toEqual([dataA.simulation.id]);
     expect(await getSimulationByTokenHash(a, dataB.simulation.resultTokenHash!)).toBeNull();
+  });
+
+  it("execuções de IA (ai_runs) ficam no próprio tenant", async () => {
+    expect((await getLatestAiRun(a, { leadId: leadA.id, kind: "brief" }))?.output).toEqual({
+      resumo: "Briefing a",
+    });
+    expect(await getLatestAiRun(a, { leadId: leadB.id, kind: "brief" })).toBeNull();
+    expect(await getLatestAiRun(b, { leadId: leadA.id, kind: "brief" })).toBeNull();
+    expect(await countAiRunsToday(a)).toBe(1);
+    expect(await countAiRunsToday(b)).toBe(1);
   });
 
   it("getTenant devolve o tenant do contexto", async () => {
