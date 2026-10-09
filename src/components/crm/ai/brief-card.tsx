@@ -1,7 +1,7 @@
 "use client";
 
 import { Copy, Loader2, Sparkles, TriangleAlert } from "lucide-react";
-import { useActionState, useState } from "react";
+import { useActionState, useId, useState } from "react";
 import { toast } from "sonner";
 import { generateBriefAction } from "@/actions/ai-brief";
 import { Callout } from "@/components/crm/ui/callout";
@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { Brief, BriefDeadline } from "@/lib/ai/brief";
 import { initialAiActionState, type AiActionState, type AiRunSnapshot } from "@/lib/ai/types";
 import { formatDateTime } from "@/lib/crm/format";
+import { cn } from "@/lib/utils";
 
 // "Preparar ligação" (ADR-003, frente 1; ia-plano.md, Frente A). Abre com o último briefing
 // gravado em ai_runs (`initial`, decisão P2) ou vazio com um único botão; a Server Action só roda
@@ -86,7 +87,14 @@ function BriefBody({ brief, briefKey }: { brief: Brief; briefKey: string }) {
           {brief.gancho_abertura}
         </blockquote>
         <div>
-          <Button type="button" variant="outline" size="sm" onClick={copyHook}>
+          {/* Alvo de 44 px no celular, 28 px a partir de md (crm-design-system.md, seção 9). */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-11 md:h-7"
+            onClick={copyHook}
+          >
             <Copy aria-hidden="true" />
             Copiar
           </Button>
@@ -110,16 +118,14 @@ function BriefBody({ brief, briefKey }: { brief: Brief; briefKey: string }) {
       {brief.perguntas.length ? (
         <section className="flex flex-col gap-1">
           <SectionTitle>Perguntas a fazer</SectionTitle>
-          {/* Caixas só para marcar durante a ligação; nada é gravado. `key` reinicia a cada briefing. */}
-          <ol key={briefKey} className="flex flex-col gap-1.5 text-sm">
+          {/* Caixas só para marcar durante a ligação; nada é gravado. `key` reinicia a cada briefing.
+              O <label> envolvente dá o nome acessível "N. pergunta" (sem aria-label, que o
+              substituiria); linha de 44 px e 8 px entre linhas no celular, como o CheckboxField. */}
+          <ol key={briefKey} className="flex flex-col gap-2 text-sm">
             {brief.perguntas.map((item, index) => (
               <li key={item}>
-                <label className="flex cursor-pointer gap-2">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5 size-4 shrink-0 accent-primary"
-                    aria-label={`Pergunta ${index + 1} feita`}
-                  />
+                <label className="flex min-h-11 cursor-pointer items-start gap-2 py-2 md:min-h-0 md:py-0">
+                  <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-primary" />
                   <span>
                     <span className="tabular-nums text-muted-foreground">{index + 1}.</span> {item}
                   </span>
@@ -186,6 +192,12 @@ export function BriefCard({ leadId, enabled, initial }: BriefCardProps) {
   const error = state.status === "error" ? state : null;
   // Teto diário atingido: só volta amanhã; o botão fica desabilitado até recarregar a página.
   const blocked = !enabled || error?.reason === "quota";
+  const noteId = useId();
+  const alertId = useId();
+  // Região viva sempre montada (vazia no início): leitor de tela anuncia o começo e o fim da
+  // geração; "Gerar de novo" passa por "Gerando…" e anuncia o novo resultado. No erro volta a
+  // vazia e o Callout role="alert" fala por si.
+  const live = pending ? "Gerando o briefing…" : state.status === "ok" ? "Briefing pronto." : "";
 
   return (
     <Card aria-busy={pending || undefined}>
@@ -200,16 +212,16 @@ export function BriefCard({ leadId, enabled, initial }: BriefCardProps) {
         ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        <p role="status" className="sr-only">
+          {live}
+        </p>
         {error ? (
-          <Callout tone="warning" role="alert">
+          <Callout tone="warning" role="alert" id={alertId}>
             {error.message}
           </Callout>
         ) : null}
         {pending ? (
           <div className="flex flex-col gap-2">
-            <span className="sr-only" role="status">
-              Gerando o briefing…
-            </span>
             <Skeleton className="h-3 w-24" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-11/12" />
@@ -223,11 +235,17 @@ export function BriefCard({ leadId, enabled, initial }: BriefCardProps) {
         ) : null}
         <form action={formAction} className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <input type="hidden" name="leadId" value={leadId} />
+          {/* Desabilitado mas focável (aria-disabled): o foco não cai no body durante a geração e,
+              sem chave ou no teto diário, a explicação fica ligada por aria-describedby. Alvo de
+              44 px no celular; 32/28 px a partir de md. */}
           <Button
             type="submit"
             variant="outline"
-            size={brief ? "sm" : "default"}
+            size={brief ? "sm" : "touch"}
+            className={cn(brief ? "h-11 md:h-7" : "md:h-8", "aria-disabled:opacity-50")}
             disabled={pending || blocked}
+            focusableWhenDisabled
+            aria-describedby={!enabled ? noteId : error ? alertId : undefined}
           >
             {pending ? (
               <>
@@ -242,7 +260,9 @@ export function BriefCard({ leadId, enabled, initial }: BriefCardProps) {
             )}
           </Button>
           {!enabled ? (
-            <p className="crm-meta">IA não configurada.</p>
+            <p id={noteId} className="crm-meta">
+              IA não configurada.
+            </p>
           ) : brief ? (
             <p className="crm-meta">{NOTE}</p>
           ) : null}

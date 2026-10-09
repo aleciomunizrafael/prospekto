@@ -22,6 +22,7 @@ import {
 } from "@/lib/ai/types";
 import { initialCrmActionState, type CrmActionState } from "@/lib/crm/action-state";
 import { calendarDateInSaoPaulo, formatDate, formatDateTime } from "@/lib/crm/format";
+import { cn } from "@/lib/utils";
 import type { AiPanelLead } from "./ai-panel";
 import { TextField, TextareaField } from "../forms/fields";
 import { HiddenField, type FormAction } from "../project-forms/action-form";
@@ -130,12 +131,10 @@ const sendAction: FormAction = async (_prev, formData) => {
   return { status: "idle" };
 };
 
+// Só a silhueta: o anúncio "Gerando o rascunho…" sai da região viva fixa do cartão.
 function DraftSkeleton() {
   return (
     <div className="flex flex-col gap-2">
-      <span className="sr-only" role="status">
-        Gerando o rascunho…
-      </span>
       <Skeleton className="h-3 w-20" />
       <Skeleton className="h-9 w-full" />
       <Skeleton className="h-3 w-24" />
@@ -175,6 +174,9 @@ export function ReplyCard({
   // mesmo valor no SSR e na hidratação (o inicializador de useState rodaria nos dois lados).
   const today = calendarDateInSaoPaulo(new Date(now));
   const blockId = useId();
+  const hintId = useId();
+  const noteId = useId();
+  const alertId = useId();
 
   const [state, formAction, pending] = useActionState(
     async (prev: AiActionState<ReplyDraft>, formData: FormData) => {
@@ -236,6 +238,15 @@ export function ReplyCard({
     </p>
   ) : null;
 
+  // Região viva sempre montada (vazia no início): leitor de tela anuncia o começo e o fim da
+  // geração; "Gerar de novo" passa por "Gerando…" e anuncia o novo resultado. No erro volta a
+  // vazia e o Callout role="alert" fala por si.
+  const live = pending
+    ? "Gerando o rascunho…"
+    : state.status === "ok"
+      ? "Rascunho pronto. Revise antes de enviar."
+      : "";
+
   return (
     <Card aria-busy={pending || undefined}>
       <CardHeader>
@@ -249,6 +260,9 @@ export function ReplyCard({
         ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        <p role="status" className="sr-only">
+          {live}
+        </p>
         <div className="flex flex-col gap-1">
           <SegmentedControl
             name="replyChannel"
@@ -263,7 +277,7 @@ export function ReplyCard({
         </div>
 
         {error ? (
-          <Callout tone="warning" role="alert">
+          <Callout tone="warning" role="alert" id={alertId}>
             {error.message}
           </Callout>
         ) : null}
@@ -319,7 +333,15 @@ export function ReplyCard({
                   ) : canEmail ? (
                     <ConfirmDialog
                       trigger={
-                        <Button type="button" disabled={!canSend}>
+                        // Alvo de 44 px no celular, 32 px a partir de md (o Trigger repassa a
+                        // className); a dica do preenchimento fica ligada ao botão bloqueado.
+                        <Button
+                          type="button"
+                          size="touch"
+                          className="md:h-8"
+                          disabled={!canSend}
+                          aria-describedby={canSend ? undefined : hintId}
+                        >
                           <Send aria-hidden="true" />
                           Enviar por e-mail
                         </Button>
@@ -349,13 +371,19 @@ export function ReplyCard({
                       ) : null}
                     </ConfirmDialog>
                   ) : (
-                    <Button type="button" disabled aria-describedby={blockId}>
+                    <Button
+                      type="button"
+                      size="touch"
+                      className="md:h-8"
+                      disabled
+                      aria-describedby={blockId}
+                    >
                       <Send aria-hidden="true" />
                       Enviar por e-mail
                     </Button>
                   )}
                   {canEmail && !canSend ? (
-                    <p className="crm-meta">
+                    <p id={hintId} className="crm-meta">
                       Preencha o assunto e uma mensagem com pelo menos {MIN_TEXT} caracteres.
                     </p>
                   ) : null}
@@ -366,6 +394,8 @@ export function ReplyCard({
                 {whatsappHref ? (
                   <Button
                     variant="outline"
+                    size="touch"
+                    className="md:h-8"
                     nativeButton={false}
                     render={
                       <a
@@ -387,7 +417,13 @@ export function ReplyCard({
                     <HiddenField name="slotIso" value={nextSlot?.iso ?? ""} />
                     <HiddenField name="runId" value={draft.runId ?? ""} />
                     <span className="text-sm">Enviou?</span>
-                    <Button type="submit" variant="outline" size="sm" disabled={recordPending}>
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      size="sm"
+                      className="h-11 md:h-7"
+                      disabled={recordPending}
+                    >
                       {recordPending ? (
                         <>
                           <Loader2 className="animate-spin" aria-hidden="true" />
@@ -408,11 +444,17 @@ export function ReplyCard({
         <form action={formAction} className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <input type="hidden" name="leadId" value={lead.id} />
           <input type="hidden" name="channel" value={channel} />
+          {/* Desabilitado mas focável (aria-disabled): o foco não cai no body durante a geração e,
+              sem chave ou no teto diário, a explicação fica ligada por aria-describedby. Alvo de
+              44 px no celular; 32/28 px a partir de md. */}
           <Button
             type="submit"
             variant="outline"
-            size={draft ? "sm" : "default"}
+            size={draft ? "sm" : "touch"}
+            className={cn(draft ? "h-11 md:h-7" : "md:h-8", "aria-disabled:opacity-50")}
             disabled={pending || blocked}
+            focusableWhenDisabled
+            aria-describedby={!enabled ? noteId : error ? alertId : undefined}
           >
             {pending ? (
               <>
@@ -427,7 +469,9 @@ export function ReplyCard({
             )}
           </Button>
           {!enabled ? (
-            <p className="crm-meta">IA não configurada.</p>
+            <p id={noteId} className="crm-meta">
+              IA não configurada.
+            </p>
           ) : draft ? (
             <p className="crm-meta">{NOTE}</p>
           ) : null}

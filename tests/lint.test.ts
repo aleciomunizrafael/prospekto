@@ -82,3 +82,42 @@ describe("lint: zod fora do navegador", () => {
     }
   });
 });
+
+// Alvos de toque nos cartões de IA (crm-design-system.md, seção 9: ≥ 44 px no celular). Todo
+// <Button> em src/components/crm/ai/ leva `size="touch"` ou `h-11` (com `md:h-*` para o tamanho
+// de mesa); a altura real é medida pela sonda em 390 px, este teste só barra a regressão estática.
+describe("lint: alvos de 44 px nos cartões de IA", () => {
+  // Tags <Button …> de um .tsx: `>` dentro de chaves (onClick={() => …}, render={<a />}) não
+  // encerra a tag.
+  function buttonTags(source: string): string[] {
+    const tags: string[] = [];
+    const re = /<Button\b/g;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(source))) {
+      let depth = 0;
+      let i = match.index + match[0].length;
+      for (; i < source.length; i += 1) {
+        const ch = source[i];
+        if (ch === "{") depth += 1;
+        else if (ch === "}") depth -= 1;
+        else if (ch === ">" && depth === 0) break;
+      }
+      tags.push(source.slice(match.index, i + 1));
+    }
+    return tags;
+  }
+
+  it("brief-card, reply-card e dictation não deixam botão de 28/32 px sem alvo de toque", () => {
+    const dir = path.join(process.cwd(), "src/components/crm/ai");
+    const offenders: string[] = [];
+    let total = 0;
+    for (const file of readdirSync(dir).filter((f) => f.endsWith(".tsx"))) {
+      for (const tag of buttonTags(readFileSync(path.join(dir, file), "utf8"))) {
+        total += 1;
+        if (!/size="touch"|h-11/.test(tag)) offenders.push(`${file}: ${tag.replace(/\s+/g, " ")}`);
+      }
+    }
+    expect(total).toBeGreaterThan(8);
+    expect(offenders).toEqual([]);
+  });
+});

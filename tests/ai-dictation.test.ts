@@ -54,6 +54,13 @@ describe("DictationTools sem suporte a voz (SSR)", () => {
     // Sem sugestão ainda: nenhum Callout de resultado.
     expect(html).not.toContain("Sugestão da IA");
   });
+
+  it("a região viva existe vazia desde o primeiro render (anuncia o começo e o fim depois)", () => {
+    const html = render();
+    expect(html).toContain('<p role="status" class="sr-only"></p>');
+    expect(html).not.toContain("Organizando…");
+    expect(html).not.toContain("Sugestão pronta");
+  });
 });
 
 describe("DictationTools sem chave de IA", () => {

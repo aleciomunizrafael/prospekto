@@ -62,6 +62,31 @@ function render(props: Partial<ReplyCardProps> = {}) {
 const STALE = "os horários propostos podem ter passado";
 const channelInput = (channel: string) => new RegExp(`name="channel" value="${channel}"`);
 
+// A tag <button> que contém o rótulo (o SVG do ícone fica entre a tag e o texto).
+function buttonWith(html: string, label: string): string {
+  const at = html.indexOf(label);
+  expect(at, label).toBeGreaterThan(-1);
+  const start = html.lastIndexOf("<button", at);
+  return html.slice(start, html.indexOf(">", start) + 1);
+}
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Texto do elemento apontado por aria-describedby.
+function describedText(html: string, tag: string): string {
+  const id = tag.match(/aria-describedby="([^"]+)"/)?.[1];
+  expect(id, tag).toBeTruthy();
+  const match = html.match(new RegExp(`id="${escapeRegExp(id!)}"[^>]*>([\\s\\S]*?)</`));
+  expect(match, `elemento com id ${id}`).not.toBeNull();
+  // React separa nós de texto adjacentes com <!-- --> no SSR.
+  return match![1].replace(/<!--.*?-->/g, "").trim();
+}
+
+// Atributo `disabled` de verdade (a lista de classes também contém "disabled:…").
+const DISABLED_ATTR = /\sdisabled(=""|\s|>)/;
+
+const LIVE_EMPTY = '<p role="status" class="sr-only"></p>';
+
 describe("ReplyCard: rascunho de outro dia", () => {
   it("compara a data do rascunho com o relógio do servidor (prop now), não com o do processo", () => {
     expect(render({ now: "2026-10-09T12:00:00Z" })).toContain(STALE);
@@ -103,5 +128,55 @@ describe("ReplyCard: canal do rascunho gravado", () => {
     expect(email).toContain('id="f-replySubject"');
     expect(email).toContain('value="Oi"');
     expect(email).toContain("Enviar por e-mail");
+  });
+});
+
+describe("ReplyCard: botão de gerar", () => {
+  it('sem chave: desabilitado mas focável, descrito por "IA não configurada."', () => {
+    const html = render({ enabled: false, initial: null });
+    const button = buttonWith(html, "Gerar rascunho");
+    expect(button).toContain('aria-disabled="true"');
+    expect(button).not.toMatch(DISABLED_ATTR);
+    expect(describedText(html, button)).toBe("IA não configurada.");
+  });
+
+  it("com chave e sem rascunho: habilitado, sem descrição", () => {
+    const button = buttonWith(render({ initial: null }), "Gerar rascunho");
+    expect(button).not.toContain('aria-disabled="true"');
+    expect(button).not.toMatch(DISABLED_ATTR);
+    expect(button).not.toContain("aria-describedby");
+  });
+});
+
+describe("ReplyCard: botão de envio", () => {
+  it("mensagem curta: bloqueado e descrito pela dica de preenchimento", () => {
+    const html = render({
+      initial: snapshot({ output: { assunto: "Oi", texto: "curta", horarios_incluidos: [] } }),
+    });
+    const button = buttonWith(html, "Enviar por e-mail");
+    expect(button).toMatch(DISABLED_ATTR);
+    expect(describedText(html, button)).toBe(
+      "Preencha o assunto e uma mensagem com pelo menos 20 caracteres.",
+    );
+  });
+
+  it("rascunho completo: habilitado, sem dica", () => {
+    const html = render();
+    const button = buttonWith(html, "Enviar por e-mail");
+    expect(button).not.toMatch(DISABLED_ATTR);
+    expect(button).not.toContain("aria-describedby");
+    expect(html).not.toContain("Preencha o assunto");
+  });
+});
+
+describe("ReplyCard: região viva", () => {
+  // O estado `pending` não existe em renderToString; "Gerando o rascunho…" só é verificado por
+  // ausência e a sonda em 390 px mede a altura real dos botões.
+  it("existe vazia desde o primeiro render, com ou sem rascunho gravado", () => {
+    for (const html of [render({ initial: null }), render(), render({ enabled: false })]) {
+      expect(html).toContain(LIVE_EMPTY);
+      expect(html).not.toContain("Gerando o rascunho…");
+      expect(html).not.toContain("Rascunho pronto.");
+    }
   });
 });

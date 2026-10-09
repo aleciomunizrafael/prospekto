@@ -263,6 +263,17 @@ export function DictationTools({
 
   const notes = state.status === "ok" ? state.data : null;
 
+  // Região viva sempre montada (vazia no início): anuncia o começo da organização, a sugestão
+  // pronta e o que foi aplicado ao formulário. O Callout do resultado fica como "note" para o
+  // leitor de tela não ler duas vezes.
+  const live = organizing
+    ? "Organizando…"
+    : notes
+      ? applied
+        ? `Preenchidos no formulário: tipo, assunto, o que aconteceu${notes.proximaAcao ? " e próxima ação" : ""}. Revise e clique em Registrar.`
+        : "Sugestão pronta. Revise e aplique ao formulário."
+      : "";
+
   return (
     <div data-ai-dictation="" className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -306,6 +317,9 @@ export function DictationTools({
           {speechError}
         </p>
       ) : null}
+      <p role="status" className="sr-only">
+        {live}
+      </p>
       <div id={resultId} aria-busy={organizing} className="flex flex-col gap-2 empty:hidden">
         {organizing ? (
           <div className="flex flex-col gap-2" aria-hidden="true">
@@ -320,7 +334,7 @@ export function DictationTools({
           </Callout>
         ) : null}
         {!organizing && notes ? (
-          <Callout tone="info" title="Sugestão da IA" role="status" className="[&>div]:flex-1">
+          <Callout tone="info" title="Sugestão da IA" role="note" className="[&>div]:flex-1">
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="info">{ACTIVITY_TYPE_LABELS[notes.tipo]}</Badge>
@@ -405,7 +419,7 @@ export function DictationTools({
                 ) : null}
               </div>
               {applied ? (
-                <p className="crm-meta" aria-live="polite">
+                <p className="crm-meta">
                   Preenchidos no formulário: tipo, assunto, o que aconteceu
                   {notes.proximaAcao ? " e próxima ação" : ""}. Revise e clique em Registrar.
                 </p>
