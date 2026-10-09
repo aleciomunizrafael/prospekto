@@ -277,13 +277,14 @@ export function DictationTools({
   return (
     <div data-ai-dictation="" className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
+        {/* Botão de ação cujo rótulo muda ("Ditar" → "Parar"), sem aria-pressed: um toggle com
+            aria-pressed manteria o rótulo fixo (APG), como o mostrar/ocultar senha do login. */}
         {supported ? (
           <Button
             type="button"
             variant="outline"
             size="sm"
             className="h-11 md:h-7"
-            aria-pressed={listening}
             onClick={listening ? stopListening : startListening}
           >
             {listening ? <Square aria-hidden="true" /> : <Mic aria-hidden="true" />}
@@ -299,9 +300,7 @@ export function DictationTools({
           </Tooltip>
         )}
         {listening ? (
-          <span aria-live="polite" className="crm-meta min-w-0 flex-1 truncate">
-            {interim || "Ouvindo…"}
-          </span>
+          <span className="crm-meta min-w-0 flex-1 truncate">{interim || "Ouvindo…"}</span>
         ) : null}
         <span className="crm-meta">
           {supported
@@ -320,6 +319,12 @@ export function DictationTools({
       <p role="status" className="sr-only">
         {live}
       </p>
+      {/* Região viva do ditado, sempre montada (vazia até ligar): anuncia uma vez que está ouvindo.
+          O parcial não é anunciado (muda a cada palavra e disputaria com a fala da pessoa) e os
+          resultados finais já entram no textarea. */}
+      <span role="status" className="sr-only">
+        {listening ? "Ouvindo… diga o que aconteceu." : ""}
+      </span>
       <div id={resultId} aria-busy={organizing} className="flex flex-col gap-2 empty:hidden">
         {organizing ? (
           <div className="flex flex-col gap-2" aria-hidden="true">

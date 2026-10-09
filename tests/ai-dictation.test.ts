@@ -27,6 +27,10 @@ function render(props: Partial<Parameters<typeof DictationTools>[0]> = {}) {
   );
 }
 
+function dictationSource(): string {
+  return readFileSync(path.join(process.cwd(), "src/components/crm/ai/dictation.tsx"), "utf8");
+}
+
 // A tag <button> que contém o rótulo (o SVG do ícone fica entre a tag e o texto).
 function buttonWith(html: string, label: string): string {
   const at = html.indexOf(label);
@@ -61,6 +65,25 @@ describe("DictationTools sem suporte a voz (SSR)", () => {
     expect(html).not.toContain("Organizando…");
     expect(html).not.toContain("Sugestão pronta");
   });
+
+  it('a região viva do ditado existe vazia desde o primeiro render (anuncia "Ouvindo…" ao ligar)', () => {
+    const html = render();
+    expect(html).toMatch(/<span role="status" class="sr-only"><\/span>/);
+    expect(html).not.toContain("Ouvindo…");
+  });
+});
+
+describe("ditado e leitor de tela", () => {
+  it('"Ditar"/"Parar" é botão de ação (rótulo muda, sem aria-pressed) e o parcial não é região viva', () => {
+    const source = dictationSource();
+    expect(source).toContain('"Parar" : "Ditar"');
+    // Atributo no JSX (o comentário do componente cita o nome para explicar a escolha).
+    expect(source).not.toMatch(/aria-pressed=/);
+    // O parcial muda a cada palavra enquanto a pessoa fala: só visual, nunca aria-live.
+    expect(source).not.toMatch(/aria-live[^>]*>\s*\{interim/);
+    expect(source).not.toMatch(/aria-live=/);
+    expect(source).toContain('{listening ? "Ouvindo… diga o que aconteceu." : ""}');
+  });
 });
 
 describe("DictationTools sem chave de IA", () => {
@@ -88,10 +111,7 @@ describe("texto aplicado ao formulário", () => {
 
 describe("nenhum áudio ou texto sai por outro caminho", () => {
   it("dictation.tsx não usa fetch e importa de src/lib/ai/notes só o tipo", () => {
-    const source = readFileSync(
-      path.join(process.cwd(), "src/components/crm/ai/dictation.tsx"),
-      "utf8",
-    );
+    const source = dictationSource();
     expect(source).not.toContain("fetch(");
     expect(source).not.toMatch(/XMLHttpRequest|WebSocket|MediaRecorder/);
     expect(source).toMatch(/import type \{ Notes \} from "@\/lib\/ai\/notes"/);
