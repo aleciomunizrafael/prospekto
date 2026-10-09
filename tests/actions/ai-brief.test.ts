@@ -4,6 +4,7 @@
 // tests/lib/ai-client.test.ts.
 import { eq } from "drizzle-orm";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { AI_MAX_TOKENS } from "@/config/ai";
 import { BRIEF_SYSTEM, normalizeBrief, type Brief } from "@/lib/ai/brief";
 import type { AiActionState } from "@/lib/ai/types";
 import { db } from "@/lib/db";
@@ -196,7 +197,7 @@ describe("generateBriefAction", () => {
     expect(sdk.create).toHaveBeenCalledTimes(1);
     const params = sdk.create.mock.calls[0][0];
     expect(params.model).toBe("claude-opus-5-5");
-    expect(params.max_tokens).toBe(4000);
+    expect(params.max_tokens).toBe(AI_MAX_TOKENS);
     expect(params.output_config.effort).toBe("medium");
     expect(params.system).toEqual([
       { type: "text", text: BRIEF_SYSTEM, cache_control: { type: "ephemeral" } },

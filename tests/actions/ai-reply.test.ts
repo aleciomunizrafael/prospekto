@@ -4,6 +4,7 @@
 // importar), como em tests/lib/ai-client.test.ts.
 import { eq } from "drizzle-orm";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { AI_MAX_TOKENS } from "@/config/ai";
 import { proposeSlots } from "@/lib/ai/qualification";
 import {
   EMAIL_SIGNATURE,
@@ -208,7 +209,7 @@ describe("generateReplyAction", () => {
     expect(sdk.create).toHaveBeenCalledTimes(1);
     const params = sdk.create.mock.calls[0][0];
     expect(params.model).toBe("claude-opus-5-5");
-    expect(params.max_tokens).toBe(4000);
+    expect(params.max_tokens).toBe(AI_MAX_TOKENS);
     expect(params.output_config.effort).toBe("low");
     expect(params.system).toEqual([
       { type: "text", text: REPLY_SYSTEM, cache_control: { type: "ephemeral" } },

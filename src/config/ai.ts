@@ -7,8 +7,14 @@ export const AI_DEFAULT_MODEL = "claude-opus-5-5";
 // Teto de execuções por tenant por dia civil em America/Sao_Paulo (controle de custo).
 export const AI_DAILY_LIMIT = 200;
 
-// Cabe a maior saída estruturada mais o pensamento, que conta em max_tokens mesmo sem ser devolvido.
-export const AI_MAX_TOKENS = 4000;
+// Teto, não alvo: o gasto é governado por effort e pelo teto diário, não por este valor. O
+// pensamento do Opus 5.5 conta em max_tokens mesmo sem ser devolvido e é maior por turno que no
+// Opus 5 (claude-api, shared/model-migration.md): com 4000, um lead de histórico cheio (até 20
+// atividades no briefing) estourava o teto antes do JSON, a saída inteira era cobrada e a tela só
+// dizia "incompleta". 8.000 cobre o pensamento e a maior saída estruturada (briefing, ~900 tokens);
+// acima disso AI_DEADLINE_MS tende a cortar antes. Como o cliente fixa `timeout`, o SDK não
+// recalcula o prazo a partir de max_tokens (resources/beta/messages/messages.js, `timeout == null`).
+export const AI_MAX_TOKENS = 8_000;
 
 // Prazo total de uma chamada ao modelo, somando todas as tentativas do SDK (AbortSignal.timeout em
 // runStructured) e também o timeout de cada tentativa. Precisa ficar abaixo do `maxDuration = 60`

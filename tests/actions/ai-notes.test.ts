@@ -3,6 +3,7 @@
 // é recarregado a cada teste porque src/env.ts lê process.env ao importar.
 import { eq } from "drizzle-orm";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { AI_MAX_TOKENS } from "@/config/ai";
 import { db } from "@/lib/db";
 import { aiRuns } from "@/lib/db/schema";
 import { initialAiActionState } from "@/lib/ai/types";
@@ -188,7 +189,7 @@ describe("organizeNotesAction", () => {
     expect(sdk.create).toHaveBeenCalledTimes(1);
     const params = sdk.create.mock.calls[0][0];
     expect(params.output_config.effort).toBe("medium");
-    expect(params.max_tokens).toBe(4000);
+    expect(params.max_tokens).toBe(AI_MAX_TOKENS);
     expect("thinking" in params).toBe(false);
     const system: string = params.system[0].text;
     expect(params.system[0].cache_control).toEqual({ type: "ephemeral" });

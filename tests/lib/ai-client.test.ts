@@ -155,7 +155,9 @@ describe("runStructured: forma da chamada", () => {
     expect(sdk.create).toHaveBeenCalledTimes(1);
     const params = sdk.create.mock.calls[0][0];
     expect(params.model).toBe("claude-opus-5-5");
-    expect(params.max_tokens).toBe(4000);
+    // Teto acima da estimativa de "saída + pensamento" do ADR-003 (2.500 no briefing): com 4000 o
+    // pensamento do Opus 5.5 cortava o JSON em leads de histórico cheio (achado F41).
+    expect(params.max_tokens).toBe(8000);
     expect(params.betas).toEqual([
       "server-side-fallback-2026-07-01",
       "structured-outputs-2025-12-15",
