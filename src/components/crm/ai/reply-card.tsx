@@ -40,6 +40,8 @@ export type ReplyCardProps = {
   canEmail: boolean;
   emailBlockReason: EmailBlockReason;
   whatsappHref: string | null;
+  // Relógio do servidor em ISO (prop da página): "hoje" igual no SSR e na hidratação.
+  now: string;
 };
 
 type Draft = {
@@ -60,19 +62,28 @@ const MIN_TEXT = 20;
 const strings = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && !!v) : [];
 
-// O `output` de ai_runs chega como JSON genérico; aqui vira Draft sem zod (nunca lança). O canal
-// vem do próprio registro: assunto null é WhatsApp.
+// Canal do rascunho gravado: ai_runs.data.channel (runStructured grava o que a action pediu).
+// Sem ele (linha anterior a esse metadado), assunto null é WhatsApp: normalizeReply força null
+// fora do e-mail.
+function channelOf(snapshot: AiRunSnapshot, output: Record<string, unknown>): ReplyChannel {
+  const saved = snapshot.data?.channel;
+  if (saved === "email" || saved === "whatsapp") return saved;
+  return typeof output.assunto === "string" ? "email" : "whatsapp";
+}
+
+// O `output` de ai_runs chega como JSON genérico, já normalizado na geração (runStructured grava
+// depois de normalizeReply); aqui vira Draft sem zod (nunca lança).
 function draftsFromSnapshot(snapshot: AiRunSnapshot | null, slots: AiSlot[]): Drafts {
   const empty: Drafts = { email: null, whatsapp: null };
   if (!snapshot) return empty;
   const o = snapshot.output as Record<string, unknown>;
   if (typeof o.texto !== "string" || !o.texto.trim()) return empty;
-  const channel: ReplyChannel = typeof o.assunto === "string" ? "email" : "whatsapp";
+  const channel = channelOf(snapshot, o);
   const horarios = strings(o.horarios_incluidos);
   return {
     ...empty,
     [channel]: {
-      subject: typeof o.assunto === "string" ? o.assunto : "",
+      subject: channel === "email" && typeof o.assunto === "string" ? o.assunto : "",
       text: o.texto,
       horarios: horarios.length ? horarios : slots.map((s) => s.label),
       slots,
@@ -144,6 +155,7 @@ export function ReplyCard({
   canEmail,
   emailBlockReason,
   whatsappHref,
+  now,
 }: ReplyCardProps) {
   const [drafts, setDrafts] = useState<Drafts>(() => draftsFromSnapshot(initial, slots));
   // Padrão: e-mail quando o endereço está ok, senão WhatsApp (se houver telefone); um rascunho
@@ -159,8 +171,9 @@ export function ReplyCard({
   // E-mail já enviado com este texto: o botão some até a pessoa editar ou gerar de novo (evita
   // o envio duplicado por um segundo clique).
   const [sent, setSent] = useState(false);
-  // Dia civil de hoje fixado na montagem (o mesmo valor no SSR e na hidratação).
-  const [today] = useState(() => calendarDateInSaoPaulo(new Date()));
+  // Dia civil de hoje pelo relógio do servidor (prop), como no ActivityForm e no Timeline: o
+  // mesmo valor no SSR e na hidratação (o inicializador de useState rodaria nos dois lados).
+  const today = calendarDateInSaoPaulo(new Date(now));
   const blockId = useId();
 
   const [state, formAction, pending] = useActionState(

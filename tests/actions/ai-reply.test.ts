@@ -10,6 +10,7 @@ import {
   REPLY_SYSTEM,
   WHATSAPP_EXIT_SENTENCE,
   WHATSAPP_SIGNATURE,
+  normalizeReply,
   type Reply,
   type ReplyDraft,
 } from "@/lib/ai/reply";
@@ -237,9 +238,13 @@ describe("generateReplyAction", () => {
     expect(runs).toHaveLength(1);
     expect(runs[0].kind).toBe("reply");
     expect(runs[0].status).toBe("ok");
-    expect(runs[0].output).toEqual(emailOutput);
+    // Gravado já normalizado (o rascunho reaberto da página é o mesmo texto do cartão) e com o
+    // canal em data (ADR-003, seção 8).
+    expect(runs[0].output).toEqual(
+      normalizeReply(emailOutput, { channel: "email", slots, isFirstContact: true }),
+    );
     expect(runs[0].id).toBe(result.runId);
-    expect(runs[0].data).toMatchObject({ effort: "low" });
+    expect(runs[0].data).toMatchObject({ effort: "low", channel: "email" });
 
     const line = spy.mock.calls.map((c) => String(c[0])).find((l) => l.includes("ia executada"));
     expect(line).toBeDefined();
@@ -278,7 +283,7 @@ describe("generateReplyAction", () => {
     expect(result.data.texto.endsWith(EMAIL_SIGNATURE)).toBe(true);
   });
 
-  it("WhatsApp para lead novo sem contato termina com a frase de saída e sem assunto", async () => {
+  it("WhatsApp para lead novo sem contato termina com a frase de saída e sem assunto, também em ai_runs", async () => {
     sdk.parse.mockResolvedValueOnce(response(whatsappOutput));
     const { generateReplyAction } = await loadActions();
     const result = await generateReplyAction(idle, fd({ leadId, channel: "whatsapp" }));
@@ -288,6 +293,35 @@ describe("generateReplyAction", () => {
     expect(result.data.assunto).toBeNull();
     expect(result.data.texto.endsWith(WHATSAPP_EXIT_SENTENCE)).toBe(true);
     expect(result.data.texto.length).toBeLessThanOrEqual(900);
+    // A linha gravada é o que a página reabre depois de um F5: mesma frase de saída, assunto
+    // null (WhatsApp) e o canal em data.
+    const run = (await runsOfLead()).find((r) => r.id === result.runId);
+    const output = run?.output as Reply;
+    expect(output.texto).toBe(result.data.texto);
+    expect(output.texto.endsWith(WHATSAPP_EXIT_SENTENCE)).toBe(true);
+    expect(output.assunto).toBeNull();
+    expect(run?.data).toMatchObject({ channel: "whatsapp" });
+  });
+
+  it("URL e e-mail inventados saem antes de gravar: ai_runs.output é o texto normalizado", async () => {
+    sdk.parse.mockResolvedValueOnce(
+      response({
+        ...emailOutput,
+        texto: `${emailOutput.texto.replace(EMAIL_SIGNATURE, "")}Veja https://exemplo-inventado.com/x ou escreva para daniela@example.test.\n\n${EMAIL_SIGNATURE}`,
+      }),
+    );
+    const { generateReplyAction } = await loadActions();
+    const result = await generateReplyAction(idle, fd({ leadId, channel: "email" }));
+    expect(result.status).toBe("ok");
+    if (result.status !== "ok") return;
+    const run = (await runsOfLead()).find((r) => r.id === result.runId);
+    const output = run?.output as Reply;
+    expect(output.texto).toBe(result.data.texto);
+    expect(output.texto).not.toContain("exemplo-inventado.com");
+    expect(output.texto).not.toContain("https://");
+    expect(output.texto).toContain("[e-mail]");
+    expect(output.texto).not.toContain("example.test");
+    expect(output.texto).toContain(`Tenho horários ${A} e ${B}. Qual prefere?`);
   });
 
   it("e-mail ou telefone inventado pelo modelo sai mascarado", async () => {

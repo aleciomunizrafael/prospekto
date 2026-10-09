@@ -262,6 +262,60 @@ describe("runStructured: estados de parada", () => {
   });
 });
 
+describe("runStructured: normalize e data", () => {
+  it("normalize roda antes de gravar: ai_runs.output e o retorno são a saída normalizada; data extra entra mesclado", async () => {
+    sdk.parse.mockResolvedValueOnce(response({ parsed_output: { resumo: "  Lead quente.  " } }));
+    const { runStructured } = await loadClient();
+    const own = await makeTenant();
+    const normalize = vi.fn((p: { resumo: string }) => ({ resumo: p.resumo.trim().toUpperCase() }));
+    const result = await runStructured(own, {
+      ...baseInput,
+      leadId: null,
+      normalize,
+      // `effort` extra não sobrescreve o campo fixo.
+      data: { channel: "email", effort: "alto" },
+    });
+    expect(result.ok && result.data).toEqual({ resumo: "LEAD QUENTE." });
+    expect(normalize).toHaveBeenCalledTimes(1);
+    expect(normalize).toHaveBeenCalledWith({ resumo: "  Lead quente.  " });
+    const [run] = await runsOf(own);
+    expect(run.output).toEqual({ resumo: "LEAD QUENTE." });
+    expect(run.data).toEqual({
+      channel: "email",
+      effort: "medium",
+      fallback: false,
+      stopDetailsCategory: null,
+      httpStatus: 200,
+    });
+  });
+
+  it("fora de ok, normalize não roda e data extra ainda é gravado, inclusive no erro do SDK", async () => {
+    const { RateLimitError } = await Errors();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    sdk.parse.mockResolvedValueOnce(
+      response({
+        stop_reason: "refusal",
+        stop_details: { category: "general_harms" },
+        parsed_output: null,
+      }),
+    );
+    sdk.parse.mockRejectedValueOnce(new RateLimitError(429, "Rate limited"));
+    const { runStructured } = await loadClient();
+    const own = await makeTenant();
+    const normalize = vi.fn((p: { resumo: string }) => p);
+    const input = { ...baseInput, leadId: null, normalize, data: { channel: "whatsapp" } };
+    expect((await runStructured(own, input)).ok).toBe(false);
+    expect((await runStructured(own, input)).ok).toBe(false);
+    expect(normalize).not.toHaveBeenCalled();
+    const runs = await runsOf(own);
+    expect(runs.map((r) => r.status).sort()).toEqual(["error", "refusal"]);
+    for (const run of runs) {
+      expect(run.output).toBeNull();
+      expect(run.data).toMatchObject({ channel: "whatsapp", effort: "medium" });
+    }
+  });
+});
+
 describe("runStructured: teto diário", () => {
   it("200 execuções de hoje bloqueiam sem chamar; as de ontem não contam", async () => {
     const own = await makeTenant();

@@ -76,6 +76,11 @@ export async function generateReplyAction(
     });
     const slots = proposeSlots(now);
     const questions = qualificationQuestions(lead.segment, lead.attributes);
+    const isFirstContact =
+      isInitialStage(lead.pipeline as Pipeline, lead.stage) && !lead.lastContactAt;
+    // A normalização roda dentro de runStructured, antes de gravar: o rascunho reaberto da página
+    // (ai_runs.output) é o mesmo texto que o cartão recebeu agora, e `channel` fica em
+    // ai_runs.data (ADR-003, seção 8).
     const result = await runStructured(ctx, {
       kind: "reply",
       leadId,
@@ -83,12 +88,11 @@ export async function generateReplyAction(
       user: replyUserMessage(context, { channel, questions, slots, now }),
       schema: replySchema,
       effort: "low",
+      normalize: (reply) => normalizeReply(reply, { channel, slots, isFirstContact }),
+      data: { channel },
     });
     if (!result.ok) return toActionState(result);
-    const isFirstContact =
-      isInitialStage(lead.pipeline as Pipeline, lead.stage) && !lead.lastContactAt;
-    const reply = normalizeReply(result.data, { channel, slots, isFirstContact });
-    return { status: "ok", data: { ...reply, channel, slots }, runId: result.runId };
+    return { status: "ok", data: { ...result.data, channel, slots }, runId: result.runId };
   } catch (error) {
     // Falha ao carregar os dados (a chamada ao modelo já trata as suas por dentro). Sem conteúdo
     // no log (R-16).

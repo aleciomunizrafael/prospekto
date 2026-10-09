@@ -44,6 +44,13 @@ export type RunStructuredInput<S extends z.ZodObject<z.ZodRawShape>> = {
   user: string;
   schema: S;
   effort: AiEffort;
+  // Pós-processamento puro da saída validada (normalizeBrief, normalizeReply). Roda antes de
+  // gravar: ai_runs.output é o que o cartão mostra, hoje e depois de recarregar a página, e as
+  // defesas da normalização (mascarar, remover URL, horários, SAIR, limite) valem também para o
+  // rascunho reaberto. Nunca lança.
+  normalize?: (parsed: z.infer<S>) => z.infer<S>;
+  // Metadados sem conteúdo que o recurso acrescenta a ai_runs.data (ex.: `channel` na resposta).
+  data?: Record<string, unknown>;
 };
 
 function statusOf(response: { stop_reason: string | null; parsed_output: unknown }): AiRunStatus {
@@ -77,7 +84,8 @@ export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
     const durationMs = Math.round(performance.now() - started);
     const status = statusOf(response);
     const fallback = (response.usage.iterations ?? []).some((i) => i.type === "fallback_message");
-    const parsed = (status === "ok" ? response.parsed_output : null) as z.infer<S> | null;
+    const raw = (status === "ok" ? response.parsed_output : null) as z.infer<S> | null;
+    const parsed = raw != null && input.normalize ? input.normalize(raw) : raw;
     const usage = response.usage;
     const run = await insertAiRun(ctx, {
       kind,
@@ -90,6 +98,7 @@ export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
       durationMs,
       output: parsed as Record<string, unknown> | null,
       data: {
+        ...input.data,
         effort,
         fallback,
         stopDetailsCategory: response.stop_details?.category ?? null,
@@ -134,7 +143,7 @@ export async function runStructured<S extends z.ZodObject<z.ZodRawShape>>(
         model,
         status: "error",
         durationMs,
-        data: { effort, fallback: false, stopDetailsCategory: null, httpStatus },
+        data: { ...input.data, effort, fallback: false, stopDetailsCategory: null, httpStatus },
         createdBy: ctx.userId ?? null,
       });
     } catch {

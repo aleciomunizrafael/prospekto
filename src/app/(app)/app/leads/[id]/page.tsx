@@ -90,6 +90,7 @@ function aiSnapshot(run: AiRun | null): AiRunSnapshot | null {
   return {
     runId: run.id,
     output: run.output,
+    data: run.data,
     model: run.model,
     createdAt: run.createdAt.toISOString(),
   };
@@ -213,7 +214,6 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
     stage: lead.stage,
     emailStatus: lead.emailStatus,
     hasPhone: whatsappHref !== null,
-    isFirstContact: isInitialStage(pipeline, lead.stage) && !lead.lastContactAt,
   };
 
   const stageProps: LeadStageProps = {
@@ -548,6 +548,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
         canEmail={emailBlockReason === null}
         emailBlockReason={emailBlockReason}
         whatsappHref={whatsappHref}
+        now={now.toISOString()}
       />
       <FormSection
         id="registrar"

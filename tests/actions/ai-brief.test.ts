@@ -4,7 +4,7 @@
 // tests/lib/ai-client.test.ts.
 import { eq } from "drizzle-orm";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { BRIEF_SYSTEM, type Brief } from "@/lib/ai/brief";
+import { BRIEF_SYSTEM, normalizeBrief, type Brief } from "@/lib/ai/brief";
 import type { AiActionState } from "@/lib/ai/types";
 import { db } from "@/lib/db";
 import { aiRuns } from "@/lib/db/schema";
@@ -221,7 +221,8 @@ describe("generateBriefAction", () => {
     expect(runs[0].kind).toBe("brief");
     expect(runs[0].tenantId).toBe(ctx.tenantId);
     expect(runs[0].status).toBe("ok");
-    expect(runs[0].output).toEqual(briefOutput);
+    // Gravado já normalizado: o briefing reaberto da página é o mesmo que o cartão recebeu.
+    expect(runs[0].output).toEqual(normalizeBrief(briefOutput));
     expect(runs[0].createdBy).toBe(ctx.userId);
     expect(runs[0].id).toBe(result.runId);
 
@@ -247,7 +248,7 @@ describe("generateBriefAction", () => {
     expect(a).not.toMatch(/Hoje é/);
   });
 
-  it("normaliza a saída antes de devolver: listas cortadas, vazios e duplicados fora", async () => {
+  it("normaliza a saída antes de devolver e de gravar: listas cortadas, vazios e duplicados fora", async () => {
     sdk.parse.mockResolvedValueOnce(
       response({
         parsed_output: {
@@ -263,6 +264,9 @@ describe("generateBriefAction", () => {
     if (result.status !== "ok") return;
     expect(result.data.pontos_atencao).toEqual(["Risco A", "B", "C", "D", "E", "F"]);
     expect(result.data.perguntas).toHaveLength(7);
+    const run = (await runsOfLead()).find((r) => r.id === result.runId);
+    expect(run?.output).toEqual(result.data);
+    expect((run?.output as Brief).pontos_atencao).toEqual(["Risco A", "B", "C", "D", "E", "F"]);
   });
 
   it("recusa devolve a mensagem do ADR e grava status refusal", async () => {

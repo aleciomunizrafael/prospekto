@@ -17,8 +17,6 @@ export type AiPanelLead = {
   stage: string;
   emailStatus: EmailStatus;
   hasPhone: boolean;
-  // Primeira mensagem (estágio inicial e sem contato): o WhatsApp oferece a saída "SAIR".
-  isFirstContact: boolean;
 };
 
 export type AiPanelProps = {
@@ -30,6 +28,8 @@ export type AiPanelProps = {
   canEmail: boolean;
   emailBlockReason: EmailBlockReason;
   whatsappHref: string | null;
+  // Relógio do servidor em ISO: o mesmo "hoje" no SSR e na hidratação (como no ActivityForm).
+  now: string;
   className?: string;
   children?: ReactNode;
 };
@@ -46,6 +46,7 @@ export function AiPanel({
   canEmail,
   emailBlockReason,
   whatsappHref,
+  now,
   className,
 }: AiPanelProps) {
   return (
@@ -67,6 +68,7 @@ export function AiPanel({
         canEmail={canEmail}
         emailBlockReason={emailBlockReason}
         whatsappHref={whatsappHref}
+        now={now}
       />
     </section>
   );

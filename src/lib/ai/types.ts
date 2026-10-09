@@ -52,10 +52,13 @@ export function toActionState<T>(result: AiResult<T>): AiActionState<T> {
 }
 
 // Última execução bem-sucedida carregada pela página (decisão P2) e passada como `initial` aos
-// cartões. `createdAt` em ISO para atravessar a fronteira servidor → cliente.
+// cartões. `createdAt` em ISO para atravessar a fronteira servidor → cliente. `output` já vem
+// normalizado (runStructured grava depois de `normalize`); `data` traz os metadados da execução
+// (ex.: `channel` na resposta).
 export type AiRunSnapshot<T = Record<string, unknown>> = {
   runId: string;
   output: T;
+  data?: Record<string, unknown> | null;
   model: string;
   createdAt: string;
 };

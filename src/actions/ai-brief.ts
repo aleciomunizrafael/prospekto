@@ -69,9 +69,12 @@ export async function generateBriefAction(
       user: briefUserMessage(context, now),
       schema: briefSchema,
       effort: "medium",
+      // Normalizado antes de gravar: o briefing reaberto da página (ai_runs.output) é o mesmo
+      // que o cartão recebeu agora.
+      normalize: normalizeBrief,
     });
     if (!result.ok) return toActionState(result);
-    return { status: "ok", data: normalizeBrief(result.data), runId: result.runId };
+    return { status: "ok", data: result.data, runId: result.runId };
   } catch (error) {
     // Falha ao carregar os dados (a chamada ao modelo já trata as suas por dentro). Sem conteúdo
     // no log (R-16).
