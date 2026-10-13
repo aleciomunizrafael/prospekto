@@ -212,7 +212,13 @@ describe("StatRuler e StatCard variant=ruler", () => {
       }),
     ];
     return renderToString(
-      createElement(StatRuler, { label: "Hoje" }, createElement(Fragment, null, ...cells)),
+      // O tipo de StatRuler exige `children` nas props; a regra react/no-children-prop
+      // não vale para createElement em .ts sem JSX.
+      // eslint-disable-next-line react/no-children-prop
+      createElement(StatRuler, {
+        label: "Hoje",
+        children: createElement(Fragment, null, ...cells),
+      }),
     );
   }
 
