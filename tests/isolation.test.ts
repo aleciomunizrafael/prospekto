@@ -1,7 +1,15 @@
 // Regra R-15 (ADR-001): dois tenants, um lead em cada; nenhuma função de listagem devolve dado do outro.
 import { beforeAll, describe, expect, it } from "vitest";
+import { db } from "@/lib/db";
+import { activities } from "@/lib/db/schema";
 import type { Ctx } from "@/lib/repos/ctx";
-import { createActivity, listActivities, listOpenTasks } from "@/lib/repos/activities";
+import {
+  createActivity,
+  listActivities,
+  listOpenTasks,
+  listOpenTasksWithLead,
+  listRecentActivities,
+} from "@/lib/repos/activities";
 import { countAiRunsToday, getLatestAiRun, insertAiRun } from "@/lib/repos/ai-runs";
 import { getCurrentConsent, listConsents } from "@/lib/repos/consents";
 import { createContact, getContact, listContacts } from "@/lib/repos/contacts";
@@ -10,10 +18,26 @@ import { createLead, getLead, listLeads, type Lead } from "@/lib/repos/leads";
 import { createOrganization, getOrganization, listOrganizations } from "@/lib/repos/organizations";
 import { createProject, getProject, listProjects } from "@/lib/repos/projects";
 import {
+  addItems,
+  createList,
+  getItem,
+  getList,
+  listItems,
+  listLists,
+  searchProspectingItems,
+} from "@/lib/repos/prospecting";
+import {
   createSimulation,
   getSimulationByTokenHash,
   listSimulations,
 } from "@/lib/repos/simulations";
+import {
+  createTask,
+  getTask,
+  listOpenTasksForOwner,
+  listTasksBoard,
+  searchTasks,
+} from "@/lib/repos/tasks";
 import { getTenant } from "@/lib/repos/tenants";
 import { consentContato, makeTenant } from "./helpers";
 
@@ -61,6 +85,23 @@ async function seedTenant(ctx: Ctx, label: string) {
     leadId: lead.id,
     dueAt: new Date(),
   });
+  // Tarefa solta (sem vínculo; só `tarefa` pode) e lista de prospecção com um item (ADR-004).
+  const looseTask = await createTask(ctx, { subject: `Tarefa solta ${label}` });
+  const list = await createList(ctx, {
+    name: `Lista ${label}`,
+    sourceDetail: "busca pública (teste)",
+  });
+  const {
+    items: [item],
+  } = await addItems(ctx, {
+    listId: list.id,
+    items: [{ name: `Empresa prospectada ${label}`, phone: "(54) 90000-0001" }],
+  });
+  await createActivity(ctx, {
+    type: "ligacao",
+    subject: `Ligação ${label}`,
+    prospectingItemId: item.id,
+  });
   await insertAiRun(ctx, {
     kind: "brief",
     leadId: lead.id,
@@ -77,7 +118,7 @@ async function seedTenant(ctx: Ctx, label: string) {
     applyLc224: true,
     resultTokenHash: `${label}`.padEnd(64, "0"),
   });
-  return { lead, proponent, contact, project, contribution, simulation };
+  return { lead, proponent, contact, project, contribution, simulation, looseTask, list, item };
 }
 
 let dataA: Awaited<ReturnType<typeof seedTenant>>;
@@ -123,7 +164,8 @@ describe("isolamento entre tenants", () => {
     expect(await getCurrentConsent(b, leadA.id, "contato_comercial")).toBeNull();
     expect((await listActivities(a)).every((x) => x.tenantId === a.tenantId)).toBe(true);
     expect(await listActivities(a, { leadId: leadB.id })).toHaveLength(0);
-    expect((await listOpenTasks(b)).map((t) => t.subject)).toEqual(["Tarefa b"]);
+    // due_at asc com nulos por último: a tarefa com prazo vem antes da solta.
+    expect((await listOpenTasks(b)).map((t) => t.subject)).toEqual(["Tarefa b", "Tarefa solta b"]);
     expect((await listSimulations(a)).map((s) => s.id)).toEqual([dataA.simulation.id]);
     expect(await getSimulationByTokenHash(a, dataB.simulation.resultTokenHash!)).toBeNull();
   });
@@ -136,6 +178,77 @@ describe("isolamento entre tenants", () => {
     expect(await getLatestAiRun(b, { leadId: leadA.id, kind: "brief" })).toBeNull();
     expect(await countAiRunsToday(a)).toBe(1);
     expect(await countAiRunsToday(b)).toBe(1);
+  });
+
+  it("prospecção: listas, itens e busca ficam no próprio tenant", async () => {
+    expect((await listLists(a)).map((l) => l.id)).toEqual([dataA.list.id]);
+    expect(await getList(a, dataB.list.id)).toBeNull();
+    expect((await getList(b, dataB.list.id))?.total).toBe(1);
+    expect((await listItems(a, { listId: dataB.list.id })).length).toBe(0);
+    expect((await listItems(b, { listId: dataB.list.id })).map((i) => i.id)).toEqual([
+      dataB.item.id,
+    ]);
+    expect(await getItem(a, dataB.item.id)).toBeNull();
+    expect(
+      (await searchProspectingItems(a, { search: "Empresa prospectada" })).map((i) => i.id),
+    ).toEqual([dataA.item.id]);
+    expect(await listActivities(a, { prospectingItemId: dataB.item.id })).toHaveLength(0);
+  });
+
+  it("tarefas: quadro, detalhe, minhas tarefas e busca ficam no próprio tenant", async () => {
+    const now = new Date();
+    const boardA = await listTasksBoard(a, { now });
+    expect(boardA.a_fazer.rows.map((t) => t.subject).sort()).toEqual([
+      "Tarefa a",
+      "Tarefa solta a",
+    ]);
+    expect(boardA.a_fazer.total).toBe(2);
+    expect(await getTask(b, dataA.looseTask.id)).toBeNull();
+    expect((await getTask(a, dataA.looseTask.id))?.subject).toBe("Tarefa solta a");
+    expect(
+      (await listOpenTasksForOwner(b, { ownerUserId: b.userId!, now }))
+        .map((t) => t.subject)
+        .sort(),
+    ).toEqual(["Tarefa b", "Tarefa solta b"]);
+    expect((await listOpenTasksForOwner(a, { ownerUserId: b.userId!, now })).length).toBe(0);
+    expect(
+      (await searchTasks(a, { search: "Tarefa" })).every((t) => t.tenantId === a.tenantId),
+    ).toBe(true);
+    expect((await searchTasks(a, { search: "solta b" })).length).toBe(0);
+  });
+
+  it("últimas atividades ficam no próprio tenant", async () => {
+    const recent = await listRecentActivities(a, { limit: 8 });
+    expect(recent.length).toBeGreaterThan(0);
+    expect(recent.every((x) => x.tenantId === a.tenantId)).toBe(true);
+    expect(recent.some((x) => x.type === "sistema" || x.type === "formulario")).toBe(false);
+    expect(recent.find((x) => x.subject === "Ligação a")?.prospectingItemName).toBe(
+      "Empresa prospectada a",
+    );
+  });
+
+  // Regra 11 do plano: todo leftJoin restringe o tenant na condição. Uma tarefa do tenant A cujo
+  // lead_id aponta para o lead do tenant B (inserida direto pelo db do teste) não devolve o nome.
+  it("lead_id de outro tenant não devolve o nome do lead pelo join", async () => {
+    const [cross] = await db
+      .insert(activities)
+      .values({
+        tenantId: a.tenantId,
+        type: "tarefa",
+        subject: "Tarefa cruzada",
+        leadId: leadB.id,
+        dueAt: new Date(),
+        priority: "media",
+      })
+      .returning();
+    const now = new Date();
+    const board = await listTasksBoard(a, { now });
+    const inBoard = board.a_fazer.rows.find((t) => t.id === cross.id);
+    expect(inBoard).toBeDefined();
+    expect(inBoard?.leadName).toBeNull();
+    const withLead = await listOpenTasksWithLead(a, { dueTo: new Date(now.getTime() + 60_000) });
+    expect(withLead.find((t) => t.id === cross.id)?.leadName).toBeNull();
+    expect((await getTask(a, cross.id))?.leadName).toBeNull();
   });
 
   it("getTenant devolve o tenant do contexto", async () => {
