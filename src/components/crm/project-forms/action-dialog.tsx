@@ -241,7 +241,11 @@ export function ActionDialogMenu({
                   variant="outline"
                   size={size === "touch" ? "touch" : "icon-sm"}
                   aria-label={menuLabel}
-                  className={cn("relative z-10", size === "touch" ? "px-3" : "size-11 md:size-7")}
+                  // Só com o ícone, `touch` com px-3 daria 42 px de largura; `min-w-11` garante 44 × 44.
+                  className={cn(
+                    "relative z-10",
+                    size === "touch" ? "min-w-11 px-3" : "size-11 md:size-7",
+                  )}
                 />
               }
             >

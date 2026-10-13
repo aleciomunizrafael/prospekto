@@ -42,8 +42,10 @@ export function ActionBarMobile({
   more?: ActionBarMoreItem[];
   className?: string;
 }) {
+  // Só com o ícone, `touch` (h-11, px-4 → px-3) daria 16 + 24 + 2 = 42 px de largura; `min-w-11`
+  // garante os 44 × 44 px da lista de verificação (seção 9, WCAG 2.5.8).
   const moreButton = (
-    <Button variant="outline" size="touch" aria-label="Mais ações" className="px-3" />
+    <Button variant="outline" size="touch" aria-label="Mais ações" className="min-w-11 px-3" />
   );
   return (
     <div

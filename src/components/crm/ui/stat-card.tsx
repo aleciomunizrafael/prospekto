@@ -16,6 +16,10 @@ import { cn } from "@/lib/utils";
 // (`after:inset-0`), e o anel de foco fica nele, `ring-inset`, porque o grupo tem
 // `overflow-hidden` e um anel externo seria cortado nas pontas (WCAG 2.4.7). Com `hintHref`, o
 // hint é um segundo link (`relative z-10`) acima do pseudo-elemento: nunca um <a> dentro de outro.
+// Como o círculo de 24 px em volta do hint cai sobre o link principal, a exceção de espaçamento
+// não vale e o hint precisa do alvo de 24 px (`min-h-6 py-1 -my-1`, WCAG 2.5.8): a linha de 16 px
+// ganha 4 px de padding em cima e embaixo, e a margem negativa devolve os 8 px ao fluxo, então a
+// célula não muda de altura nem de aparência.
 export type StatCardTone = "neutral" | "warning" | "danger" | "success";
 
 const DOT_CLASS: Record<StatCardTone, string> = {
@@ -117,7 +121,7 @@ export function StatCard({
             <Link
               href={hintHref}
               className={cn(
-                "crm-meta relative z-10 self-start rounded-sm underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                "crm-meta relative z-10 -my-1 inline-flex min-h-6 items-center self-start rounded-sm py-1 underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                 HINT_TONE_CLASS[hintTone],
               )}
             >

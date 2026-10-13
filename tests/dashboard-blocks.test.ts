@@ -253,6 +253,13 @@ describe("StatRuler e StatCard variant=ruler", () => {
     expect(html).toContain('href="/app/tarefas?vencem=hoje"');
     expect(html).toMatch(/<a[^>]*href="\/app\/tarefas\?atrasadas=1"[^>]*>2 atrasadas<\/a>/);
     expect(html).not.toMatch(/<a [^>]*>(?:(?!<\/a>)[\s\S])*<a /);
+    // Alvo de 24 px (2.5.8) sobre o link esticado da célula: a linha de 16 px do .crm-meta ganha
+    // 4 px de padding em cima e embaixo, e o -my-1 devolve os 8 px ao fluxo.
+    const tag = html.match(/<a[^>]*href="\/app\/tarefas\?atrasadas=1"[^>]*>/)?.[0] ?? "";
+    expect(tag).toContain("min-h-6");
+    expect(tag).toContain("py-1");
+    expect(tag).toContain("-my-1");
+    expect(tag).toContain("z-10");
     expect(html).toContain('title="4 tarefas vencidas ou para hoje, 2 atrasadas"');
     expect(html).toContain('aria-label="4 tarefas para hoje, 2 atrasadas, abrir tarefas"');
   });
