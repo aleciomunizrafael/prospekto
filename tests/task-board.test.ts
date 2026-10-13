@@ -107,8 +107,16 @@ describe("TaskBoardColumns", () => {
     expect(t).toContain("Alta");
     expect(t).toContain("Média");
     expect(t).toContain("Baixa");
-    // Concluída não tem "Concluir"; as abertas têm.
+    // Concluída não tem "Concluir"; as abertas têm, com 44 px no celular e 28 px no desktop no
+    // próprio <button> (size="responsive"; o className do TaskCompleteButton vai para o <form>).
     expect(html.match(/Concluir</g)).toHaveLength(2);
+    const completeTags = html.match(/<button [^>]*>(?:(?!<\/button>)[\s\S])*?Concluir</g) ?? [];
+    expect(completeTags).toHaveLength(2);
+    for (const tag of completeTags) {
+      const open = tag.match(/<button [^>]*>/)?.[0] ?? "";
+      expect(open).toContain("h-11");
+      expect(open).toContain("md:h-7");
+    }
   });
 
   it("vínculo com link real e 'sem vínculo' na solta; prazo vencido só nas abertas", () => {

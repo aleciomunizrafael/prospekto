@@ -169,6 +169,14 @@ describe("LeadBoardColumns", () => {
     // Sem dono: "Assumir"; com dono: avatar com o nome.
     expect(html).toContain("Assumir");
     expect(html).toContain('aria-label="Daniela Teste"');
+    // Alvos de 44 px no celular (design system, seção 9): "Mover … para" e "Assumir".
+    const moveTag =
+      html.match(/<button [^>]*aria-label="Mover Rodrigo Fictício para"[^>]*>/)?.[0] ?? "";
+    expect(moveTag).toContain("size-11");
+    expect(moveTag).toContain("md:size-7");
+    const claimTag = html.match(/<button [^>]*>Assumir</)?.[0] ?? "";
+    expect(claimTag).toContain("h-11");
+    expect(claimTag).toContain("md:h-7");
     // Cartões nascem sem arrasto no HTML do servidor.
     expect(html).toContain('draggable="false"');
     expect(html).not.toContain('draggable="true"');
@@ -220,6 +228,11 @@ describe("ViewToggle", () => {
     expect(list).toContain("stage=contato");
     expect(list).toContain("page=2");
     expect(html).not.toContain("aria-pressed");
+    // 44 px no celular, 28 px no desktop.
+    for (const a of html.match(/<a [^>]*>/g) ?? []) {
+      expect(a).toContain("h-11");
+      expect(a).toContain("md:h-7");
+    }
   });
 });
 

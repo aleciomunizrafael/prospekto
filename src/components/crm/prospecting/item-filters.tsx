@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 
 // Chips de status da lista de prospecção (ADR-004, 6.6; plano, P19): links com aria-current no
 // ativo dentro de um nav, mais o campo de busca por nome (formulário GET, Enter). Os filtros
-// vivem na URL: `status` (um dos cinco ou ausente = todos) e `q`. Server Component.
+// vivem na URL: `status` (um dos cinco ou ausente = todos) e `q`. Chips de 44 px no celular e
+// 28 px no desktop (`h-11 md:h-7`), como os de TaskFilters. Server Component.
 export type ItemCounts = Record<ProspectingStatus | "todos", number>;
 
 export function ItemFilters({
@@ -50,7 +51,7 @@ export function ItemFilters({
                   aria-current={active ? "true" : undefined}
                 />
               }
-              className={cn("h-7 px-2.5", !active && "hover:bg-surface-2")}
+              className={cn("h-11 px-3 md:h-7 md:px-2.5", !active && "hover:bg-surface-2")}
             >
               {chip.label}
               <span className={cn("tabular-nums", !active && "text-muted-foreground")}>

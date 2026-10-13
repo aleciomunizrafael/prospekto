@@ -9,7 +9,8 @@ import { cn } from "@/lib/utils";
 
 // Alternância Lista/Quadro de /app/leads (ADR-004, 6.2; plano, P4 e P19): dois links num
 // `nav aria-label="Visão"` com `aria-current="true"` no ativo (são links que navegam, não
-// botões), preservando os filtros e trocando só `view`. O clique grava o cookie `crm-leads-view`
+// botões), preservando os filtros e trocando só `view`; 44 px no celular (`h-11 md:h-7`). O
+// clique grava o cookie `crm-leads-view`
 // antes de navegar; é o único lugar que grava o cookie, além da primeira visita
 // (`rememberOnMount`: sem parâmetro e sem cookie, o quadro no desktop e a lista no celular, lida
 // por `matchMedia`, sem `router.refresh()`). O "ver todos em Lista" das colunas não passa por aqui.
@@ -70,7 +71,7 @@ export function ViewToggle({
             aria-current={current ? "true" : undefined}
             onClick={() => rememberView(view)}
             className={cn(
-              "inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors duration-120 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:h-7",
+              "inline-flex h-11 items-center gap-1.5 rounded-md px-2.5 text-sm transition-colors duration-120 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:h-7",
               current
                 ? "bg-muted font-medium text-foreground"
                 : "text-muted-foreground hover:text-foreground",

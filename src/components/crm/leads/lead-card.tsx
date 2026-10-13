@@ -25,7 +25,9 @@ import { cn } from "@/lib/utils";
 // manipuladores vêm do LeadBoard. Nome como link real para o detalhe (decisão D10), empresa ·
 // segmento, prazo em frase (SlaIndicator), dono ou "Assumir", valor do aporte aberto e o botão
 // "Mover para" (menu com os destinos permitidos e "Marcar perdido"), que é o caminho por teclado:
-// o arrasto nativo não é acessível e nunca grava nada, só abre o mesmo diálogo.
+// o arrasto nativo não é acessível e nunca grava nada, só abre o mesmo diálogo. "Assumir" e
+// "Mover para" têm 44 px no celular (`h-11 md:h-7`, `size-11 md:size-7`), onde o menu é o único
+// caminho para mover um lead.
 //
 // `draggable` nasce falso no HTML e só vira verdadeiro depois da montagem com ponteiro fino; os
 // links e botões dentro do cartão levam `draggable={false}` (senão Firefox e Safari arrastam o
@@ -106,7 +108,7 @@ export function LeadCard({
         {lead.ownerName ? (
           <Avatar name={lead.ownerName} size="sm" />
         ) : (
-          <ClaimButton leadId={lead.id} size="sm" />
+          <ClaimButton leadId={lead.id} size="sm" className="h-11 md:h-7" />
         )}
         {amount != null ? (
           <span className="min-w-0 flex-1 truncate text-sm tabular-nums" title="Aporte em aberto">
@@ -124,7 +126,7 @@ export function LeadCard({
                 size="icon-sm"
                 draggable={false}
                 aria-label={`Mover ${lead.name} para`}
-                className="relative z-10 shrink-0 text-muted-foreground hover:text-foreground"
+                className="relative z-10 size-11 shrink-0 text-muted-foreground hover:text-foreground md:size-7"
               />
             }
           >

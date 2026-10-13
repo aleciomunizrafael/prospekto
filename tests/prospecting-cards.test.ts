@@ -10,6 +10,7 @@ import {
   type ItemCardItem,
   type ItemCardsContext,
 } from "@/components/crm/prospecting/item-cards";
+import { ItemFilters, type ItemCounts } from "@/components/crm/prospecting/item-filters";
 import { ListTable } from "@/components/crm/prospecting/list-table";
 import type { ProspectingListSummary } from "@/lib/repos/prospecting";
 
@@ -179,6 +180,33 @@ describe("ItemCards", () => {
     );
     expect(text(fresh)).toContain("Reunião marcada");
     expect(text(fresh)).not.toContain("Ver lead");
+  });
+});
+
+describe("ItemFilters", () => {
+  const counts: ItemCounts = {
+    todos: 6,
+    a_ligar: 3,
+    sem_resposta: 1,
+    retornar: 1,
+    reuniao_marcada: 1,
+    descartado: 0,
+  };
+
+  it("chips-link de 44 px no celular e 28 px no desktop, aria-current só no ativo", () => {
+    const html = renderToString(
+      createElement(ItemFilters, { listId: LIST_ID, counts, filters: { status: "retornar" } }),
+    );
+    const chips = html.match(/<nav [^>]*aria-label="Status"[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? "";
+    const links = chips.match(/<a [^>]*>/g) ?? [];
+    expect(links).toHaveLength(6);
+    for (const a of links) {
+      expect(a).toContain("h-11");
+      expect(a).toContain("md:h-7");
+    }
+    expect(chips.match(/aria-current="true"/g)).toHaveLength(1);
+    expect(chips).toMatch(/<a [^>]*aria-current="true"[^>]*href="[^"]*status=retornar"/);
+    expect(text(chips)).toContain("Retornar 1");
   });
 });
 

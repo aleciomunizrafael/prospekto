@@ -21,7 +21,8 @@ import { StatusBadge } from "../ui/status-badge";
 // Cartão do quadro de Tarefas (ADR-004, 6.5; plano, frente B). Puro: tudo o que muda vem por
 // props. Linha 1: assunto como botão "Editar" + pill de prioridade com texto; linha 2: vínculo
 // como link real (ou "sem vínculo"); linha 3: descrição em duas linhas; linha 4: prazo
-// (describeTaskDue) e, nas colunas abertas, "Concluir"; dono à direita. O menu "⋯" ("Mais ações da
+// (describeTaskDue) e, nas colunas abertas, "Concluir" (`size="responsive"`: 44 px no celular,
+// 28 px no desktop); dono à direita. O menu "⋯" ("Mais ações da
 // tarefa") reúne Editar e "Mover para …" para as outras duas colunas: é o caminho sem arrasto para
 // mover (teclado e celular). `data-task-move` é o gancho que o TaskBoard usa para devolver o foco
 // ao botão depois que o cartão remonta na coluna de destino. Links e botões não iniciam arrasto
@@ -144,7 +145,7 @@ export function TaskCard({
           >
             {due.text}
           </span>
-          {done ? null : <TaskCompleteButton activityId={task.id} size="sm" className="md:h-7" />}
+          {done ? null : <TaskCompleteButton activityId={task.id} size="responsive" />}
         </div>
         {task.ownerName ? (
           <Avatar name={task.ownerName} size="sm" />
