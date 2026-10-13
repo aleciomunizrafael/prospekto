@@ -10,6 +10,7 @@ import {
   isNull,
   lt,
   notInArray,
+  or,
   sql,
 } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -23,7 +24,7 @@ import {
   tenants,
   users,
 } from "@/lib/db/schema";
-import type { DigestData } from "@/lib/crm/digest";
+import type { DigestAssignedTask, DigestData } from "@/lib/crm/digest";
 import { addCalendarDays, calendarDateInSaoPaulo } from "@/lib/crm/format";
 import { TERMINAL_STAGES } from "@/lib/domain/pipelines";
 import type { Ctx } from "./ctx";
@@ -222,6 +223,42 @@ export async function loadDigestData(
       leadsLast24h,
     },
   };
+}
+
+// "Tarefas atribuídas a você" (ADR-004, 6.5): abertas com owner_user_id do destinatário, com
+// due_at < agora + 7 dias ou sem prazo, por vencimento com nulos por último. O rótulo do vínculo
+// vem de subconsultas restritas ao tenant (regra 11). Por usuário: o cron chama dentro do laço.
+export async function loadAssignedTasks(
+  ctx: Ctx,
+  userId: string,
+  now: Date,
+  limit = 10,
+): Promise<DigestAssignedTask[]> {
+  const until = new Date(now.getTime() + 7 * DAY);
+  const linkLabel = sql<
+    string | null
+  >`coalesce((select ${leads.name} from ${leads} where ${leads.id} = ${activities.leadId} and ${leads.tenantId} = ${activities.tenantId}), (select ${organizations.name} from ${organizations} where ${organizations.id} = ${activities.orgId} and ${organizations.tenantId} = ${activities.tenantId}), (select ${culturalProjects.name} from ${culturalProjects} where ${culturalProjects.id} = ${activities.projectId} and ${culturalProjects.tenantId} = ${activities.tenantId}))`;
+  const rows = await db
+    .select({
+      id: activities.id,
+      subject: activities.subject,
+      dueAt: activities.dueAt,
+      createdAt: activities.createdAt,
+      linkLabel,
+    })
+    .from(activities)
+    .where(
+      and(
+        eq(activities.tenantId, ctx.tenantId),
+        eq(activities.type, "tarefa"),
+        isNull(activities.doneAt),
+        eq(activities.ownerUserId, userId),
+        or(isNull(activities.dueAt), lt(activities.dueAt, until)),
+      ),
+    )
+    .orderBy(sql`${activities.dueAt} asc nulls last`, asc(activities.position))
+    .limit(Math.min(Math.max(limit, 1), 50));
+  return rows;
 }
 
 // Idempotência do e-mail diário: `tenants.settings.daily_email_sent_on` (seção 9.3).

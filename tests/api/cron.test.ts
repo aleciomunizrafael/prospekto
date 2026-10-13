@@ -3,19 +3,21 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { GET } from "@/app/api/cron/daily/route";
 import { env } from "@/env";
-import { buildDigest, renderDigest, type DigestData } from "@/lib/crm/digest";
+import { buildDigest, describeAssignedTask, renderDigest, type DigestData } from "@/lib/crm/digest";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { createActivity } from "@/lib/repos/activities";
 import { createContribution } from "@/lib/repos/contributions";
 import type { Ctx } from "@/lib/repos/ctx";
-import { getDigestSentOn, loadDigestData } from "@/lib/repos/digest";
+import { getDigestSentOn, loadAssignedTasks, loadDigestData } from "@/lib/repos/digest";
 import { createLead, updateLead } from "@/lib/repos/leads";
 import { createOrganization } from "@/lib/repos/organizations";
 import { createProject } from "@/lib/repos/projects";
 import { createSimulation, listSimulations } from "@/lib/repos/simulations";
+import { createTask } from "@/lib/repos/tasks";
 import { ensureTenant } from "@/lib/repos/tenants";
+import { renderDigestEmail } from "@/lib/email/templates/digest";
 import { consentContato, uniqueEmail } from "../helpers";
 
 function request(authorization?: string, query = "") {
@@ -32,13 +34,22 @@ const now = new Date();
 
 beforeAll(async () => {
   await ensureTenant({ id: ctx.tenantId, name: "Prospekto" });
-  await db.insert(users).values({
-    id: "cron-user-1",
-    name: "Daniela",
-    email: "cron-user-1@example.test",
-    tenantId: ctx.tenantId,
-    role: "owner",
-  });
+  await db.insert(users).values([
+    {
+      id: "cron-user-1",
+      name: "Daniela",
+      email: "cron-user-1@example.test",
+      tenantId: ctx.tenantId,
+      role: "owner",
+    },
+    {
+      id: "cron-user-2",
+      name: "Rafael",
+      email: "cron-user-2@example.test",
+      tenantId: ctx.tenantId,
+      role: "operator",
+    },
+  ]);
   // Lead com follow-up vencido e sem dono (novo): entra nos dois primeiros blocos.
   const { lead } = await createLead(ctx, {
     segment: "PJ",
@@ -56,6 +67,22 @@ beforeAll(async () => {
     subject: "Ligar de volta",
     leadId: lead.id,
     dueAt: new Date(now.getTime() - DAY),
+  });
+  // Tarefas do quadro (ADR-004, 6.5): uma solta e vencida (entra em "Follow-ups vencidos" com o
+  // link do quadro), duas atribuídas à Daniela (uma vence em 3 dias, uma sem prazo) e uma dela
+  // vencendo em 30 dias (fora da janela de 7 dias).
+  await createTask(ctx, { subject: "Solta e vencida", dueAt: new Date(now.getTime() - 2 * DAY) });
+  await createTask(ctx, {
+    subject: "Enviar proposta",
+    leadId: lead.id,
+    ownerUserId: "cron-user-1",
+    dueAt: new Date(now.getTime() + 3 * DAY),
+  });
+  await createTask(ctx, { subject: "Sem prazo mesmo", ownerUserId: "cron-user-1" });
+  await createTask(ctx, {
+    subject: "Daqui a um mês",
+    ownerUserId: "cron-user-1",
+    dueAt: new Date(now.getTime() + 30 * DAY),
   });
   const proponent = await createOrganization(ctx, { type: "proponente", name: "Produtora Cron" });
   const soon = new Date(now.getTime() + 90 * DAY).toISOString().slice(0, 10);
@@ -109,7 +136,7 @@ describe("/api/cron/daily", () => {
     const data = await loadDigestData(ctx, now);
     expect(data.overdueLeadsTotal).toBe(1);
     expect(data.overdueLeads[0].organization).toBe("Empresa Vencida");
-    expect(data.tasksTotal).toBe(1);
+    expect(data.tasksTotal).toBe(2);
     expect(data.newLeadsTotal).toBe(1);
     expect(data.contributionsTotal).toBe(1);
     expect(data.projectsTotal).toBe(1);
@@ -130,13 +157,13 @@ describe("/api/cron/daily", () => {
       };
       cleanup: { orphanSimulations: number; formAttempts: string };
     };
-    expect(json.digest.recipients).toBe(1);
-    expect(json.digest.sent).toBe(1);
+    expect(json.digest.recipients).toBe(2);
+    expect(json.digest.sent).toBe(2);
     expect(json.digest.failed).toBe(0);
     expect(json.digest.skipped).toBe(false);
     expect(json.digest.counts).toMatchObject({
       overdue: 1,
-      tasks: 1,
+      tasks: 2,
       newLeads: 1,
       contributions: 1,
       projects: 1,
@@ -158,7 +185,79 @@ describe("/api/cron/daily", () => {
       digest: { skipped: boolean; sent: number };
     };
     expect(forced.digest.skipped).toBe(false);
-    expect(forced.digest.sent).toBe(1);
+    expect(forced.digest.sent).toBe(2);
+  });
+
+  it("cada usuário recebe a própria seção 'Tarefas atribuídas a você' (ADR-004, 6.5)", async () => {
+    const data = await loadDigestData(ctx, now);
+    const base = "https://prospekto.com.br";
+    const mine = await loadAssignedTasks(ctx, "cron-user-1", now);
+    expect(mine.map((t) => t.subject)).toEqual(["Enviar proposta", "Sem prazo mesmo"]);
+    expect(mine[0].linkLabel).toBe("Lead Vencido");
+    expect(mine[1].dueAt).toBeNull();
+    const daniela = renderDigestEmail(
+      { ...data, assignedTasks: mine },
+      { appUrl: base, now, recipientName: "Daniela" },
+    );
+    expect(daniela.counts.assignedTasks).toBe(2);
+    expect(daniela.text).toContain("TAREFAS ATRIBUÍDAS A VOCÊ (2)");
+    expect(daniela.text).toMatch(
+      /Enviar proposta, Lead Vencido, vence \w{3}\., \d{2}\/\d{2} \(nova\)/,
+    );
+    expect(daniela.text).toContain("Sem prazo mesmo, sem prazo (nova)");
+    expect(daniela.text).not.toContain("Daqui a um mês");
+    expect(daniela.html).toContain(`${base}/app/tarefas?task=${mine[0].id}`);
+    expect(daniela.html).toContain(`${base}/app/tarefas?dono=eu`);
+    // A tarefa solta e vencida vai para "Follow-ups vencidos" com o link do quadro.
+    const loose = data.tasks.find((t) => t.subject === "Solta e vencida");
+    expect(loose).toBeDefined();
+    expect(daniela.html).toContain(`${base}/app/tarefas?task=${loose!.id}`);
+
+    const rafael = renderDigestEmail(
+      { ...data, assignedTasks: await loadAssignedTasks(ctx, "cron-user-2", now) },
+      { appUrl: base, now, recipientName: "Rafael" },
+    );
+    expect(rafael.counts.assignedTasks).toBe(0);
+    expect(rafael.text).toContain("TAREFAS ATRIBUÍDAS A VOCÊ (0)");
+    expect(rafael.text).toContain("Nenhuma tarefa atribuída a você.");
+    expect(rafael.text).not.toContain("Enviar proposta, Lead Vencido");
+
+    // Sem a seção quando a página não passa assignedTasks (compatibilidade da função pura).
+    const digest = buildDigest(data, { appUrl: base, now });
+    expect(digest.sections.map((s) => s.title)).not.toContainEqual(
+      expect.stringMatching(/Tarefas atribuídas/),
+    );
+    expect(digest.counts.assignedTasks).toBe(0);
+  });
+});
+
+describe("describeAssignedTask", () => {
+  const now = new Date("2026-10-13T12:00:00Z");
+  it("vence em dia e data numérica, 'sem prazo' quando nula, '(nova)' nas últimas 24 h", () => {
+    expect(
+      describeAssignedTask(
+        {
+          id: "t1",
+          subject: "Enviar proposta",
+          dueAt: new Date("2026-10-16T12:00:00Z"),
+          createdAt: new Date("2026-10-13T10:00:00Z"),
+          linkLabel: null,
+        },
+        now,
+      ),
+    ).toBe("Enviar proposta, vence sex., 16/10 (nova)");
+    expect(
+      describeAssignedTask(
+        {
+          id: "t2",
+          subject: "Ligar",
+          dueAt: null,
+          createdAt: new Date("2026-10-01T10:00:00Z"),
+          linkLabel: "ACME",
+        },
+        now,
+      ),
+    ).toBe("Ligar, ACME, sem prazo");
   });
 });
 
