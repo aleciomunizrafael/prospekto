@@ -253,11 +253,14 @@ async function assertTaskReferences(
 }
 
 // Campos de estado para um status de destino (ADR-004, 6.5): A fazer limpa os dois; Em andamento
-// grava started_at = coalesce(started_at, agora) e limpa done_at; Concluída grava done_at (mantém
-// started_at).
+// grava started_at = coalesce(started_at, agora) e limpa done_at; Concluída grava
+// done_at = coalesce(done_at, agora) e mantém started_at. O coalesce de done_at é o que preserva a
+// data real de conclusão quando a tarefa já concluída é reposicionada na própria coluna (ela
+// alimenta a ordem da coluna, "as 20 mais recentes" e a exportação); vindo de coluna aberta,
+// done_at é nulo e recebe o agora.
 function statusPatch(
   status: TaskStatus,
-  current: { startedAt: Date | null },
+  current: { startedAt: Date | null; doneAt: Date | null },
   now: Date,
 ): { startedAt: Date | null; doneAt: Date | null } {
   switch (status) {
@@ -266,7 +269,7 @@ function statusPatch(
     case "em_andamento":
       return { startedAt: current.startedAt ?? now, doneAt: null };
     case "concluida":
-      return { startedAt: current.startedAt, doneAt: now };
+      return { startedAt: current.startedAt, doneAt: current.doneAt ?? now };
   }
 }
 
@@ -284,7 +287,7 @@ export async function createTask(ctx: Ctx, input: CreateTaskInput): Promise<Acti
         body: data.body || null,
         occurredAt: now,
         dueAt: data.dueAt ?? null,
-        ...statusPatch(data.status as TaskStatus, { startedAt: null }, now),
+        ...statusPatch(data.status as TaskStatus, { startedAt: null, doneAt: null }, now),
         priority: data.priority ?? "media",
         position: nextTaskPositionSql(ctx),
         leadId: data.leadId ?? null,

@@ -160,6 +160,35 @@ describe("moveTask (P3)", () => {
     expect(reopened.doneAt).toBeNull();
   });
 
+  it("reposicionar dentro de Concluída mantém doneAt (G20); vindo de coluna aberta grava o agora", async () => {
+    const own = await makeTenant();
+    const finishedAt = new Date("2026-09-01T12:00:00Z");
+    const task = await createTask(own, { subject: "Feita em setembro", status: "em_andamento" });
+    const done = await moveTask(own, {
+      activityId: task.id,
+      status: "concluida",
+      index: 0,
+      now: finishedAt,
+    });
+    expect(done.doneAt?.toISOString()).toBe(finishedAt.toISOString());
+    const started = done.startedAt;
+    // Soltar o cartão concluído de novo em Concluída (outro índice, sem `now`) não reescreve a
+    // data real de conclusão nem o started_at.
+    const again = await moveTask(own, { activityId: task.id, status: "concluida", index: 1 });
+    expect(again.doneAt?.toISOString()).toBe(finishedAt.toISOString());
+    expect(again.startedAt?.getTime()).toBe(started?.getTime());
+    // Uma tarefa aberta continua recebendo o agora ao ser concluída.
+    const other = await createTask(own, { subject: "Feita agora" });
+    const now = new Date("2026-10-13T19:00:00Z");
+    const fresh = await moveTask(own, { activityId: other.id, status: "concluida", index: 0, now });
+    expect(fresh.doneAt?.toISOString()).toBe(now.toISOString());
+    const board = await listTasksBoard(own, { now });
+    expect(board.concluida.rows.map((t) => t.subject)).toEqual([
+      "Feita agora",
+      "Feita em setembro",
+    ]);
+  });
+
   it("posição entre vizinhos é a média; no fim é last + 1; no início é first - 1", async () => {
     const own = await makeTenant();
     const t1 = await createTask(own, { subject: "Um" }); // 1

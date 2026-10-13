@@ -167,6 +167,56 @@ describe("applyOptimisticMove", () => {
     expect(reopened.a_fazer.rows.at(-1)?.position).toBe(4);
   });
 
+  it("Concluída ignora o índice solto: a recém-concluída entra no topo e a já concluída mantém done_at (G20)", () => {
+    const earlier = d("2026-09-01T12:00:00Z");
+    const withDone = {
+      ...board,
+      concluida: {
+        rows: [
+          task("done-new", 1, { doneAt: d("2026-10-10T10:00:00Z") }),
+          task("done-old", 2, { doneAt: d("2026-10-05T10:00:00Z") }),
+        ],
+        total: 2,
+      },
+    };
+    // Concluir pelo arrasto num índice do meio, ou pelo menu "⋯" (fim da coluna): topo, done_at = agora.
+    const fresh = applyOptimisticMove(
+      withDone,
+      { activityId: "b", status: "concluida", index: 2 },
+      now,
+    );
+    expect(fresh.concluida.rows.map((t) => t.id)).toEqual(["b", "done-new", "done-old"]);
+    expect(fresh.concluida.rows[0].doneAt).toEqual(now);
+    expect(fresh.concluida.rows[0].position).toBe(0);
+    expect(fresh.concluida.total).toBe(3);
+    expect(fresh.a_fazer.total).toBe(2);
+    // Tarefa que já estava concluída (data antiga) solta de novo em Concluída: a data fica e ela
+    // volta para onde done_at desc a põe, como o refresh vai mostrar.
+    const old = {
+      ...withDone,
+      concluida: {
+        rows: [...withDone.concluida.rows, task("done-older", 3, { doneAt: earlier })],
+        total: 3,
+      },
+    };
+    const kept = applyOptimisticMove(
+      old,
+      { activityId: "done-older", status: "concluida", index: 0 },
+      now,
+    );
+    expect(kept.concluida.rows.map((t) => t.id)).toEqual(["done-new", "done-old", "done-older"]);
+    expect(kept.concluida.rows[2].doneAt).toEqual(earlier);
+    expect(kept.concluida.total).toBe(3);
+    // Sozinha na coluna, a já concluída entra no índice 0 com a data mantida.
+    const alone = applyOptimisticMove(
+      { ...board, concluida: { rows: [task("done-older", 1, { doneAt: earlier })], total: 1 } },
+      { activityId: "done-older", status: "concluida", index: 5 },
+      now,
+    );
+    expect(alone.concluida.rows.map((t) => t.id)).toEqual(["done-older"]);
+    expect(alone.concluida.rows[0].doneAt).toEqual(earlier);
+  });
+
   it("tarefa desconhecida devolve o mesmo quadro", () => {
     expect(applyOptimisticMove(board, { activityId: "nope", status: "concluida", index: 0 })).toBe(
       board,

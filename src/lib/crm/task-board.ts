@@ -89,7 +89,9 @@ type BoardLike<T extends TaskLike> = Record<TaskStatus, { rows: T[]; total: numb
 
 // Estado otimista do quadro depois de um movimento (useOptimistic): tira a tarefa de onde está,
 // aplica started_at/done_at da regra do ADR (6.5) e insere no índice pedido da coluna de destino
-// com a posição que o repositório vai calcular. Os totais acompanham a troca de coluna.
+// com a posição que o repositório vai calcular. Os totais acompanham a troca de coluna. Concluída
+// é ordenada por done_at desc, não pelo índice solto: a recém-concluída entra no topo (é onde o
+// refresh a mostra) e a que já estava concluída mantém a data e volta para onde ela a põe.
 export function applyOptimisticMove<T extends TaskLike>(
   board: BoardLike<T>,
   move: TaskMove,
@@ -116,11 +118,13 @@ export function applyOptimisticMove<T extends TaskLike>(
     concluida: { ...board.concluida, rows: board.concluida.rows.filter((t) => t.id !== moved.id) },
   };
   const target = next[move.status].rows;
-  const at = Math.max(0, Math.min(Math.floor(move.index), target.length));
+  const at =
+    move.status === "concluida" ? 0 : Math.max(0, Math.min(Math.floor(move.index), target.length));
   const before = at > 0 ? target[at - 1].position : undefined;
   const after = at < target.length ? target[at].position : undefined;
   patched.position = nextPosition({ before, after });
   target.splice(at, 0, patched);
+  if (move.status === "concluida" && moved.doneAt !== null) target.sort(byDoneDesc);
   if (from !== move.status) {
     next[from].total = Math.max(0, next[from].total - 1);
     next[move.status].total += 1;
@@ -128,10 +132,12 @@ export function applyOptimisticMove<T extends TaskLike>(
   return next;
 }
 
-// Mesma regra do repositório (statusPatch de repos/tasks.ts) para o cartão mudar de coluna na hora.
+// Mesma regra do repositório (statusPatch de repos/tasks.ts) para o cartão mudar de coluna na hora:
+// Concluída grava done_at = coalesce(done_at, agora), para a reposição na própria coluna não
+// apagar a data real de conclusão.
 function statusPatch(
   status: TaskStatus,
-  current: { startedAt: Date | null },
+  current: { startedAt: Date | null; doneAt: Date | null },
   now: Date,
 ): { startedAt: Date | null; doneAt: Date | null } {
   switch (status) {
@@ -140,7 +146,7 @@ function statusPatch(
     case "em_andamento":
       return { startedAt: current.startedAt ?? now, doneAt: null };
     case "concluida":
-      return { startedAt: current.startedAt, doneAt: now };
+      return { startedAt: current.startedAt, doneAt: current.doneAt ?? now };
   }
 }
 

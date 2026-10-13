@@ -24,7 +24,7 @@ import {
   type TaskFilters,
   type TaskMove,
 } from "@/lib/crm/task-board";
-import type { TaskStatus } from "@/lib/crm/task-status";
+import { taskStatusOf, type TaskStatus } from "@/lib/crm/task-status";
 import type { TaskBoard as TaskBoardData, TaskRow } from "@/lib/repos/tasks";
 import { cn } from "@/lib/utils";
 import type { Option } from "../project-forms/action-form";
@@ -123,6 +123,9 @@ export function TaskBoard({
   );
   const [canDrag, setCanDrag] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
+  // Coluna de onde o cartão saiu: um cartão de Concluída pode ser arrastado para reabrir (ADR-004,
+  // 6.5), mas não reordenado na própria coluna, que é ordenada por data de conclusão.
+  const [dragFrom, setDragFrom] = useState<TaskStatus | null>(null);
   const [over, setOver] = useState<DropTarget>(null);
   const [announce, setAnnounce] = useState("");
   // Tarefa que acabou de ser movida: o cartão remonta na coluna de destino e o botão "⋯" que abriu
@@ -231,16 +234,24 @@ export function TaskBoard({
     event.dataTransfer.setData("text/plain", task.id);
     event.dataTransfer.effectAllowed = "move";
     setDragId(task.id);
+    setDragFrom(taskStatusOf(task));
   }, []);
 
   const onDragEnd = useCallback(() => {
     setDragId(null);
+    setDragFrom(null);
     setOver(null);
   }, []);
 
   const onColumnDragOver = useCallback(
     (status: TaskStatus, event: DragEvent<HTMLElement>) => {
       if (!dragId) return;
+      // Sem preventDefault o navegador não aceita a soltura (cursor "não permitido") e não há
+      // indicador: reordenar dentro de Concluída não existe.
+      if (dragFrom === "concluida" && status === "concluida") {
+        setOver(null);
+        return;
+      }
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
       const list = event.currentTarget.querySelector<HTMLElement>("[data-column-list]");
@@ -257,7 +268,7 @@ export function TaskBoard({
           : { status, index },
       );
     },
-    [dragId],
+    [dragId, dragFrom],
   );
 
   const onColumnDragLeave = useCallback((_status: TaskStatus, event: DragEvent<HTMLElement>) => {
@@ -272,6 +283,7 @@ export function TaskBoard({
       const target = over && over.status === status ? over : null;
       setOver(null);
       setDragId(null);
+      setDragFrom(null);
       if (!dragId) return;
       let task: TaskRow | undefined;
       let from: TaskStatus | undefined;
@@ -283,6 +295,9 @@ export function TaskBoard({
         }
       }
       if (!task || !from) return;
+      // Reordenar dentro de Concluída é no-op: a coluna é ordenada por data de conclusão, e a
+      // action regravaria a posição à toa (o dragover acima já recusa a soltura).
+      if (from === "concluida" && status === "concluida") return;
       const rows = optimisticBoard[status].rows;
       let index = target ? target.index : rows.length;
       // Na mesma coluna o índice mostrado inclui o próprio cartão; o servidor relê a coluna sem ele.
