@@ -1,78 +1,155 @@
+import { Phone } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { KeyValueList, type KeyValueItem } from "@/components/crm/ui/key-value-list";
+import {
+  ItemAboutSection,
+  ItemCrmCard,
+  ItemDataCard,
+  ItemHeaderMeta,
+  ItemHistoryCard,
+  ItemHookSection,
+} from "@/components/crm/prospecting/item-detail";
+import {
+  ItemActionBar,
+  ItemMoreMenu,
+  ResultButtons,
+  type ResultContext,
+} from "@/components/crm/prospecting/result-buttons";
+import { WhatsappDialog } from "@/components/crm/prospecting/whatsapp-dialog";
+import { DetailLayout } from "@/components/crm/ui/detail-layout";
 import { PageHeader } from "@/components/crm/ui/page-header";
-import { StatusBadge } from "@/components/crm/ui/status-badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCalendarDate, formatDateTime, formatPhoneBR } from "@/lib/crm/format";
-import { getItem, getList } from "@/lib/repos/prospecting";
+import { formatCalendarDate, formatPhoneBR } from "@/lib/crm/format";
+import { defaultCallbackDate, defaultMeetingAt } from "@/lib/crm/prospecting-view";
+import { listActivities } from "@/lib/repos/activities";
+import { getLeadDetail } from "@/lib/repos/leads";
+import { getOrganization } from "@/lib/repos/organizations";
+import { getItem, getList, listDiscardReasons } from "@/lib/repos/prospecting";
+import { listTenantUsers } from "@/lib/repos/users";
 import { requireSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Empresa" };
 
-// Ficha de uma empresa da prospecção (ADR-004, 6.6 e 6.10). Fundação: cabeçalho real e os dados;
-// a frente C entrega "Ligar", WhatsApp, os botões de resultado, o autosave e o histórico.
+const UUID = /^[0-9a-f-]{36}$/i;
+
+// Ficha de uma empresa da prospecção (ADR-004, 6.6 e 6.10): "Ligar" é a única ação sólida da
+// tela; WhatsApp ao lado; os resultados da ligação no primeiro card; abertura e "Sobre a empresa"
+// com autosave; histórico do item; dados e, quando convertida, os links para o lead e a organização.
 export default async function ProspectingItemPage({
   params,
 }: PageProps<"/app/prospeccao/[listId]/[itemId]">) {
   const ctx = await requireSession();
   const { listId, itemId } = await params;
+  if (!UUID.test(listId) || !UUID.test(itemId)) notFound();
   const [list, item] = await Promise.all([getList(ctx, listId), getItem(ctx, itemId)]);
   if (!list || !item || item.listId !== list.id) notFound();
 
-  const data: KeyValueItem[] = [
-    {
-      label: "Telefone",
-      value: item.phone ? formatPhoneBR(item.phone) : null,
-      href: item.phone ? `tel:${item.phone}` : undefined,
-    },
-    { label: "Segmento", value: item.segment },
-    { label: "Lista", value: list.name, href: `/app/prospeccao/${list.id}` },
-    { label: "Localização", value: item.address },
-    { label: "Porte", value: item.size },
-    { label: "Informações", value: item.info },
-    { label: "Adicionada em", value: formatDateTime(item.createdAt) },
-    { label: "Última tentativa", value: item.calledAt ? formatDateTime(item.calledAt) : null },
-    { label: "Retornar em", value: item.callbackAt ? formatCalendarDate(item.callbackAt) : null },
-    {
-      label: "WhatsApp aberto em",
-      value: item.whatsappSentAt ? formatDateTime(item.whatsappSentAt) : null,
-    },
-    { label: "Anotação", value: item.notes },
-  ];
+  const now = new Date();
+  const [activities, users, discardReasons, lead, org] = await Promise.all([
+    listActivities(ctx, { prospectingItemId: item.id, limit: 100 }),
+    listTenantUsers(ctx),
+    listDiscardReasons(ctx, { itemId: item.id }),
+    item.leadId ? getLeadDetail(ctx, item.leadId) : Promise.resolve(null),
+    item.orgId ? getOrganization(ctx, item.orgId) : Promise.resolve(null),
+  ]);
+  const userNames = new Map(users.map((u) => [u.id, u.name]));
+  const userOptions = users.map((u) => ({ value: u.id, label: u.name }));
+  const resultCtx: ResultContext = {
+    users: userOptions,
+    defaultOwnerUserId: list.assigneeUserId ?? ctx.userId,
+    defaultMeetingAt: defaultMeetingAt(now),
+    defaultCallbackAt: defaultCallbackDate(now),
+    discardReason: discardReasons[item.id] ?? null,
+  };
+  const resultItem = { id: item.id, name: item.name, status: item.status, notes: item.notes };
+  const whatsappItem = {
+    id: item.id,
+    name: item.name,
+    phone: item.phone,
+    whatsappSentAt: item.whatsappSentAt ? item.whatsappSentAt.toISOString() : null,
+  };
+  const nowIso = now.toISOString();
+
+  const header = (
+    <PageHeader
+      eyebrow={<Link href={`/app/prospeccao/${list.id}`}>{list.name}</Link>}
+      title={item.name}
+      meta={<ItemHeaderMeta item={item} now={now} />}
+      primary={
+        item.phone ? (
+          <Button nativeButton={false} render={<a href={`tel:${item.phone}`} />}>
+            <Phone aria-hidden="true" />
+            Ligar {formatPhoneBR(item.phone)}
+          </Button>
+        ) : undefined
+      }
+      secondary={
+        item.phone
+          ? [<WhatsappDialog key="whatsapp" item={whatsappItem} now={nowIso} size="default" />]
+          : []
+      }
+      more={
+        <ItemMoreMenu item={resultItem} listId={list.id} discardReason={resultCtx.discardReason} />
+      }
+    />
+  );
+
+  const main = (
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Resultado da ligação</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {!item.phone ? (
+            <p className="crm-meta">
+              Sem telefone: ligue por outro número e registre o resultado aqui mesmo.
+            </p>
+          ) : null}
+          <ResultButtons item={resultItem} ctx={resultCtx} size="default" />
+          {item.status === "retornar" && item.callbackAt ? (
+            <p className="crm-meta">
+              Retorno marcado para {formatCalendarDate(item.callbackAt)}. Use Retornar para mudar a
+              data.
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
+      <ItemHookSection item={item} />
+      <ItemAboutSection item={item} />
+      <ItemHistoryCard activities={activities} users={userNames} now={now} />
+    </>
+  );
+
+  const aside = (
+    <>
+      <ItemDataCard item={item} list={{ id: list.id, name: list.name }} />
+      <ItemCrmCard
+        lead={
+          lead ? { id: lead.id, name: lead.name, stage: lead.stage, pipeline: lead.pipeline } : null
+        }
+        org={org ? { id: org.id, name: org.name } : null}
+      />
+    </>
+  );
 
   return (
-    <div className="flex flex-col gap-4">
-      <PageHeader
-        eyebrow={<Link href={`/app/prospeccao/${list.id}`}>{list.name}</Link>}
-        title={item.name}
-        meta={<StatusBadge kind="prospecting" value={item.status} size="md" />}
-      />
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Abertura da ligação</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {item.hook ? (
-              <blockquote className="border-l-[3px] border-l-brand pl-3 text-sm italic">
-                {item.hook}
-              </blockquote>
-            ) : (
-              <p className="crm-meta">Sem abertura registrada.</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Dados</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <KeyValueList items={data} hideEmpty columns={1} />
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    <DetailLayout
+      header={header}
+      main={main}
+      aside={aside}
+      asideLabel="Dados da empresa"
+      actionsMobile={
+        <ItemActionBar
+          item={resultItem}
+          phone={item.phone}
+          whatsapp={whatsappItem}
+          now={nowIso}
+          ctx={resultCtx}
+        />
+      }
+    />
   );
 }

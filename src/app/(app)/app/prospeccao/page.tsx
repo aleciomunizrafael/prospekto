@@ -1,58 +1,57 @@
 import { PhoneOutgoing } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { NewListDialog } from "@/components/crm/prospecting/list-dialogs";
+import { ListTable } from "@/components/crm/prospecting/list-table";
 import { EmptyState } from "@/components/crm/ui/empty-state";
 import { PageHeader } from "@/components/crm/ui/page-header";
-import { formatDate } from "@/lib/crm/format";
-import { plural } from "@/lib/crm/text";
+import { Button } from "@/components/ui/button";
 import { listLists } from "@/lib/repos/prospecting";
+import { listTenantUsers } from "@/lib/repos/users";
 import { requireSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Prospecção" };
 
-// Índice das listas de prospecção (ADR-004, 6.6). Fundação: cabeçalho real e a lista em forma
-// simples; a frente C entrega a tabela, o diálogo "Nova lista" e o "Colar lista".
-export default async function ProspectingPage() {
+// Índice das listas de prospecção (ADR-004, 6.6): tabela com nome, responsável, progresso e
+// reuniões; "Nova lista" no cabeçalho (FAB no celular) ou aberto por ?nova=1.
+export default async function ProspectingPage({ searchParams }: PageProps<"/app/prospeccao">) {
   const ctx = await requireSession();
-  const lists = await listLists(ctx);
+  const sp = await searchParams;
+  const nova = (Array.isArray(sp.nova) ? sp.nova[0] : sp.nova) === "1";
+  const [lists, users] = await Promise.all([listLists(ctx), listTenantUsers(ctx)]);
+  const userOptions = users.map((u) => ({ value: u.id, label: u.name }));
 
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
         title="Prospecção"
         description="Listas de empresas para ligar, com a abertura de cada ligação e o resultado."
+        actionsOnMobile
+        primary={
+          <NewListDialog
+            key={nova ? "aberta" : "fechada"}
+            users={userOptions}
+            defaultAssigneeUserId={ctx.userId}
+            defaultOpen={nova}
+            returnHref="/app/prospeccao"
+          />
+        }
       />
-      {lists.length === 0 ? (
-        <EmptyState
-          icon={PhoneOutgoing}
-          title="Nenhuma lista de prospecção ainda."
-          description="Cole uma lista de empresas e comece a ligar."
-        />
-      ) : (
-        <ul className="divide-y divide-divider rounded-xl border border-border bg-card">
-          {lists.map((list) => (
-            <li
-              key={list.id}
-              className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-4 py-2"
-            >
-              <span className="min-w-0 truncate text-sm">
-                <Link href={`/app/prospeccao/${list.id}`} className="font-medium hover:underline">
-                  {list.name}
-                </Link>
-                {list.region ? <span className="crm-meta"> {list.region}</span> : null}
-              </span>
-              <span className="crm-meta tabular-nums">
-                {list.contacted}/{list.total} contatadas ·{" "}
-                {plural(list.meetings, "reunião", "reuniões")}
-              </span>
-              <span className="crm-meta col-start-1">
-                {list.assigneeName ? `quem liga: ${list.assigneeName} · ` : ""}criada em{" "}
-                {formatDate(list.createdAt)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ListTable
+        lists={lists}
+        empty={
+          <EmptyState
+            icon={PhoneOutgoing}
+            title="Nenhuma lista de prospecção ainda."
+            description="Cole uma lista de empresas e comece a ligar."
+            action={
+              <Button nativeButton={false} render={<Link href="/app/prospeccao?nova=1" />}>
+                Nova lista
+              </Button>
+            }
+          />
+        }
+      />
     </div>
   );
 }
