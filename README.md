@@ -74,7 +74,7 @@ npm run dev                     # http://localhost:3000 (site) e http://localhos
 npm run check                   # lint + typecheck + format:check + test + build (mesma sequência da CI)
 ```
 
-Fora de ambiente implantado, `npm run db:seed` também cria dados de demonstração fictícios (lista de prospecção, tarefas, leads em todos os estágios de Patrocinadores, um projeto e aportes; `SEED_DEMO=0` desliga). O PGlite não aceita dois processos no mesmo diretório: pare o `npm run dev` antes de `db:seed` e de `npm run build`, ou aponte `PGLITE_DIR` para outro diretório (`docs/arquitetura/scaffold.md`, seção 5.4).
+Fora de ambiente implantado, `npm run db:seed` também cria dados de demonstração fictícios (lista de prospecção, tarefas, leads em todos os estágios de Patrocinadores, um projeto e aportes; `SEED_DEMO=0` desliga). Se esse seed rodar antes de `SEED_USERS`, os dados nascem sem responsável; a execução seguinte com `SEED_USERS` os atribui ao usuário criado. O PGlite não aceita dois processos no mesmo diretório: pare o `npm run dev` antes de `db:seed` e de `npm run build`, ou aponte `PGLITE_DIR` para outro diretório (`docs/arquitetura/scaffold.md`, seção 5.4).
 
 Deploy (Vercel, Neon em São Paulo, Resend, domínio, seed do primeiro acesso, plano Pro, backup cifrado): guia passo a passo em `docs/arquitetura/deploy.md`; variáveis por ambiente em `docs/arquitetura/scaffold.md`, seção 9. Convenções obrigatórias do código em `AGENTS.md`.
 

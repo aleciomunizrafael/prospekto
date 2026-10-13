@@ -12,6 +12,7 @@ import path from "node:path";
 import { generateRandomString } from "better-auth/crypto";
 import { isDeployed } from "../src/env";
 import { auth } from "../src/lib/auth";
+import { prospectingMessages, variantIndexFor } from "../src/lib/crm/prospecting-messages";
 import { db } from "../src/lib/db";
 import {
   activities,
@@ -24,7 +25,7 @@ import {
   tenants,
   users as usersTable,
 } from "../src/lib/db/schema";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 
 const TENANT_ID = process.env.DEFAULT_TENANT_ID ?? "prospekto";
 const TENANT_NAME = "Prospekto Consultoria & Projetos";
@@ -181,27 +182,101 @@ if (process.env.SEED_EXAMPLE === "1") {
 // a régua "Carteira". Roda por padrão fora de ambiente implantado (SEED_DEMO=0 desliga) e só com
 // SEED_DEMO=1 em produção. Idempotente pelo nome da lista e pelo e-mail de cada lead. Nomes,
 // CNPJs, telefones (+5554900000001 a 11) e e-mails (@example.test) são fictícios.
+//
+// Dono dos dados: o primeiro usuário do tenant. Quando o seed roda antes de SEED_USERS (o README
+// permite `npm run db:seed` sozinho), tudo nasce sem dono e os blocos "Minhas tarefas", "Só as
+// minhas" e "quem liga" ficam vazios; a execução seguinte, já com usuário, preenche o que ficou
+// vazio em vez de só pular.
 const seedDemo = process.env.SEED_DEMO === "1" || (process.env.SEED_DEMO !== "0" && !isDeployed);
 if (seedDemo) {
   const DEMO_LIST = "Vinícolas do Vale";
+  const DEMO_TASKS = [
+    "Preparar o roteiro de ligações da semana",
+    "Enviar proposta de patrocínio",
+    "Confirmar a reunião de diagnóstico",
+  ] as const;
+  const leadEmail = "rodrigo.exemplo@example.test";
+  const projectSlug = "festival-ficticio-de-inverno";
+  const [owner] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.tenantId, TENANT_ID))
+    .orderBy(usersTable.createdAt)
+    .limit(1);
+  const ownerId = owner?.id ?? null;
+  const now = new Date();
+  const day = 24 * 60 * 60_000;
+  const calendar = (d: Date) => d.toISOString().slice(0, 10);
+
   const [existingList] = await db
     .select({ id: prospectingLists.id })
     .from(prospectingLists)
     .where(and(eq(prospectingLists.tenantId, TENANT_ID), eq(prospectingLists.name, DEMO_LIST)));
   if (existingList) {
-    console.log(`dados de demonstração já existem, pulados: ${DEMO_LIST}`);
+    // Base criada sem usuário: preenche lista, atividades e tarefas (só os assuntos das três
+    // tarefas e os itens da lista, para não alcançar atividades de formulário público, que também
+    // nascem sem created_by), leads e projeto. Espelha a primeira execução: os leads "novo" do
+    // quadro continuam sem dono de propósito, o Rodrigo recebe dono; leads.stage não é tocado.
+    let filled = 0;
+    if (ownerId) {
+      const listRows = await db
+        .update(prospectingLists)
+        .set({ assigneeUserId: ownerId, createdByUserId: ownerId })
+        .where(
+          and(eq(prospectingLists.id, existingList.id), isNull(prospectingLists.assigneeUserId)),
+        )
+        .returning({ id: prospectingLists.id });
+      const listItemIds = db
+        .select({ id: prospectingItems.id })
+        .from(prospectingItems)
+        .where(eq(prospectingItems.listId, existingList.id));
+      const activityRows = await db
+        .update(activities)
+        .set({ ownerUserId: ownerId, createdByUserId: ownerId })
+        .where(
+          and(
+            eq(activities.tenantId, TENANT_ID),
+            isNull(activities.createdByUserId),
+            or(
+              inArray(activities.subject, [...DEMO_TASKS]),
+              inArray(activities.prospectingItemId, listItemIds),
+            ),
+          ),
+        )
+        .returning({ id: activities.id });
+      const leadRows = await db
+        .update(leads)
+        .set({ ownerUserId: ownerId })
+        .where(
+          and(
+            eq(leads.tenantId, TENANT_ID),
+            eq(leads.sourceDetail, "dados de demonstração"),
+            isNull(leads.ownerUserId),
+            or(ne(leads.stage, "novo"), eq(leads.email, leadEmail)),
+          ),
+        )
+        .returning({ id: leads.id });
+      const projectRows = await db
+        .update(culturalProjects)
+        .set({ ownerUserId: ownerId })
+        .where(
+          and(
+            eq(culturalProjects.tenantId, TENANT_ID),
+            eq(culturalProjects.slug, projectSlug),
+            isNull(culturalProjects.ownerUserId),
+          ),
+        )
+        .returning({ id: culturalProjects.id });
+      filled = listRows.length + activityRows.length + leadRows.length + projectRows.length;
+    }
+    if (filled > 0) {
+      console.log(
+        `dados de demonstração já existem: responsáveis preenchidos (${filled} registros)`,
+      );
+    } else {
+      console.log(`dados de demonstração já existem, pulados: ${DEMO_LIST}`);
+    }
   } else {
-    const [owner] = await db
-      .select({ id: usersTable.id })
-      .from(usersTable)
-      .where(eq(usersTable.tenantId, TENANT_ID))
-      .orderBy(usersTable.createdAt)
-      .limit(1);
-    const ownerId = owner?.id ?? null;
-    const now = new Date();
-    const day = 24 * 60 * 60_000;
-    const calendar = (d: Date) => d.toISOString().slice(0, 10);
-
     // Organizações da demonstração com o telefone da empresa (ADR-004, 6.4.7) e CNPJ fictício
     // (dígitos verificadores válidos, para a folha "Editar" aceitar salvar).
     const vinicolaId = await ensureCompany(
@@ -214,7 +289,6 @@ if (seedDemo) {
 
     // Lead PJ fictício ligado à vinícola (para a tarefa em andamento ter vínculo), com o telefone
     // da pessoa para o "Ligar" e o "Abrir WhatsApp" do lead.
-    const leadEmail = "rodrigo.exemplo@example.test";
     let [lead] = await db
       .select({ id: leads.id })
       .from(leads)
@@ -361,11 +435,16 @@ if (seedDemo) {
         prospectingItemId: byName["Metalúrgica Modelo"],
         createdByUserId: ownerId,
       },
+      // O mesmo registro que recordWhatsappSent grava: o CRM só sabe que a mensagem foi aberta com
+      // este texto (ADR-004, 6.6: "aberto", nunca "enviado"), e o texto é a variação que o produto
+      // escolhe para o item.
       {
         tenantId: TENANT_ID,
         type: "whatsapp",
-        subject: "WhatsApp enviado",
-        body: "Olá! Aqui é a Daniela, da Prospekto. Trabalhamos com projetos culturais nas leis de incentivo e queria entender como a empresa decide apoios e patrocínios. Responda SAIR se não quiser mensagens por aqui.",
+        subject: "WhatsApp aberto pela prospecção",
+        body: prospectingMessages("Espumantes Ilustrativos")[
+          variantIndexFor(byName["Espumantes Ilustrativos"], 3)
+        ],
         data: { channel: "whatsapp" },
         occurredAt: new Date(now.getTime() - 2 * day),
         prospectingItemId: byName["Espumantes Ilustrativos"],
@@ -390,7 +469,7 @@ if (seedDemo) {
       {
         tenantId: TENANT_ID,
         type: "tarefa",
-        subject: "Preparar o roteiro de ligações da semana",
+        subject: DEMO_TASKS[0],
         priority: "alta",
         position: basePosition + 1,
         dueAt: new Date(now.getTime() + day),
@@ -400,7 +479,7 @@ if (seedDemo) {
       {
         tenantId: TENANT_ID,
         type: "tarefa",
-        subject: "Enviar proposta de patrocínio",
+        subject: DEMO_TASKS[1],
         body: "Montar a simulação com o contador antes de enviar.",
         priority: "media",
         position: basePosition + 2,
@@ -413,7 +492,7 @@ if (seedDemo) {
       {
         tenantId: TENANT_ID,
         type: "tarefa",
-        subject: "Confirmar a reunião de diagnóstico",
+        subject: DEMO_TASKS[2],
         priority: "baixa",
         position: basePosition + 3,
         dueAt: new Date(now.getTime() - 2 * day),
@@ -431,17 +510,7 @@ if (seedDemo) {
   // Quadro de leads e régua "Carteira" (frente A; Integração): leads fictícios em todos os
   // estágios de Patrocinadores, um proponente com um projeto captando e aportes em proposta,
   // termo assinado e depositado. Idempotente por e-mail (um lead a mais numa base antiga entra).
-  const [owner] = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(eq(usersTable.tenantId, TENANT_ID))
-    .orderBy(usersTable.createdAt)
-    .limit(1);
-  const ownerId = owner?.id ?? null;
-  const now = new Date();
-  const day = 24 * 60 * 60_000;
   const at = (days: number) => new Date(now.getTime() + days * day);
-  const calendar = (d: Date) => d.toISOString().slice(0, 10);
 
   const metalurgicaId = await ensureCompany(
     "Metalúrgica Modelo",
@@ -477,7 +546,6 @@ if (seedDemo) {
       })
       .returning({ id: organizations.id });
   }
-  const projectSlug = "festival-ficticio-de-inverno";
   let [project] = await db
     .select({ id: culturalProjects.id })
     .from(culturalProjects)
