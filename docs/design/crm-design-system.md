@@ -257,7 +257,7 @@ Nada abaixo de 11 px, e 11 px só em caixa alta com espaçamento (eyebrow e barr
 
 ```
 ┌──────────────┬──────────────────────────────────────────────────────────────────────┐
-│ Prospekto    │ Pipeline › Rodrigo Pasqualotto     [🔍 Buscar leads, empresas…  /]  │
+│ Prospekto    │ Pipeline › Rodrigo Pasqualotto  [🔍 Buscar leads, organizações… /]  │
 │ CRM          │                                                      [+ Novo ▾]      │  ← header 56px, sticky, branco, sem avatar
 │ [🔍 Buscar…  ├──────────────────────────────────────────────────────────────────────┤
 │       Ctrl K]│                                                                      │

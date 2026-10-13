@@ -5,10 +5,19 @@ import { cn } from "@/lib/utils";
 // Busca global (crm-design-system.md, seção 4.1; decisão D18): formulário GET para /app/busca,
 // sem JavaScript. Server Component. A tecla "/" (shell/shortcuts.tsx) foca o primeiro campo
 // visível de `form[role="search"] input[name="q"]`; o `<kbd>` só lembra o atalho no desktop.
+
+// Mesmo vocabulário em /app/busca, na paleta Ctrl+K (command-palette.tsx) e no header: a busca
+// cobre leads, organizações, projetos, aportes, tarefas e prospecção (ADR-004, 6.1: "organizações",
+// não "empresas", que hoje sugere a prospecção); as reticências indicam os demais grupos. O campo
+// do header tem 280 px (header.tsx) e corta o texto completo em "…organizações, p" antes da tecla
+// "/", por isso recebe a variante curta em vez de alongar o campo.
+export const SEARCH_PLACEHOLDER = "Buscar leads, organizações, projetos…";
+export const SEARCH_PLACEHOLDER_SHORT = "Buscar leads, organizações…";
+
 export function SearchForm({
   defaultValue = "",
   id = "busca-global",
-  placeholder = "Buscar leads, empresas e projetos",
+  placeholder = SEARCH_PLACEHOLDER,
   className,
   inputClassName,
 }: {

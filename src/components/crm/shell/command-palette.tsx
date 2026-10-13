@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { PALETTE_EVENT } from "./modules";
+import { SEARCH_PLACEHOLDER } from "./search-form";
 import {
   PALETTE_ERROR,
   PALETTE_LISTBOX_ID,
@@ -233,7 +234,7 @@ export function CommandPalette() {
             aria-autocomplete="list"
             autoComplete="off"
             spellCheck={false}
-            placeholder="Buscar leads, organizações, projetos…"
+            placeholder={SEARCH_PLACEHOLDER}
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             onKeyDown={onInputKeyDown}

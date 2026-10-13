@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import { HeaderCrumbs } from "./header-crumbs";
 import { NewMenu } from "./new-menu";
-import { SearchForm } from "./search-form";
+import { SEARCH_PLACEHOLDER_SHORT, SearchForm } from "./search-form";
 import { PaletteTrigger } from "./sidebar-search";
 
 // Header do shell (crm-design-system.md, seções 4.1 e 4.2; ADR-004, seção 6.1), uma peça para os
@@ -19,7 +19,11 @@ export function Header({ className }: { className?: string }) {
       )}
     >
       <HeaderCrumbs />
-      <SearchForm className="hidden md:block" inputClassName="md:w-[17.5rem]" />
+      <SearchForm
+        className="hidden md:block"
+        inputClassName="md:w-[17.5rem]"
+        placeholder={SEARCH_PLACEHOLDER_SHORT}
+      />
       <PaletteTrigger className="md:hidden" />
       <NewMenu className="hidden md:inline-flex" />
     </header>
