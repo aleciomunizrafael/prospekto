@@ -4,6 +4,7 @@
 // relacionamento, notas. `defaultType` pré-seleciona o tipo quando a tela é aberta por
 // /app/organizacoes?novo=1&tipo=proponente (vindo de Projetos).
 import { UFS, type OrganizationType } from "@/lib/domain/enums";
+import { formatPhoneBR } from "@/lib/crm/format";
 import {
   ORGANIZATION_TYPE_LABELS,
   REGIME_CONFIRMATION_LABELS,
@@ -35,6 +36,8 @@ export type OrganizationFormValues = {
   icmsContributorRs?: boolean | null;
   accountantOrgId?: string | null;
   ownerUserId?: string | null;
+  // Telefone da empresa (central ou recepção), E.164 (ADR-004, 6.4.7; plano, P18).
+  phone?: string | null;
   notes?: string | null;
 };
 
@@ -93,11 +96,15 @@ export function OrganizationFields({
         defaultValue={org?.uf ?? ""}
       />
       <TextField
-        name="sector"
-        label="Setor de atuação"
-        className="sm:col-span-2"
-        defaultValue={org?.sector ?? ""}
+        name="phone"
+        label="Telefone da empresa"
+        type="tel"
+        inputMode="tel"
+        autoComplete="off"
+        help="Central ou recepção, com DDD, por exemplo (54) 3000-0000. O telefone de cada pessoa fica no contato."
+        defaultValue={formatPhoneBR(org?.phone) || ""}
       />
+      <TextField name="sector" label="Setor de atuação" defaultValue={org?.sector ?? ""} />
     </>
   );
 

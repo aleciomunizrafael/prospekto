@@ -8,42 +8,68 @@ import { EmptyState } from "@/components/crm/ui/empty-state";
 import { PageHeader } from "@/components/crm/ui/page-header";
 import { StatusBadge } from "@/components/crm/ui/status-badge";
 import { mechanismLabel } from "@/lib/crm/enum-labels";
-import { formatCnpj } from "@/lib/crm/format";
-import { SEGMENT_LABELS, pipelineLabel } from "@/lib/crm/labels";
+import { formatBRL, formatCnpj } from "@/lib/crm/format";
+import { SEGMENT_LABELS, TASK_STATUS_LABELS, pipelineLabel } from "@/lib/crm/labels";
 import { leadCompany } from "@/lib/crm/lead-view";
+import { describeTaskDue } from "@/lib/crm/task-due";
+import { taskStatusOf } from "@/lib/crm/task-status";
+import { listContributionSummaries, type ContributionSummary } from "@/lib/repos/contributions";
 import { searchLeads, type LeadListRow } from "@/lib/repos/leads";
 import { listOrganizationSummaries, type OrganizationSummary } from "@/lib/repos/organizations";
 import { listProjectSummaries, type ProjectSummary } from "@/lib/repos/projects";
+import { searchProspectingItems, type ProspectingItem } from "@/lib/repos/prospecting";
+import { searchTasks, type TaskRow } from "@/lib/repos/tasks";
 import { requireSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Busca" };
 
 const PER_GROUP = 8;
 
-// Busca global (crm-design-system.md, seção 4.1 e decisão D18): três consultas já existentes em
-// paralelo, 8 resultados por grupo, link "ver todos" para a lista com o mesmo `q`. Sem repositório
-// novo. Inclui leads perdidos: quem busca pelo nome quer achar a pessoa, em qualquer estágio.
+type ProspectingHit = ProspectingItem & { listName: string };
+
+// Busca global (crm-design-system.md, seção 4.1 e decisão D18; ADR-004, 6.7): é o "ver todos os
+// resultados" da paleta Ctrl+K e o destino sem JavaScript do campo do header, com os mesmos seis
+// repositórios da `searchAllAction` em paralelo, 8 resultados por grupo e link "ver todos" para a
+// lista com o mesmo `q` onde a lista aceita busca. Sem repositório novo. Inclui leads perdidos:
+// quem busca pelo nome quer achar a pessoa, em qualquer estágio. Itens de prospecção só por nome.
 export default async function SearchPage({ searchParams }: PageProps<"/app/busca">) {
   const ctx = await requireSession();
   const sp = await searchParams;
   const q = (typeof sp.q === "string" ? sp.q : "").trim().slice(0, 120);
+  const now = new Date();
 
-  const [leads, organizations, projects] = q
+  const [leads, organizations, projects, contributions, tasks, prospecting] = q
     ? await Promise.all([
         searchLeads(ctx, { search: q, pageSize: PER_GROUP, includeLost: true }),
         listOrganizationSummaries(ctx, { search: q, limit: PER_GROUP }),
         listProjectSummaries(ctx, { search: q, limit: PER_GROUP, includeArchived: true }),
+        listContributionSummaries(ctx, { search: q, limit: PER_GROUP }),
+        searchTasks(ctx, { search: q, limit: PER_GROUP }),
+        searchProspectingItems(ctx, { search: q, limit: PER_GROUP }),
       ])
-    : [{ rows: [] as LeadListRow[], total: 0 }, [], []];
+    : [
+        { rows: [] as LeadListRow[], total: 0 },
+        [] as OrganizationSummary[],
+        [] as ProjectSummary[],
+        [] as ContributionSummary[],
+        [] as TaskRow[],
+        [] as ProspectingHit[],
+      ];
   const nothing =
-    q.length > 0 && leads.rows.length === 0 && organizations.length === 0 && projects.length === 0;
+    q.length > 0 &&
+    leads.rows.length === 0 &&
+    organizations.length === 0 &&
+    projects.length === 0 &&
+    contributions.length === 0 &&
+    tasks.length === 0 &&
+    prospecting.length === 0;
   const query = `?q=${encodeURIComponent(q)}`;
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Busca"
-        description="Leads, organizações e projetos pelo nome, e-mail, empresa ou CNPJ."
+        description="Leads, organizações, projetos, aportes, tarefas e empresas de prospecção pelo nome, e-mail, empresa ou CNPJ."
       />
       <SearchForm
         id="busca-pagina"
@@ -55,7 +81,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/app/busca
         <EmptyState
           icon={Search}
           title="Digite parte do nome, do e-mail, da empresa ou do CNPJ."
-          description="Os resultados aparecem em três grupos: leads, organizações e projetos."
+          description="Os resultados aparecem por tipo: leads, organizações, projetos, aportes, tarefas e empresas de prospecção."
         />
       ) : nothing ? (
         <EmptyState
@@ -149,12 +175,74 @@ export default async function SearchPage({ searchParams }: PageProps<"/app/busca
               empty={<GroupEmpty>Nenhum projeto com esse termo.</GroupEmpty>}
             />
           </ResultGroup>
+          <ResultGroup id="busca-aportes" title="Aportes" shown={contributions.length}>
+            <DataTable<ContributionSummary>
+              caption={`Aportes encontrados para "${q}"`}
+              density="compact"
+              columns={CONTRIBUTION_COLUMNS}
+              rows={contributions}
+              rowHref={(c) => `/app/aportes/${c.id}`}
+              rowKey={(c) => c.id}
+              mobile={{
+                primary: (c) => c.leadName,
+                secondary: (c) => (
+                  <>
+                    <span>{c.projectName}</span>
+                    <span>·</span>
+                    <span className="tabular">{formatBRL(c.proposedAmount)}</span>
+                  </>
+                ),
+                trailing: (c) => <StatusBadge kind="contribution" value={c.status} />,
+              }}
+              empty={<GroupEmpty>Nenhum aporte com esse termo.</GroupEmpty>}
+            />
+          </ResultGroup>
+          <ResultGroup id="busca-tarefas" title="Tarefas" shown={tasks.length}>
+            <DataTable<TaskRow>
+              caption={`Tarefas encontradas para "${q}"`}
+              density="compact"
+              columns={taskColumns(now)}
+              rows={tasks}
+              rowHref={(t) => `/app/tarefas?task=${t.id}`}
+              rowKey={(t) => t.id}
+              mobile={{
+                primary: (t) => t.subject,
+                secondary: (t) => (
+                  <>
+                    <span>{TASK_STATUS_LABELS[taskStatusOf(t)]}</span>
+                    <span>·</span>
+                    <span>{taskDue(t, now)}</span>
+                  </>
+                ),
+                trailing: (t) => <StatusBadge kind="priority" value={t.priority ?? "media"} />,
+              }}
+              empty={<GroupEmpty>Nenhuma tarefa com esse termo.</GroupEmpty>}
+            />
+          </ResultGroup>
+          <ResultGroup id="busca-prospeccao" title="Prospecção" shown={prospecting.length}>
+            <DataTable<ProspectingHit>
+              caption={`Empresas de prospecção encontradas para "${q}"`}
+              density="compact"
+              columns={PROSPECTING_COLUMNS}
+              rows={prospecting}
+              rowHref={(i) => `/app/prospeccao/${i.listId}/${i.id}`}
+              rowKey={(i) => i.id}
+              mobile={{
+                primary: (i) => i.name,
+                secondary: (i) => <span>{i.listName}</span>,
+                trailing: (i) => <StatusBadge kind="prospecting" value={i.status} />,
+              }}
+              empty={<GroupEmpty>Nenhuma empresa de prospecção com esse termo.</GroupEmpty>}
+            />
+          </ResultGroup>
         </>
       )}
     </div>
   );
 }
 
+// `allHref` só quando a lista do módulo aceita o mesmo `q` (Aportes, Tarefas e Prospecção não
+// têm busca por texto; a paleta e esta página já são o atalho).
 function ResultGroup({
   id,
   title,
@@ -168,8 +256,8 @@ function ResultGroup({
   title: string;
   count?: number;
   shown: number;
-  allHref: string;
-  allLabel: string;
+  allHref?: string;
+  allLabel?: string;
   children: ReactNode;
 }) {
   const total = count ?? shown;
@@ -182,7 +270,7 @@ function ResultGroup({
             {total > shown ? `${shown} de ${total}` : total}
           </span>
         </h2>
-        {shown > 0 ? (
+        {shown > 0 && allHref ? (
           <Link href={allHref} className="text-sm text-primary hover:underline">
             {allLabel} ›
           </Link>
@@ -283,4 +371,83 @@ const PROJECT_COLUMNS: Column<ProjectSummary>[] = [
     cell: (p) => <StatusBadge kind="stage" value={p.stage} pipeline="projetos" />,
   },
   { key: "mechanism", header: "Mecanismo", priority: 2, cell: (p) => mechanismLabel(p.mechanism) },
+];
+
+const CONTRIBUTION_COLUMNS: Column<ContributionSummary>[] = [
+  {
+    key: "lead",
+    header: "Patrocinador",
+    cell: (c) => (
+      <div className="flex min-w-0 flex-col">
+        <RowLink href={`/app/aportes/${c.id}`}>{c.leadName}</RowLink>
+        <span className="crm-meta truncate">{c.projectName}</span>
+      </div>
+    ),
+  },
+  {
+    key: "status",
+    header: "Status",
+    cell: (c) => <StatusBadge kind="contribution" value={c.status} />,
+  },
+  {
+    key: "amount",
+    header: "Proposto",
+    align: "right",
+    priority: 2,
+    cell: (c) => <span className="tabular">{formatBRL(c.proposedAmount)}</span>,
+  },
+];
+
+// Vínculo da tarefa em texto: o primeiro que existir (uma tarefa tem no máximo um).
+function taskLink(t: TaskRow): string | null {
+  return t.leadName ?? t.orgName ?? t.projectName ?? t.contributionLabel ?? null;
+}
+
+function taskDue(t: TaskRow, now: Date): string {
+  return t.doneAt ? "Concluída" : describeTaskDue(t.dueAt, now).text;
+}
+
+function taskColumns(now: Date): Column<TaskRow>[] {
+  return [
+    {
+      key: "subject",
+      header: "Tarefa",
+      cell: (t) => (
+        <div className="flex min-w-0 flex-col">
+          <RowLink href={`/app/tarefas?task=${t.id}`}>{t.subject}</RowLink>
+          <span className="crm-meta truncate">{taskLink(t) ?? "sem vínculo"}</span>
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      cell: (t) => (
+        <span className="inline-flex items-center gap-2">
+          {TASK_STATUS_LABELS[taskStatusOf(t)]}
+          <StatusBadge kind="priority" value={t.priority ?? "media"} size="sm" />
+        </span>
+      ),
+    },
+    { key: "due", header: "Prazo", priority: 2, cell: (t) => taskDue(t, now) },
+  ];
+}
+
+const PROSPECTING_COLUMNS: Column<ProspectingHit>[] = [
+  {
+    key: "name",
+    header: "Empresa",
+    cell: (i) => (
+      <div className="flex min-w-0 flex-col">
+        <RowLink href={`/app/prospeccao/${i.listId}/${i.id}`}>{i.name}</RowLink>
+        <span className="crm-meta truncate">{i.listName}</span>
+      </div>
+    ),
+  },
+  {
+    key: "status",
+    header: "Status",
+    cell: (i) => <StatusBadge kind="prospecting" value={i.status} />,
+  },
+  { key: "segment", header: "Grupo", priority: 2, cell: (i) => i.segment ?? "—" },
 ];

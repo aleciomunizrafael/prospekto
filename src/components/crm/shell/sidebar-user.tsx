@@ -15,7 +15,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { MODULES } from "./modules";
-import { useSignOut } from "./user-menu";
+import { useSignOut } from "./use-sign-out";
 
 // Rodapé do usuário na sidebar (crm-design-system.md, seção 4.1; ADR-004, seção 6.1): Avatar 32 px,
 // nome 14 px/500 e e-mail 12 px em `muted`, truncados com o nome completo em `title`, e o menu que

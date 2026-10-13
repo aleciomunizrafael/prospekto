@@ -136,9 +136,12 @@ export async function listOrganizationSummaries(
       ...getTableColumns(organizations),
       contactsCount: sql<number>`(select count(*)::int from ${contacts} where ${contacts.orgId} = ${organizations.id})`,
       leadsCount: sql<number>`(select count(*)::int from ${leads} where ${leads.orgId} = ${organizations.id})`,
+      // Coluna qualificada à mão: numa consulta de uma tabela só o drizzle renderia
+      // `${organizations.accountantOrgId}` como "accountant_org_id", que dentro da subconsulta
+      // resolve para o próprio `o2` e nunca acha o escritório.
       accountantName: sql<
         string | null
-      >`(select o2.name from organizations o2 where o2.id = ${organizations.accountantOrgId})`,
+      >`(select o2.name from organizations o2 where o2.id = organizations.accountant_org_id and o2.tenant_id = organizations.tenant_id)`,
     })
     .from(organizations)
     .where(and(...where))
@@ -157,9 +160,12 @@ export async function getOrganizationSummary(
       ...getTableColumns(organizations),
       contactsCount: sql<number>`(select count(*)::int from ${contacts} where ${contacts.orgId} = ${organizations.id})`,
       leadsCount: sql<number>`(select count(*)::int from ${leads} where ${leads.orgId} = ${organizations.id})`,
+      // Coluna qualificada à mão: numa consulta de uma tabela só o drizzle renderia
+      // `${organizations.accountantOrgId}` como "accountant_org_id", que dentro da subconsulta
+      // resolve para o próprio `o2` e nunca acha o escritório.
       accountantName: sql<
         string | null
-      >`(select o2.name from organizations o2 where o2.id = ${organizations.accountantOrgId})`,
+      >`(select o2.name from organizations o2 where o2.id = organizations.accountant_org_id and o2.tenant_id = organizations.tenant_id)`,
     })
     .from(organizations)
     .where(and(eq(organizations.tenantId, ctx.tenantId), eq(organizations.id, orgId)));

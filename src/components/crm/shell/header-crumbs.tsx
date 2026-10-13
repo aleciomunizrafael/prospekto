@@ -19,8 +19,9 @@ import { describePath } from "./modules";
 // subpágina ("Leads › Lead"). Nas páginas de detalhe o rótulo genérico é só o fallback: assim que
 // o h1 da página chega (as páginas chegam por streaming), o caminho passa a mostrar o nome do
 // registro ("Leads › Rodrigo Pasqualotto"; no celular o título truncado, seção 4.2), e a página
-// não precisa repetir o caminho no PageHeader. No celular o módulo vira o botão "voltar" (href fixo
-// para a lista pai, nunca history.back()).
+// não precisa repetir o caminho no PageHeader. No celular a página pai vira o botão "voltar" (href
+// fixo, nunca history.back()): o módulo, ou a lista no caso da empresa de prospecção, que no
+// desktop aparece como item intermediário ("Prospecção › Lista › Empresa").
 // O h1 é estado externo (DOM): useSyncExternalStore lê o texto atual e um MutationObserver no
 // <main> avisa quando a página (ou o esqueleto) troca.
 function subscribe(onChange: () => void): () => void {
@@ -41,18 +42,20 @@ function usePageTitle(): string | null {
 
 export function HeaderCrumbs({ className }: { className?: string }) {
   const pathname = usePathname();
-  const { module, sub } = describePath(pathname);
+  const { module, sub, parent } = describePath(pathname);
   const pageTitle = usePageTitle();
+  const back = parent ?? module;
+  const intermediate = parent && module && parent.href !== module.href ? parent : null;
   // Nas páginas de criação ("Novo lead") o rótulo genérico já é o título; só o detalhe troca.
   const isDetail = Boolean(module && sub && !sub.startsWith("Novo"));
   const current = (isDetail && pageTitle) || sub || module?.label || "CRM";
 
   return (
     <div className={cn("flex min-w-0 flex-1 items-center gap-1", className)}>
-      {module && sub ? (
+      {module && sub && back ? (
         <Link
-          href={module.href}
-          aria-label={`Voltar para ${module.label}`}
+          href={back.href}
+          aria-label={`Voltar para ${back.label}`}
           className="-ml-1 flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-muted md:hidden"
         >
           <ChevronLeft className="size-5" aria-hidden="true" />
@@ -72,6 +75,16 @@ export function HeaderCrumbs({ className }: { className?: string }) {
                 <BreadcrumbLink render={<Link href={module.href} />}>{module.label}</BreadcrumbLink>
               </BreadcrumbItem>
               <BreadcrumbSeparator />
+              {intermediate ? (
+                <>
+                  <BreadcrumbItem>
+                    <BreadcrumbLink render={<Link href={intermediate.href} />}>
+                      {intermediate.label}
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator />
+                </>
+              ) : null}
               <BreadcrumbItem className="min-w-0">
                 <BreadcrumbPage className="truncate" title={current}>
                   {current}

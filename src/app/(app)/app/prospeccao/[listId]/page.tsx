@@ -21,6 +21,7 @@ import {
   progressText,
 } from "@/lib/crm/prospecting-view";
 import {
+  LIST_ITEMS_LIMIT,
   countItemsByStatus,
   getList,
   listDiscardReasons,
@@ -46,7 +47,6 @@ export default async function ProspectingListPage({
   const list = await getList(ctx, listId);
   if (!list) notFound();
   const filters = parseItemFilters(sp);
-  const criada = (Array.isArray(sp.criada) ? sp.criada[0] : sp.criada) === "1";
   const now = new Date();
   const [items, counts, users, discardReasons] = await Promise.all([
     listItems(ctx, { listId: list.id, status: filters.status, search: filters.q }),
@@ -114,11 +114,6 @@ export default async function ProspectingListPage({
         more={<ListMoreMenu list={listValues} users={userOptions} />}
         primary={<AddItemDialog listId={list.id} />}
       />
-      {criada ? (
-        <Callout tone="success">
-          Lista criada. Cole as empresas de uma vez ou adicione uma por uma.
-        </Callout>
-      ) : null}
       <Meter
         value={list.contacted}
         max={list.total}
@@ -132,6 +127,13 @@ export default async function ProspectingListPage({
         </Callout>
       ) : null}
       <ItemFilters listId={list.id} counts={counts} filters={filters} />
+      {items.length >= LIST_ITEMS_LIMIT ? (
+        <Callout tone="warning" role="status">
+          Mostrando as {LIST_ITEMS_LIMIT} primeiras empresas
+          {filters.status || filters.q ? " deste filtro" : ` de ${list.total}`}. Use a busca ou os
+          chips de status para encontrar as demais.
+        </Callout>
+      ) : null}
       {items.length === 0 ? (
         !filtered ? (
           <EmptyState

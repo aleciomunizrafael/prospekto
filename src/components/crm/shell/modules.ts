@@ -58,13 +58,20 @@ export const SEARCH_GROUP_LABELS: Record<SearchKind, string> = {
 
 // Rótulo genérico das subpáginas (novo e detalhe), na ordem de teste: o padrão mais específico
 // primeiro. O detalhe usa o substantivo do módulo; o nome real vem do PageHeader da página.
-const SUBPAGES: { module: CrmModule; pattern: RegExp; label: string }[] = [
+// `parent` é a página pai quando não é o módulo (a empresa de prospecção volta para a lista).
+const SUBPAGES: {
+  module: CrmModule;
+  pattern: RegExp;
+  label: string;
+  parent?: (match: RegExpMatchArray) => CrmModule;
+}[] = [
   { module: MODULES.pipeline, pattern: /^\/app\/leads\/novo\/?$/, label: "Novo lead" },
   { module: MODULES.pipeline, pattern: /^\/app\/leads\/[^/]+\/?$/, label: "Lead" },
   {
     module: MODULES.prospeccao,
-    pattern: /^\/app\/prospeccao\/[^/]+\/[^/]+\/?$/,
+    pattern: /^\/app\/prospeccao\/([^/]+)\/[^/]+\/?$/,
     label: "Empresa",
+    parent: (m) => ({ href: `/app/prospeccao/${m[1]}`, label: "Lista" }),
   },
   { module: MODULES.prospeccao, pattern: /^\/app\/prospeccao\/[^/]+\/?$/, label: "Lista" },
   {
@@ -84,14 +91,24 @@ export function isActivePath(href: string, pathname: string, exact = false): boo
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export type PathDescription = { module: CrmModule | null; sub: string | null };
+// `parent`: para onde o "voltar" do celular leva e o item intermediário do caminho no desktop;
+// é o módulo, exceto nas subpáginas que declaram um pai próprio (lista de prospecção).
+export type PathDescription = {
+  module: CrmModule | null;
+  sub: string | null;
+  parent: CrmModule | null;
+};
 
 export function describePath(pathname: string): PathDescription {
-  const sub = SUBPAGES.find((s) => s.pattern.test(pathname));
-  if (sub) return { module: sub.module, sub: sub.label };
+  for (const sub of SUBPAGES) {
+    const match = pathname.match(sub.pattern);
+    if (match) {
+      return { module: sub.module, sub: sub.label, parent: sub.parent?.(match) ?? sub.module };
+    }
+  }
   const all = Object.values(MODULES) as CrmModule[];
   const current =
     all.find((m) => !m.exact && isActivePath(m.href, pathname)) ??
     (isActivePath(MODULES.painel.href, pathname, true) ? MODULES.painel : null);
-  return { module: current, sub: null };
+  return { module: current, sub: null, parent: current };
 }

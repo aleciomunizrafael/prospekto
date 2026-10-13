@@ -6,9 +6,8 @@ import {
   type LeadStageProps,
 } from "@/components/crm/forms/stage-move-dialog";
 import { stageInfo } from "@/lib/crm/lead-view";
-import { stageMovePlans, terminalStageOf } from "@/lib/crm/stage-moves";
-import { isInitialStage, stageSla, type Pipeline } from "@/lib/domain/pipelines";
-import { slaBusinessDays } from "@/lib/domain/sla";
+import { stageMovePlansWithSuggestion, terminalStageOf } from "@/lib/crm/stage-moves";
+import { isInitialStage, type Pipeline } from "@/lib/domain/pipelines";
 import type { LeadBoardRow } from "@/lib/repos/leads";
 
 // Diálogos do quadro de leads (ADR-004, 6.3; plano, P5): soltar um cartão ou escolher um destino
@@ -23,16 +22,6 @@ export type MoveRequest = { lead: LeadBoardRow; target: string };
 
 type User = { id: string; name: string };
 
-// Mesma regra da página do lead: só estágios com prazo em dias (úteis ou corridos) sugerem uma
-// próxima ação; um prazo zero devolveria o instante atual. Cópia das 8 linhas de
-// leads/[id]/page.tsx; a Integração move as duas para stage-moves.ts.
-function stageHasDeadline(pipeline: Pipeline, stage: string, now: Date): boolean {
-  const sla = stageSla(pipeline, stage);
-  if (!sla) return false;
-  if (sla.calendarDays != null) return sla.calendarDays > 0;
-  return (slaBusinessDays(pipeline, stage, now) ?? 0) > 0;
-}
-
 // LeadStageProps a partir da linha do quadro, com o `now` do servidor (ISO) para o plano não
 // divergir entre servidor e cliente.
 export function stagePropsFor(
@@ -41,11 +30,8 @@ export function stagePropsFor(
   users: User[],
   now: Date,
 ): LeadStageProps {
-  const plans = stageMovePlans(pipeline, lead.stage, now).map((plan) =>
-    stageHasDeadline(pipeline, plan.target.stage, now)
-      ? plan
-      : { ...plan, suggestedNextActionAt: null },
-  );
+  // Mesma regra da página do lead (stage-moves.ts): sugestão só em destinos com prazo em dias.
+  const plans = stageMovePlansWithSuggestion(pipeline, lead.stage, now);
   return {
     leadId: lead.id,
     leadName: lead.name,

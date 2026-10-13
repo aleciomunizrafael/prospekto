@@ -331,6 +331,9 @@ export async function getItem(ctx: Ctx, itemId: string): Promise<ProspectingItem
   return row ?? null;
 }
 
+// Máximo de itens que uma leitura da lista devolve (várias colagens de 500, P13, podem passar).
+export const LIST_ITEMS_LIMIT = 1000;
+
 export async function listItems(
   ctx: Ctx,
   input: { listId: string; status?: ProspectingStatus; search?: string },
@@ -349,9 +352,9 @@ export async function listItems(
       .from(prospectingItems)
       .where(and(...where))
       .orderBy(asc(prospectingItems.position), asc(prospectingItems.createdAt))
-      // Teto de leitura: uma lista com mais de 1000 empresas (várias colagens de 500, P13) é
-      // truncada em silêncio; paginação ou aviso na tela ficam com a frente C.
-      .limit(1000)
+      // Teto de leitura (LIST_ITEMS_LIMIT): a tela avisa quando a lista passa dele e os chips por
+      // status (countItemsByStatus) continuam com o total real; sem paginação nesta entrega.
+      .limit(LIST_ITEMS_LIMIT)
   );
 }
 

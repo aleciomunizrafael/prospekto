@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { MODULES, isActivePath, type CrmModule } from "./modules";
-import { useSignOut } from "./user-menu";
+import { useSignOut } from "./use-sign-out";
 
 // Barra inferior do celular (crm-design-system.md, seção 4.2; ADR-004, seção 6.1): cinco alvos de
 // 64 × 56 px com ícone 22 px e rótulo 11 px sempre visível; `aria-current="page"` no ativo. Painel,

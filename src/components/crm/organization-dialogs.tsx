@@ -25,7 +25,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { formatPhoneBR } from "@/lib/crm/format";
 import type { OrganizationType } from "@/lib/domain/enums";
 import { cn } from "@/lib/utils";
 import { fabClassName } from "./shell/fab";
@@ -40,7 +39,6 @@ import {
 } from "./project-forms/action-form";
 import { LeadPicker } from "./project-forms/lead-picker";
 import { OrganizationFields, type OrganizationFormValues } from "./organization-form";
-import { FormSection } from "./ui/form-section";
 
 type NewOrganizationDialogProps = {
   accountants: Option[];
@@ -116,8 +114,7 @@ export function EditOrganizationSheet({
   returnHref,
   trigger,
 }: {
-  // `phone`: telefone da empresa (ADR-004, 6.4.7; plano, P18), campo só desta folha.
-  org: OrganizationFormValues & { phone?: string | null };
+  org: OrganizationFormValues;
   accountants: Option[];
   users: Option[];
   defaultOpen?: boolean;
@@ -168,17 +165,6 @@ export function EditOrganizationSheet({
           }
         >
           <OrganizationFields org={org} accountants={accountants} users={users} />
-          <FormSection title="Telefone" contentClassName="grid gap-4 sm:grid-cols-2">
-            <TextField
-              name="phone"
-              label="Telefone da empresa"
-              type="tel"
-              inputMode="tel"
-              autoComplete="off"
-              help="Central ou recepção, com DDD, por exemplo (54) 3000-0000. O telefone de cada pessoa fica no contato."
-              defaultValue={formatPhoneBR(org.phone) || ""}
-            />
-          </FormSection>
         </ActionForm>
       </SheetContent>
     </Sheet>

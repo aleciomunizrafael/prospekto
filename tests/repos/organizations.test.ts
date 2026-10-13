@@ -9,8 +9,10 @@ import { createLead, type Lead } from "@/lib/repos/leads";
 import {
   createOrganization,
   getOrganization,
+  getOrganizationSummary,
   listLeadsForOrganization,
   listOrganizationActivities,
+  listOrganizationSummaries,
   updateOrganization,
   updateOrganizationNotes,
   type Organization,
@@ -93,6 +95,29 @@ describe("updateOrganization: telefone da empresa (P18)", () => {
   it("recusa telefone inválido", async () => {
     await expect(updateOrganization(ctx, { orgId: org.id, phone: "123" })).rejects.toThrow();
     expect((await getOrganization(ctx, org.id))?.phone).toBeNull();
+  });
+});
+
+describe("accountantName nos resumos", () => {
+  // A subconsulta compara `o2.id` com a coluna da linha externa; numa consulta de uma tabela só o
+  // drizzle rende `${organizations.accountantOrgId}` sem o nome da tabela, e o nome resolveria
+  // para o próprio `o2` (nunca acharia o escritório). Regressão apontada pela frente D.
+  it("traz o nome do escritório contábil vinculado", async () => {
+    const accountant = await createOrganization(ctx, {
+      type: "contabilidade",
+      name: "Escritório Contábil Teste",
+    });
+    const client = await createOrganization(ctx, {
+      type: "empresa",
+      name: "Cliente do Escritório",
+      accountantOrgId: accountant.id,
+    });
+    expect((await getOrganizationSummary(ctx, client.id))?.accountantName).toBe(
+      "Escritório Contábil Teste",
+    );
+    const listed = await listOrganizationSummaries(ctx, { search: "Cliente do Escritório" });
+    expect(listed.map((o) => o.accountantName)).toEqual(["Escritório Contábil Teste"]);
+    expect((await getOrganizationSummary(ctx, accountant.id))?.accountantName).toBeNull();
   });
 });
 

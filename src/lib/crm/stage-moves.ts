@@ -1,12 +1,13 @@
 // "Mover para" (proposta-c, seção 9.2): destinos permitidos a partir do estágio atual, rótulos
 // em português dos campos exigidos por STAGE_REQUIREMENTS e a data sugerida pela SLA.
-import { slaDeadline } from "@/lib/domain/sla";
+import { slaBusinessDays, slaDeadline } from "@/lib/domain/sla";
 import {
   TERMINAL_STAGES,
   allowedStageMoves,
   isInitialStage,
   isTerminalStage,
   requirementsForMove,
+  stageSla,
   type Pipeline,
   type StageMoveKind,
 } from "@/lib/domain/pipelines";
@@ -127,6 +128,29 @@ export function stageMovePlans(pipeline: Pipeline, current: string, now: Date): 
       blockedBy: requirements.filter((r) => r.kind === "contribution" || r.kind === "project"),
     };
   });
+}
+
+// Só estágios com prazo em dias (úteis ou corridos) sugerem uma próxima ação. Um prazo zero
+// ("automático", lista de espera) devolveria o instante atual e o lead voltaria na hora para a
+// fila "Precisa de ação agora" com "Ação vence hoje". Usada pela página do lead e pelo quadro.
+export function stageHasDeadline(pipeline: Pipeline, stage: string, now: Date): boolean {
+  const sla = stageSla(pipeline, stage);
+  if (!sla) return false;
+  if (sla.calendarDays != null) return sla.calendarDays > 0;
+  return (slaBusinessDays(pipeline, stage, now) ?? 0) > 0;
+}
+
+// Planos de "Mover para" com a sugestão de próxima ação só nos destinos que têm prazo em dias.
+export function stageMovePlansWithSuggestion(
+  pipeline: Pipeline,
+  current: string,
+  now: Date,
+): StageMovePlan[] {
+  return stageMovePlans(pipeline, current, now).map((plan) =>
+    stageHasDeadline(pipeline, plan.target.stage, now)
+      ? plan
+      : { ...plan, suggestedNextActionAt: null },
+  );
 }
 
 export function terminalStageOf(pipeline: Pipeline): string {

@@ -59,13 +59,18 @@ import {
 } from "@/lib/crm/labels";
 import { leadCompany, stageInfo } from "@/lib/crm/lead-view";
 import { nextStepForLead, type NextStep } from "@/lib/crm/next-step";
-import { isTerminal, stageMovePlans, terminalStageOf } from "@/lib/crm/stage-moves";
+import {
+  isTerminal,
+  stageHasDeadline,
+  stageMovePlansWithSuggestion,
+  terminalStageOf,
+} from "@/lib/crm/stage-moves";
 import { daysInStageText } from "@/lib/crm/text";
 import { whatsappHrefFor } from "@/lib/crm/whatsapp-messages";
 import { CONSENT_PURPOSES, type LeadSegment } from "@/lib/domain/enums";
 import { allowedContributionMechanisms } from "@/lib/domain/mechanisms";
-import { isInitialStage, stageSla, type Pipeline } from "@/lib/domain/pipelines";
-import { slaBusinessDays, slaDeadline } from "@/lib/domain/sla";
+import { isInitialStage, type Pipeline } from "@/lib/domain/pipelines";
+import { slaDeadline } from "@/lib/domain/sla";
 import { listActivities } from "@/lib/repos/activities";
 import { getLatestAiRun, type AiRun } from "@/lib/repos/ai-runs";
 import { consentAllows, getCurrentConsent, listConsents } from "@/lib/repos/consents";
@@ -131,16 +136,6 @@ function attributeValue(field: AttributeField, raw: unknown): ReactNode {
 // FoldsOpenOnDesktop): FormSection collapsible com a classe `crm-fold`.
 const FOLD = { collapsible: true, className: "crm-fold" } as const;
 
-// Só estágios com prazo em dias (úteis ou corridos) sugerem uma próxima ação. Um prazo zero
-// ("automático", lista de espera) devolveria o instante atual e o lead voltaria na hora para a
-// fila "Precisa de ação agora" com "Ação vence hoje".
-function stageHasDeadline(pipeline: Pipeline, stage: string, now: Date): boolean {
-  const sla = stageSla(pipeline, stage);
-  if (!sla) return false;
-  if (sla.calendarDays != null) return sla.calendarDays > 0;
-  return (slaBusinessDays(pipeline, stage, now) ?? 0) > 0;
-}
-
 export default async function LeadPage({ params, searchParams }: PageProps<"/app/leads/[id]">) {
   const ctx = await requireSession();
   const { id } = await params;
@@ -179,11 +174,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
   const userNames = new Map(users.map((u) => [u.id, u.name]));
   const info = stageInfo(lead, now);
   const company = leadCompany(lead);
-  const plans = stageMovePlans(pipeline, lead.stage, now).map((plan) =>
-    stageHasDeadline(pipeline, plan.target.stage, now)
-      ? plan
-      : { ...plan, suggestedNextActionAt: null },
-  );
+  const plans = stageMovePlansWithSuggestion(pipeline, lead.stage, now);
   const suggestedNext = stageHasDeadline(pipeline, lead.stage, now)
     ? slaDeadline(pipeline, lead.stage, now)
     : null;

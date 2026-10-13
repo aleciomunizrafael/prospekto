@@ -149,7 +149,11 @@ describe("mapa de módulos do shell", () => {
     expect(describePath("/app/prospeccao/abc/def")).toMatchObject({
       module: { label: "Prospecção" },
       sub: "Empresa",
+      // A empresa volta para a lista, não para o módulo (nota da frente E).
+      parent: { href: "/app/prospeccao/abc", label: "Lista" },
     });
+    expect(describePath("/app/prospeccao/abc").parent).toMatchObject({ href: "/app/prospeccao" });
+    expect(describePath("/app/leads/abc").parent).toMatchObject({ href: "/app/leads" });
     expect(describePath("/app/tarefas")).toMatchObject({ module: { label: "Tarefas" }, sub: null });
     expect(describePath("/app/conta")).toMatchObject({ module: { label: "Minha conta" } });
     expect(describePath("/app/busca")).toMatchObject({ module: { label: "Busca" } });
