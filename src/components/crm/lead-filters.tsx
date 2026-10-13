@@ -12,6 +12,7 @@ import {
 import { DismissableDetails } from "@/components/crm/ui/dismissable-details";
 import { Chips, Toolbar, type FilterDef, type ToolbarChip } from "@/components/crm/ui/toolbar";
 import { leadFiltersToQuery, type LeadFilters } from "@/lib/crm/filters";
+import type { LeadsView, LeadsViewResolution } from "@/lib/crm/leads-view";
 import {
   PIPELINE_LABELS,
   SEGMENT_LABELS,
@@ -22,6 +23,7 @@ import {
 import { LEAD_SOURCES, LEAD_TEMPERATURES } from "@/lib/domain/enums";
 import { PIPELINES, STAGES, type Pipeline } from "@/lib/domain/pipelines";
 import { cn } from "@/lib/utils";
+import { ViewToggle } from "./leads/view-toggle";
 
 // Abas por pipeline (links), barra de filtros (formulário GET) e paginação da lista de Leads
 // (crm-design-system.md, seção 7.3). Tudo fica na URL: `parseLeadFilters` e `leadFiltersToQuery`
@@ -74,7 +76,7 @@ const SORT_OPTIONS = [
   { value: "created", label: "mais recentes" },
 ];
 
-function filterDefs(f: LeadFilters, users: User[]) {
+function filterDefs(f: LeadFilters, users: User[], mode: LeadsView) {
   const stage: FilterDef = {
     name: "stage",
     label: "Estágio",
@@ -114,8 +116,11 @@ function filterDefs(f: LeadFilters, users: User[]) {
     allLabel: "todas",
   };
   const sort: FilterDef = { name: "sort", label: "Ordenar", value: f.sort, options: SORT_OPTIONS };
-  const main = [stage, segment, source, owner].filter((d): d is FilterDef => d !== null);
-  return { main, temperature, sort };
+  // No quadro as colunas são os estágios e a ordem é fixa por urgência: sem "Estágio" nem "Ordenar".
+  const main = [mode === "quadro" ? null : stage, segment, source, owner].filter(
+    (d): d is FilterDef => d !== null,
+  );
+  return { main, temperature, sort: mode === "quadro" ? null : sort };
 }
 
 // Chips dos filtros ativos. No desktop os selects visíveis já mostram estágio, segmento, origem e
@@ -189,27 +194,70 @@ function capitalize(text: string): string {
 
 // Barra de filtros. Desktop: a `Toolbar` compartilhada (busca, quatro selects, ordenação) com o
 // menu "⋯ Mais filtros" (temperatura e perdidos) dentro do mesmo <form>, num <details> que fecha
-// com Esc e clique fora (DismissableDetails) sem sair do formulário. Celular: busca + "Filtrar (N)"
-// abrindo uma folha com todos os filtros; N conta os filtros ativos, inclusive temperatura e
-// perdidos, sem contar pipeline nem a ordenação padrão.
-export function LeadToolbar({ filters, users }: { filters: LeadFilters; users: User[] }) {
-  const f = filters;
-  const { main, temperature, sort } = filterDefs(f, users);
-  const lost: FilterDef = {
+// com Esc e clique fora (DismissableDetails) sem sair do formulário, e a alternância Lista/Quadro
+// à direita. Celular: busca + "Filtrar (N)" abrindo uma folha com todos os filtros, e a
+// alternância na linha dos chips; N conta os filtros ativos, inclusive temperatura e perdidos,
+// sem contar pipeline nem a ordenação padrão. `mode` é a visão em uso (ADR-004, 6.2): em
+// "quadro" somem "Estágio" e "Ordenar"; em "ambas" (primeira visita, P4) o desktop está em quadro
+// e o celular em lista, cada um com o `aria-current` certo na própria alternância, e a alternância
+// do desktop grava o cookie ao montar. `?view=` presente na URL é preservado pelos formulários.
+export function LeadToolbar({
+  filters,
+  users,
+  mode = "lista",
+}: {
+  filters: LeadFilters;
+  users: User[];
+  mode?: LeadsViewResolution;
+}) {
+  const desktopMode: LeadsView = mode === "ambas" ? "quadro" : mode;
+  const mobileMode: LeadsView = mode === "ambas" ? "lista" : mode;
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="hidden md:block">
+        <DesktopToolbar
+          filters={filters}
+          users={users}
+          mode={desktopMode}
+          remember={mode === "ambas"}
+        />
+      </div>
+      <div className="flex flex-col gap-2 md:hidden">
+        <MobileToolbar filters={filters} users={users} mode={mobileMode} />
+      </div>
+    </div>
+  );
+}
+
+function lostFilter(f: LeadFilters): FilterDef {
+  return {
     name: "lost",
     label: "Perdidos",
     value: f.includeLost ? "1" : "",
     options: [{ value: "1", label: "Mostrar perdidos" }],
     allLabel: "ocultar perdidos",
   };
-  const chips = chipsFor(f);
-  const mobileChips = chipsFor(f, main);
-  const clearHref = leadsHref({ pipeline: f.pipeline });
-  const moreCount = (f.temperature ? 1 : 0) + (f.includeLost ? 1 : 0);
-  const activeCount = main.filter((d) => d.value !== "").length + moreCount;
-  const search = { name: "q", placeholder: "Nome, e-mail ou empresa", value: f.search ?? "" };
-  const sortIsDefault = f.sort === "next_action";
+}
 
+function hiddenView(f: LeadFilters): Record<string, string> {
+  return f.view ? { view: f.view } : {};
+}
+
+const SEARCH_PLACEHOLDER = "Nome, e-mail ou empresa";
+
+function DesktopToolbar({
+  filters: f,
+  users,
+  mode,
+  remember,
+}: {
+  filters: LeadFilters;
+  users: User[];
+  mode: LeadsView;
+  remember: boolean;
+}) {
+  const { main, temperature, sort } = filterDefs(f, users, mode);
+  const moreCount = (f.temperature ? 1 : 0) + (f.includeLost ? 1 : 0);
   const moreFilters = (
     <DismissableDetails className="relative">
       <summary
@@ -223,99 +271,127 @@ export function LeadToolbar({ filters, users }: { filters: LeadFilters; users: U
       </summary>
       <div className="absolute top-full right-0 z-20 mt-1 flex w-64 flex-col gap-3 rounded-lg bg-popover p-3 text-popover-foreground shadow-pop ring-1 ring-border">
         <LabeledSelect filter={temperature} prefix="mais" size="sm" />
-        <LabeledSelect filter={lost} prefix="mais" size="sm" />
+        <LabeledSelect filter={lostFilter(f)} prefix="mais" size="sm" />
       </div>
     </DismissableDetails>
   );
-
   return (
-    <div className="flex flex-col gap-2">
-      <div className="hidden md:block">
-        <Toolbar
-          action={ACTION}
-          search={search}
-          filters={main}
-          hidden={{ pipeline: f.pipeline }}
-          sort={sort}
-          extra={moreFilters}
-          chips={chips}
-          clearHref={clearHref}
-        />
-      </div>
+    <Toolbar
+      action={ACTION}
+      search={{ name: "q", placeholder: SEARCH_PLACEHOLDER, value: f.search ?? "" }}
+      filters={main}
+      hidden={{ pipeline: f.pipeline, ...hiddenView(f) }}
+      sort={sort ?? undefined}
+      extra={
+        <>
+          {moreFilters}
+          <ViewToggle filters={f} active={mode} rememberOnMount={remember} className="ml-auto" />
+        </>
+      }
+      chips={chipsFor(f)}
+      clearHref={leadsHref({ pipeline: f.pipeline, view: f.view })}
+    />
+  );
+}
 
-      <div className="flex flex-col gap-2 md:hidden">
-        <div className="flex items-center gap-2">
-          <form method="get" action={ACTION} className="relative min-w-0 flex-1">
-            <input type="hidden" name="pipeline" value={f.pipeline} />
-            {[...main, temperature].map((d) =>
-              d.value ? <input key={d.name} type="hidden" name={d.name} value={d.value} /> : null,
-            )}
-            {f.includeLost ? <input type="hidden" name="lost" value="1" /> : null}
-            {sortIsDefault ? null : <input type="hidden" name="sort" value={f.sort} />}
-            <label htmlFor="leads-busca" className="sr-only">
-              {search.placeholder}
-            </label>
-            <Search
-              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <input
-              id="leads-busca"
-              type="search"
-              name="q"
-              defaultValue={search.value}
-              placeholder={search.placeholder}
-              className="h-11 w-full rounded-lg border border-input bg-background pr-2 pl-8 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            />
-          </form>
-          <Sheet>
-            <SheetTrigger render={<Button variant="outline" size="touch" className="shrink-0" />}>
-              <SlidersHorizontal aria-hidden="true" />
-              {activeCount > 0 ? `Filtrar (${activeCount})` : "Filtrar"}
-            </SheetTrigger>
-            <SheetContent side="bottom">
-              <SheetHeader>
-                <SheetTitle>Filtrar leads</SheetTitle>
-                <SheetDescription>Escolha os filtros e toque em Aplicar.</SheetDescription>
-              </SheetHeader>
-              <form method="get" action={ACTION} className="flex flex-col gap-3">
-                <input type="hidden" name="pipeline" value={f.pipeline} />
-                {f.search ? <input type="hidden" name="q" value={f.search} /> : null}
-                {[...main, temperature].map((d) => (
-                  <LabeledSelect key={d.name} filter={d} prefix="folha" size="touch" />
-                ))}
-                <LabeledSelect filter={sort} prefix="folha" size="touch" isSort />
-                <label className="flex min-h-11 items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    name="lost"
-                    value="1"
-                    defaultChecked={f.includeLost}
-                    className="accent-primary size-4"
-                  />
-                  Mostrar perdidos
-                </label>
-                <Button type="submit" size="touch" className="w-full">
-                  Aplicar
+function MobileToolbar({
+  filters: f,
+  users,
+  mode,
+}: {
+  filters: LeadFilters;
+  users: User[];
+  mode: LeadsView;
+}) {
+  const { main, temperature, sort } = filterDefs(f, users, mode);
+  const mobileChips = chipsFor(f, main);
+  const clearHref = leadsHref({ pipeline: f.pipeline, view: f.view });
+  const moreCount = (f.temperature ? 1 : 0) + (f.includeLost ? 1 : 0);
+  const activeCount = main.filter((d) => d.value !== "").length + moreCount;
+  const sortIsDefault = f.sort === "next_action";
+  const hidden = hiddenView(f);
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <form method="get" action={ACTION} className="relative min-w-0 flex-1">
+          <input type="hidden" name="pipeline" value={f.pipeline} />
+          {Object.entries(hidden).map(([name, value]) => (
+            <input key={name} type="hidden" name={name} value={value} />
+          ))}
+          {[...main, temperature].map((d) =>
+            d.value ? <input key={d.name} type="hidden" name={d.name} value={d.value} /> : null,
+          )}
+          {f.includeLost ? <input type="hidden" name="lost" value="1" /> : null}
+          {sort && !sortIsDefault ? <input type="hidden" name="sort" value={f.sort} /> : null}
+          <label htmlFor="leads-busca" className="sr-only">
+            {SEARCH_PLACEHOLDER}
+          </label>
+          <Search
+            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <input
+            id="leads-busca"
+            type="search"
+            name="q"
+            defaultValue={f.search ?? ""}
+            placeholder={SEARCH_PLACEHOLDER}
+            className="h-11 w-full rounded-lg border border-input bg-background pr-2 pl-8 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          />
+        </form>
+        <Sheet>
+          <SheetTrigger render={<Button variant="outline" size="touch" className="shrink-0" />}>
+            <SlidersHorizontal aria-hidden="true" />
+            {activeCount > 0 ? `Filtrar (${activeCount})` : "Filtrar"}
+          </SheetTrigger>
+          <SheetContent side="bottom">
+            <SheetHeader>
+              <SheetTitle>Filtrar leads</SheetTitle>
+              <SheetDescription>Escolha os filtros e toque em Aplicar.</SheetDescription>
+            </SheetHeader>
+            <form method="get" action={ACTION} className="flex flex-col gap-3">
+              <input type="hidden" name="pipeline" value={f.pipeline} />
+              {Object.entries(hidden).map(([name, value]) => (
+                <input key={name} type="hidden" name={name} value={value} />
+              ))}
+              {f.search ? <input type="hidden" name="q" value={f.search} /> : null}
+              {[...main, temperature].map((d) => (
+                <LabeledSelect key={d.name} filter={d} prefix="folha" size="touch" />
+              ))}
+              {sort ? <LabeledSelect filter={sort} prefix="folha" size="touch" isSort /> : null}
+              <label className="flex min-h-11 items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="lost"
+                  value="1"
+                  defaultChecked={f.includeLost}
+                  className="accent-primary size-4"
+                />
+                Mostrar perdidos
+              </label>
+              <Button type="submit" size="touch" className="w-full">
+                Aplicar
+              </Button>
+              {activeCount > 0 ? (
+                <Button
+                  variant="ghost"
+                  size="touch"
+                  className="w-full"
+                  nativeButton={false}
+                  render={<Link href={clearHref} />}
+                >
+                  Limpar
                 </Button>
-                {activeCount > 0 ? (
-                  <Button
-                    variant="ghost"
-                    size="touch"
-                    className="w-full"
-                    nativeButton={false}
-                    render={<Link href={clearHref} />}
-                  >
-                    Limpar
-                  </Button>
-                ) : null}
-              </form>
-            </SheetContent>
-          </Sheet>
-        </div>
-        <Chips chips={mobileChips} clearHref={clearHref} />
+              ) : null}
+            </form>
+          </SheetContent>
+        </Sheet>
       </div>
-    </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Chips chips={mobileChips} clearHref={clearHref} />
+        <ViewToggle filters={f} active={mode} className="ml-auto" />
+      </div>
+    </>
   );
 }
 
