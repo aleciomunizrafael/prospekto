@@ -14,7 +14,9 @@ import { WhatsappDialog } from "./whatsapp-dialog";
 // cartão), badge de status (com "retorna sex., 17 de out." quando há data), endereço e porte,
 // a abertura como citação, a anotação, e a linha de ações: "Ligar (54) 3000-0000" (tel:), WhatsApp,
 // os botões de resultado e "Ver lead" quando convertido. Tudo o que é clicável fica `relative
-// z-10` sobre o link do nome (D10). Server Component puro: as datas chegam como ISO.
+// z-10` sobre o link do nome (D10). `data-item-id` é o gancho que os diálogos de resultado usam
+// para devolver o foco ao cartão quando o botão que os abriu some (ResultDialogs). Server
+// Component puro: as datas chegam como ISO.
 export type ItemCardItem = {
   id: string;
   name: string;
@@ -44,6 +46,7 @@ export function ItemCard({ item, ctx }: { item: ItemCardItem; ctx: ItemCardsCont
   const meta = [item.address, item.size].filter(Boolean).join(" · ");
   return (
     <article
+      data-item-id={item.id}
       data-status={item.status}
       className={cn(
         "relative flex flex-col gap-2 rounded-lg border border-border bg-card p-3.5 transition-colors duration-120 focus-within:bg-primary-soft/40",

@@ -46,6 +46,12 @@ import { WhatsappDialog, type WhatsappDialogItem } from "./whatsapp-dialog";
 // que voltou para a ligar (leadId preenchido), "Reunião marcada" não aparece: a conversão é
 // recusada pelo servidor e a reunião se registra no lead (Ver lead). Enquanto uma gravação está
 // pendente o grupo fica aria-busy e desabilitado; o sucesso vira toast e refresh() pela action.
+// Os diálogos não têm gatilho (abrem por estado), então o base-ui só devolve o foco ao botão que
+// os abriu enquanto ele existir; depois de "Confirmar reunião" o "Reunião marcada" some com o
+// refresh, e o foco cairia no body ou no último controle focado na página (WCAG 2.4.3). Por isso
+// o ConvertDialog recebe `finalFocus`: o próprio botão (`data-result="convert"`) se ainda estiver
+// lá, senão o cartão da empresa (`data-item-id`, de onde o base-ui foca o primeiro tabbable, o
+// nome); na ficha, sem cartão, `null` mantém o padrão.
 export type ResultItem = {
   id: string;
   name: string;
@@ -100,6 +106,10 @@ function ResultDialogs({
   const closeWhenFalse = (value: boolean) => {
     if (!value) onClose();
   };
+  const convertFinalFocus = () => {
+    const card = document.querySelector<HTMLElement>(`[data-item-id="${item.id}"]`);
+    return card?.querySelector<HTMLElement>('[data-result="convert"]') ?? card;
+  };
   return (
     <>
       <ConvertDialog
@@ -110,6 +120,7 @@ function ResultDialogs({
         trigger={null}
         open={open === "convert"}
         onOpenChange={closeWhenFalse}
+        finalFocus={convertFinalFocus}
       />
       <Dialog open={open === "retornar"} onOpenChange={closeWhenFalse}>
         <DialogContent className="sm:max-w-sm">
@@ -255,6 +266,7 @@ export function ResultButtons({
               size={btnSize}
               className={btnClass}
               disabled={pending}
+              data-result="convert"
               onClick={() => setOpen("convert")}
             >
               <CalendarCheck aria-hidden="true" />

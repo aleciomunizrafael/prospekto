@@ -153,6 +153,13 @@ describe("LeadBoardColumns", () => {
     const html = render();
     expect(html).toContain(`href="/app/leads/${LEAD_A}"`);
     expect(html).toContain('aria-label="Mover Rodrigo Fictício para"');
+    // Âncoras do `finalFocus` dos diálogos abertos por soltura (lead-board-dialogs.tsx): o cartão
+    // leva `data-lead-id` e o botão "Mover … para" fica dentro dele.
+    const card =
+      html.match(
+        new RegExp(`<article [^>]*data-lead-id="${LEAD_A}"[^>]*>[\\s\\S]*?</article>`),
+      )?.[0] ?? "";
+    expect(card).toContain('aria-label="Mover Rodrigo Fictício para"');
     expect(html).toContain("R$\u00a0100.000,00");
     expect(html).toContain("Vinícola Fictícia · Empresa");
     const links = html.match(/<a [^>]*>/g) ?? [];

@@ -3,7 +3,7 @@
 import { ChevronDown, Circle, CircleCheck, Ellipsis, PenLine } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId, useState, type ReactElement, type ReactNode } from "react";
+import { useId, useState, type ComponentProps, type ReactElement, type ReactNode } from "react";
 import { toast } from "sonner";
 import { moveLeadStageAction } from "@/actions/crm-leads";
 import { Button } from "@/components/ui/button";
@@ -178,13 +178,15 @@ function DestinationSelect({
 // opção, exigências como checklist, aviso com link quando o movimento depende do aporte ou do
 // projeto (botão de envio desabilitado de verdade) e os campos editáveis aqui: responsável,
 // próxima ação, checagem do art. 27 e motivo de correção. `defaultTarget` abre já no destino
-// sugerido pelo NextStepCard; `trigger` troca o botão padrão (ActionBarMobile).
+// sugerido pelo NextStepCard; `trigger` troca o botão padrão (ActionBarMobile); `finalFocus`
+// (o do base-ui) diz para onde o foco volta quando não há gatilho (quadro por soltura).
 export function StageMoveDialog({
   defaultTarget,
   trigger,
   open: controlledOpen,
   onOpenChange,
   origin,
+  finalFocus,
   ...props
 }: LeadStageProps & {
   defaultTarget?: string;
@@ -193,6 +195,7 @@ export function StageMoveDialog({
   onOpenChange?: (open: boolean) => void;
   // De onde o diálogo foi aberto; vai para data.origin da atividade "Estágio alterado" (P5).
   origin?: "board" | "detail";
+  finalFocus?: ComponentProps<typeof DialogContent>["finalFocus"];
 }) {
   const router = useRouter();
   const [ownOpen, setOwnOpen] = useState(false);
@@ -237,7 +240,7 @@ export function StageMoveDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {triggerNode ? <DialogTrigger render={triggerNode as ReactElement} /> : null}
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg" finalFocus={finalFocus}>
         <DialogHeader className="pr-8">
           <DialogTitle>Mover {firstName(props.leadName)} para outro estágio</DialogTitle>
           <DialogDescription className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
@@ -414,11 +417,13 @@ export function MarkLostDialog({
   open,
   onOpenChange,
   origin,
+  finalFocus,
 }: LostProps & {
   trigger?: ReactNode | null;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   origin?: "board" | "detail";
+  finalFocus?: ComponentProps<typeof DialogContent>["finalFocus"];
 }) {
   const [reason, setReason] = useState("");
   const terminalLabel = stageLabel(terminalStage).toLowerCase();
@@ -442,6 +447,7 @@ export function MarkLostDialog({
       requireField="lostReason"
       open={open}
       onOpenChange={onOpenChange}
+      finalFocus={finalFocus}
       onSuccess={() => toast.success(`Lead marcado como ${terminalLabel}.`)}
     >
       <HiddenField name="leadId" value={leadId} />

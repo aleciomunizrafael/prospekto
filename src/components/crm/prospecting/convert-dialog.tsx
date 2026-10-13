@@ -2,7 +2,7 @@
 
 import { CalendarCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, type ReactElement } from "react";
+import { useState, type ComponentProps, type ReactElement } from "react";
 import { toast } from "sonner";
 import { convertProspectingItemAction } from "@/actions/prospecting";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,9 @@ export type ConvertDialogProps = ConvertDefaults & {
   size?: "sm" | "default";
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  // Para onde o foco volta ao fechar (o do base-ui); importa sem gatilho, quando o botão que abriu
+  // some com a conversão.
+  finalFocus?: ComponentProps<typeof DialogContent>["finalFocus"];
 };
 
 const MEETING_KIND_OPTIONS: Option[] = [
@@ -63,6 +66,7 @@ export function ConvertDialog({
   size = "sm",
   open: controlledOpen,
   onOpenChange,
+  finalFocus,
 }: ConvertDialogProps) {
   const [ownOpen, setOwnOpen] = useState(false);
   const open = controlledOpen ?? ownOpen;
@@ -88,7 +92,7 @@ export function ConvertDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {triggerNode ? <DialogTrigger render={triggerNode} /> : null}
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl" finalFocus={finalFocus}>
         <DialogHeader className="pr-8">
           <DialogTitle>Reunião marcada · {item.name}</DialogTitle>
           <DialogDescription>

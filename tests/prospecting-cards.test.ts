@@ -132,6 +132,16 @@ describe("ItemCards", () => {
     expect(telTag).toContain("z-10");
   });
 
+  // Âncoras do `finalFocus` do ConvertDialog (result-buttons.tsx): o article leva `data-item-id`,
+  // o nome é o primeiro tabbable dele e o botão "Reunião marcada" tem `data-result="convert"`.
+  it("o cartão leva data-item-id; o nome é o primeiro link; Reunião marcada tem data-result", () => {
+    const card = html.match(/<article [^>]*data-item-id="i1"[^>]*>[\s\S]*?<\/article>/)?.[0] ?? "";
+    expect(card).not.toBe("");
+    const firstTabbable = card.match(/<(a|button|input|select|textarea) [^>]*>/)?.[0] ?? "";
+    expect(firstTabbable).toContain(`href="/app/prospeccao/${LIST_ID}/i1"`);
+    expect(card).toMatch(/<button [^>]*data-result="convert"[^>]*>[\s\S]*?Reunião marcada/);
+  });
+
   it("não expõe chaves de enum no texto visível (P20)", () => {
     expect(visible).not.toMatch(/\b(a_ligar|sem_resposta|reuniao_marcada|descartado|retornar)\b/);
   });

@@ -16,7 +16,11 @@ import type { LeadBoardRow } from "@/lib/repos/leads";
 // (`${lead.id}:${target}`), porque os dois guardam o destino ou o motivo em `useState` só na
 // montagem: reaproveitar a instância entre dois arrastos mostraria o destino anterior. O sucesso
 // faz `router.refresh()` dentro do diálogo; nada de `useOptimistic`: o quadro só muda quando o
-// servidor confirma.
+// servidor confirma. Sem `trigger`, o base-ui devolveria o foco ao elemento focado antes de abrir:
+// na soltura é o `main` da página (o mousedown no cartão, não focável, cai nele), cujo primeiro
+// tabbable é o "Novo lead" do cabeçalho; por isso `finalFocus` aponta para o "Mover … para" do
+// mesmo cartão, como no caminho por menu (WCAG 2.4.3). Depois do sucesso o cartão remonta noutra
+// coluna: se já estiver no DOM o foco vai para o botão dele, senão `null` mantém o padrão.
 
 export type MoveRequest = { lead: LeadBoardRow; target: string };
 
@@ -72,6 +76,10 @@ export function LeadBoardDialogs({
   const onOpenChange = (open: boolean) => {
     if (!open) onClose();
   };
+  const finalFocus = () =>
+    document.querySelector<HTMLElement>(
+      `[data-lead-id="${request.lead.id}"] button[aria-label^="Mover "]`,
+    );
   if (request.target === props.terminalStage) {
     return (
       <MarkLostDialog
@@ -80,6 +88,7 @@ export function LeadBoardDialogs({
         trigger={null}
         open
         onOpenChange={onOpenChange}
+        finalFocus={finalFocus}
         origin="board"
       />
     );
@@ -92,6 +101,7 @@ export function LeadBoardDialogs({
       trigger={null}
       open
       onOpenChange={onOpenChange}
+      finalFocus={finalFocus}
       origin="board"
     />
   );

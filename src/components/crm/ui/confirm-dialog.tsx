@@ -2,7 +2,14 @@
 
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog";
 import { useRouter } from "next/navigation";
-import { isValidElement, useCallback, useRef, useState, type ReactNode } from "react";
+import {
+  isValidElement,
+  useCallback,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import { Button } from "@/components/ui/button";
 import {
   DialogContent,
@@ -16,7 +23,8 @@ import { ActionForm, type FormAction } from "../project-forms/action-form";
 // aporte, Arquivar projeto, Despublicar. Sobre @base-ui/react/alert-dialog, cujo Root dá
 // `role="alertdialog"` ao Popup; as partes Portal/Backdrop/Popup/Title/Description são as mesmas
 // do Dialog, por isso reaproveitamos DialogContent e companhia. O botão de confirmação fica
-// `disabled` enquanto o campo `requireField` (ex.: o motivo) estiver vazio.
+// `disabled` enquanto o campo `requireField` (ex.: o motivo) estiver vazio. `finalFocus` é o do
+// base-ui: quem abre sem `trigger` (quadro por soltura) diz para onde o foco volta ao fechar.
 export function ConfirmDialog({
   trigger,
   title,
@@ -32,6 +40,7 @@ export function ConfirmDialog({
   onSuccess,
   stayOpenOnSuccess,
   wide,
+  finalFocus,
 }: {
   trigger?: ReactNode;
   title: ReactNode;
@@ -47,6 +56,7 @@ export function ConfirmDialog({
   onSuccess?: () => void;
   stayOpenOnSuccess?: boolean;
   wide?: boolean;
+  finalFocus?: ComponentProps<typeof DialogContent>["finalFocus"];
 }) {
   const [ownOpen, setOwnOpen] = useState(false);
   const open = controlledOpen ?? ownOpen;
@@ -90,7 +100,11 @@ export function ConfirmDialog({
           </AlertDialogPrimitive.Trigger>
         )
       ) : null}
-      <DialogContent showCloseButton={false} className={wide ? "sm:max-w-2xl" : "sm:max-w-lg"}>
+      <DialogContent
+        showCloseButton={false}
+        className={wide ? "sm:max-w-2xl" : "sm:max-w-lg"}
+        finalFocus={finalFocus}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
