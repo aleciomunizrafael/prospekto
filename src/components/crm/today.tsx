@@ -10,11 +10,11 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { daysBetween } from "@/lib/crm/dates";
 import { formatShortDay } from "@/lib/crm/describe-sla";
 import { CRM_TIME_ZONE, calendarDateInSaoPaulo, formatBRL, formatDate } from "@/lib/crm/format";
 import { SEGMENT_LABELS } from "@/lib/crm/labels";
 import { leadCompany, stageInfo } from "@/lib/crm/lead-view";
+import { describeTaskDue } from "@/lib/crm/task-due";
 import { plural } from "@/lib/crm/text";
 import type { TaskRow } from "@/lib/repos/activities";
 import type { ContributionSummary } from "@/lib/repos/contributions";
@@ -158,21 +158,6 @@ const STATE_CLASS =
 // Coluna da ação: à direita dos dois andares no celular, terceira coluna no desktop.
 const ACTION_CLASS =
   "col-start-2 row-span-2 row-start-1 flex items-center justify-end gap-2 self-center md:col-start-3 md:row-span-1";
-
-function describeTaskDue(
-  dueAt: Date | null,
-  now: Date,
-): { text: string; tone: "danger" | "neutral" } {
-  if (!dueAt) return { text: "Sem data", tone: "neutral" };
-  const today = calendarDateInSaoPaulo(now);
-  const day = calendarDateInSaoPaulo(dueAt);
-  if (day === today) return { text: "Vence hoje", tone: "danger" };
-  if (dueAt.getTime() < now.getTime()) {
-    const days = Math.max(1, daysBetween(dueAt, now));
-    return { text: `Atrasada ${days === 1 ? "há 1 dia" : `há ${days} dias`}`, tone: "danger" };
-  }
-  return { text: `Vence ${formatShortDay(dueAt)}`, tone: "neutral" };
-}
 
 function TaskDue({ dueAt, now }: { dueAt: Date | null; now: Date }) {
   const due = describeTaskDue(dueAt, now);

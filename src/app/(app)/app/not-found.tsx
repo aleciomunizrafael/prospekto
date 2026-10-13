@@ -14,7 +14,7 @@ export default function NotFound() {
         description="Confira o endereço ou volte para a tela inicial."
         action={
           <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/app" />}>
-            Voltar para Hoje
+            Voltar para o Painel
           </Button>
         }
       />
