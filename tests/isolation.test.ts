@@ -1,4 +1,5 @@
 // Regra R-15 (ADR-001): dois tenants, um lead em cada; nenhuma função de listagem devolve dado do outro.
+import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { activities } from "@/lib/db/schema";
@@ -14,6 +15,7 @@ import { countAiRunsToday, getLatestAiRun, insertAiRun } from "@/lib/repos/ai-ru
 import { getCurrentConsent, listConsents } from "@/lib/repos/consents";
 import { createContact, getContact, listContacts } from "@/lib/repos/contacts";
 import { createContribution, getContribution, listContributions } from "@/lib/repos/contributions";
+import { loadAssignedTasks } from "@/lib/repos/digest";
 import { createLead, getLead, listLeads, type Lead } from "@/lib/repos/leads";
 import { createOrganization, getOrganization, listOrganizations } from "@/lib/repos/organizations";
 import { createProject, getProject, listProjects } from "@/lib/repos/projects";
@@ -249,6 +251,40 @@ describe("isolamento entre tenants", () => {
     const withLead = await listOpenTasksWithLead(a, { dueTo: new Date(now.getTime() + 60_000) });
     expect(withLead.find((t) => t.id === cross.id)?.leadName).toBeNull();
     expect((await getTask(a, cross.id))?.leadName).toBeNull();
+  });
+
+  // Regra 11 no e-mail diário: `loadAssignedTasks` lê o rótulo do vínculo por subconsulta sem join,
+  // e a restrição de tenant precisa valer para lead, organização e projeto de outro tenant.
+  it("e-mail diário não devolve o nome de lead, organização ou projeto de outro tenant", async () => {
+    const now = new Date();
+    const [task] = await db
+      .insert(activities)
+      .values({
+        tenantId: a.tenantId,
+        type: "tarefa",
+        subject: "Tarefa cruzada do e-mail",
+        ownerUserId: a.userId,
+        leadId: leadA.id,
+        dueAt: now,
+        priority: "media",
+      })
+      .returning();
+    const labelOf = async () =>
+      (await loadAssignedTasks(a, a.userId!, now)).find((t) => t.id === task.id)?.linkLabel;
+    // Controle: o vínculo do próprio tenant devolve o nome.
+    expect(await labelOf()).toBe("Lead a");
+    await db.update(activities).set({ leadId: leadB.id }).where(eq(activities.id, task.id));
+    expect(await labelOf()).toBeNull();
+    await db
+      .update(activities)
+      .set({ leadId: null, orgId: dataB.proponent.id })
+      .where(eq(activities.id, task.id));
+    expect(await labelOf()).toBeNull();
+    await db
+      .update(activities)
+      .set({ orgId: null, projectId: dataB.project.id })
+      .where(eq(activities.id, task.id));
+    expect(await labelOf()).toBeNull();
   });
 
   it("getTenant devolve o tenant do contexto", async () => {

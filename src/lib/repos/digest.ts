@@ -227,7 +227,11 @@ export async function loadDigestData(
 
 // "Tarefas atribuídas a você" (ADR-004, 6.5): abertas com owner_user_id do destinatário, com
 // due_at < agora + 7 dias ou sem prazo, por vencimento com nulos por último. O rótulo do vínculo
-// vem de subconsultas restritas ao tenant (regra 11). Por usuário: o cron chama dentro do laço.
+// vem de subconsultas restritas ao tenant (regra 11), com alias e colunas qualificadas à mão:
+// numa consulta de uma tabela só (sem join), o drizzle rende `${leads.tenantId}` e
+// `${activities.tenantId}` ambos como "tenant_id" sem prefixo, e a condição viraria
+// `"tenant_id" = "tenant_id"` (sempre verdadeira), como em `listLeadsForOrganization`.
+// Por usuário: o cron chama dentro do laço.
 export async function loadAssignedTasks(
   ctx: Ctx,
   userId: string,
@@ -237,7 +241,7 @@ export async function loadAssignedTasks(
   const until = new Date(now.getTime() + 7 * DAY);
   const linkLabel = sql<
     string | null
-  >`coalesce((select ${leads.name} from ${leads} where ${leads.id} = ${activities.leadId} and ${leads.tenantId} = ${activities.tenantId}), (select ${organizations.name} from ${organizations} where ${organizations.id} = ${activities.orgId} and ${organizations.tenantId} = ${activities.tenantId}), (select ${culturalProjects.name} from ${culturalProjects} where ${culturalProjects.id} = ${activities.projectId} and ${culturalProjects.tenantId} = ${activities.tenantId}))`;
+  >`coalesce((select l.name from ${leads} l where l.id = activities.lead_id and l.tenant_id = activities.tenant_id), (select o.name from ${organizations} o where o.id = activities.org_id and o.tenant_id = activities.tenant_id), (select p.name from ${culturalProjects} p where p.id = activities.project_id and p.tenant_id = activities.tenant_id))`;
   const rows = await db
     .select({
       id: activities.id,
