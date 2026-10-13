@@ -9,6 +9,7 @@ import path from "node:path";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { MODULES } from "@/components/crm/shell/modules";
 import {
   SEARCH_PLACEHOLDER,
   SEARCH_PLACEHOLDER_SHORT,
@@ -61,5 +62,31 @@ describe("SearchForm (busca global do header e de /app/busca)", () => {
     const header = await readFile(path.join(SHELL_DIR, "header.tsx"), "utf8");
     expect(header).toContain("placeholder={SEARCH_PLACEHOLDER_SHORT}");
     expect(header).not.toMatch(/placeholder="Buscar/);
+  });
+});
+
+// A página /app/busca (ADR-004, 6.7) liga cada grupo à lista do módulo com o mesmo `q`. O rótulo
+// "ver todos em X" nomeia o módulo de destino (Pipeline, Organizações, Projetos), não o tipo de
+// registro: `/app/leads` chama-se "Pipeline" desde a seção 6.1, e "ver todos em Leads" era o
+// rótulo antigo. Checado no fonte porque a página é um Server Component com sessão e banco.
+describe("Página /app/busca: links 'ver todos' nomeiam o módulo de destino", () => {
+  const PAGE = path.resolve(import.meta.dirname, "../src/app/(app)/app/busca/page.tsx");
+  const LINK = /allHref=\{`(\/app\/[a-z-]+)\$\{query\}`\}\s*allLabel="ver tod[oa]s em ([^"]+)"/g;
+
+  it("cada allLabel usa o rótulo do módulo cujo href é o allHref", async () => {
+    const source = await readFile(PAGE, "utf8");
+    const links = [...source.matchAll(LINK)].map(([, href, label]) => ({ href, label }));
+    expect(links.length).toBeGreaterThanOrEqual(3);
+    for (const { href, label } of links) {
+      const mod = Object.values(MODULES).find((m) => m.href === href);
+      expect(mod, `módulo com href ${href}`).toBeDefined();
+      expect(label).toBe(mod?.label);
+    }
+  });
+
+  it("não chama mais a lista de /app/leads de 'Leads'", async () => {
+    const source = await readFile(PAGE, "utf8");
+    expect(source).toContain('allLabel="ver todos em Pipeline"');
+    expect(source).not.toContain("em Leads");
   });
 });

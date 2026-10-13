@@ -97,7 +97,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/app/busca
             count={leads.total}
             shown={leads.rows.length}
             allHref={`/app/leads${query}`}
-            allLabel="ver todos em Leads"
+            allLabel="ver todos em Pipeline"
           >
             <DataTable<LeadListRow>
               caption={`Leads encontrados para "${q}"`}
