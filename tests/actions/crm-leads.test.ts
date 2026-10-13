@@ -14,6 +14,7 @@ import type { Ctx } from "@/lib/repos/ctx";
 import { listActivities, listOpenTasks } from "@/lib/repos/activities";
 import { listConsents } from "@/lib/repos/consents";
 import { createLead, getLead } from "@/lib/repos/leads";
+import * as leadsRepo from "@/lib/repos/leads";
 import { createOrganization } from "@/lib/repos/organizations";
 import { makeTenant, makeUser, uniqueEmail } from "../helpers";
 
@@ -89,6 +90,44 @@ describe("guarda de sessão", () => {
     } finally {
       session.ctx = ctx;
     }
+  });
+});
+
+describe("logs", () => {
+  it("falha inesperada do repositório vai ao log com tenantId e userId, sem nome, e-mail ou telefone", async () => {
+    const repoSpy = vi.spyOn(leadsRepo, "createLead").mockRejectedValueOnce(new Error("boom"));
+    const logged: string[] = [];
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      logged.push(args.map(String).join(" "));
+    });
+    const email = uniqueEmail("falha");
+    try {
+      const result = await createLeadAction(
+        initialCrmActionState,
+        fd({
+          segment: "PJ",
+          interest: "rouanet",
+          name: "Nome Sigiloso",
+          email,
+          phone: "(54) 98403-2180",
+          source: "evento",
+          attr_empresa: "Empresa Sigilosa",
+        }),
+      );
+      expect(result.status).toBe("error");
+      expect(result.status === "error" && result.message).toMatch(/Não foi possível salvar/);
+    } finally {
+      repoSpy.mockRestore();
+      consoleSpy.mockRestore();
+    }
+    expect(logged).toHaveLength(1);
+    const line = logged[0];
+    expect(line).toContain('"falha em createLeadAction"');
+    expect(line).toContain(`"tenantId":"${ctx.tenantId}"`);
+    expect(line).toContain(`"userId":"${ctx.userId}"`);
+    expect(line).not.toContain("Nome Sigiloso");
+    expect(line).not.toContain(email);
+    expect(line).not.toContain("98403");
   });
 });
 

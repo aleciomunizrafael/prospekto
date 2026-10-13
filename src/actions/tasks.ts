@@ -29,7 +29,12 @@ function fail(message: string, fieldErrors?: Record<string, string>): ActionStat
   return { status: "error", message, fieldErrors };
 }
 
-function fromError(error: unknown, context: string): ActionState {
+// O erro inesperado vai ao log com os ids da sessão e da tarefa (plano, regra 3), nunca o assunto.
+function fromError(
+  error: unknown,
+  context: string,
+  fields: { tenantId: string; userId: string; activityId?: string },
+): ActionState {
   if (error instanceof MissingFieldsError) {
     return { status: "error", message: error.message, missing: [...error.missing] };
   }
@@ -37,7 +42,7 @@ function fromError(error: unknown, context: string): ActionState {
     return fail("Confira os campos destacados.", firstIssueByField(error.issues));
   }
   if (error instanceof DomainError) return fail(error.message);
-  log("error", `falha em ${context}`, { error });
+  log("error", `falha em ${context}`, { ...fields, error });
   return fail("Não foi possível salvar. Tente de novo em instantes.");
 }
 
@@ -204,7 +209,7 @@ export async function createTaskAction(
       linked: Boolean(task.leadId || task.orgId || task.projectId),
     });
   } catch (error) {
-    return fromError(error, "createTaskAction");
+    return fromError(error, "createTaskAction", { tenantId: ctx.tenantId, userId: ctx.userId });
   }
   refresh();
   return {
@@ -263,7 +268,11 @@ export async function updateTaskAction(
       status: d.status,
     });
   } catch (error) {
-    return fromError(error, "updateTaskAction");
+    return fromError(error, "updateTaskAction", {
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      activityId: d.activityId,
+    });
   }
   refresh();
   return { status: "ok", message: "Tarefa salva." };
@@ -310,7 +319,11 @@ export async function moveTaskAction(input: unknown): Promise<ActionState> {
       index: d.index,
     });
   } catch (error) {
-    return fromError(error, "moveTaskAction");
+    return fromError(error, "moveTaskAction", {
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      activityId: d.activityId,
+    });
   }
   refresh();
   return { status: "ok", message };
@@ -337,7 +350,11 @@ export async function deleteTaskAction(
       activityId: parsed.data.activityId,
     });
   } catch (error) {
-    return fromError(error, "deleteTaskAction");
+    return fromError(error, "deleteTaskAction", {
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      activityId: parsed.data.activityId,
+    });
   }
   refresh();
   return { status: "ok", message: "Tarefa excluída." };

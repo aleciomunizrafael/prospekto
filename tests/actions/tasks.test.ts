@@ -16,6 +16,7 @@ import type { Ctx } from "@/lib/repos/ctx";
 import { createLead } from "@/lib/repos/leads";
 import { createOrganization } from "@/lib/repos/organizations";
 import { createTask, getTask, listTasksBoard } from "@/lib/repos/tasks";
+import * as tasksRepo from "@/lib/repos/tasks";
 import { makeTenant, uniqueEmail } from "../helpers";
 
 const session = vi.hoisted(() => ({ ctx: null as Ctx | null }));
@@ -355,6 +356,25 @@ describe("guarda de sessão e logs", () => {
     } finally {
       session.ctx = ctx;
     }
+  });
+
+  it("falha inesperada do repositório vai ao log com tenantId e userId, nunca o assunto", async () => {
+    const spy = vi.spyOn(tasksRepo, "createTask").mockRejectedValueOnce(new Error("boom"));
+    try {
+      const result = await createTaskAction(idleState, fd({ subject: SUBJECT }));
+      expect(result).toEqual({
+        status: "error",
+        message: "Não foi possível salvar. Tente de novo em instantes.",
+      });
+    } finally {
+      spy.mockRestore();
+    }
+    const line = logged.at(-1) ?? "";
+    expect(line).toContain('"falha em createTaskAction"');
+    expect(line).toContain(`"tenantId":"${ctx.tenantId}"`);
+    expect(line).toContain(`"userId":"${ctx.userId}"`);
+    expect(line).toContain('"message":"boom"');
+    expect(line).not.toContain(SUBJECT);
   });
 
   it("o console nunca recebe o assunto da tarefa (R-16)", () => {

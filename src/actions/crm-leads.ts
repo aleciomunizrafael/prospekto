@@ -62,7 +62,19 @@ function fail(message: string, fieldErrors?: Record<string, string>): CrmActionS
   return { status: "error", message, fieldErrors };
 }
 
-function fromError(error: unknown, context: string): CrmActionState {
+// O erro inesperado vai ao log com os ids da sessão e do registro (plano, regra 3), nunca nome,
+// e-mail ou telefone.
+function fromError(
+  error: unknown,
+  context: string,
+  fields: {
+    tenantId: string;
+    userId: string;
+    leadId?: string;
+    orgId?: string;
+    activityId?: string;
+  },
+): CrmActionState {
   if (error instanceof MissingFieldsError) {
     return { status: "error", message: error.message, missing: [...error.missing] };
   }
@@ -70,7 +82,7 @@ function fromError(error: unknown, context: string): CrmActionState {
     return fail("Confira os campos destacados.", firstIssueByField(error.issues));
   }
   if (error instanceof DomainError) return fail(error.message);
-  log("error", `falha em ${context}`, { error });
+  log("error", `falha em ${context}`, { ...fields, error });
   return fail("Não foi possível salvar. Tente de novo em instantes.");
 }
 
@@ -160,7 +172,10 @@ export async function createLeadAction(
     leadId = result.lead.id;
     created = result.created;
   } catch (error) {
-    return { ...fromError(error, "createLeadAction"), values };
+    return {
+      ...fromError(error, "createLeadAction", { tenantId: ctx.tenantId, userId: ctx.userId }),
+      values,
+    };
   }
   log("info", created ? "lead criado no CRM" : "lead existente atualizado pelo CRM", {
     tenantId: ctx.tenantId,
@@ -228,7 +243,14 @@ export async function updateLeadAction(
       attributes,
     });
   } catch (error) {
-    return { ...fromError(error, "updateLeadAction"), values };
+    return {
+      ...fromError(error, "updateLeadAction", {
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        leadId: d.leadId,
+      }),
+      values,
+    };
   }
   refresh();
   return { status: "ok", message: "Lead atualizado." };
@@ -299,7 +321,14 @@ export async function moveLeadStageAction(
       stage: lead.stage,
     });
   } catch (error) {
-    return { ...fromError(error, "moveLeadStageAction"), values };
+    return {
+      ...fromError(error, "moveLeadStageAction", {
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        leadId: d.leadId,
+      }),
+      values,
+    };
   }
   refresh();
   return { status: "ok", message: "Estágio atualizado." };
@@ -327,7 +356,11 @@ export async function assignLeadOwnerAction(
       ownerUserId: parsed.data.ownerUserId ?? null,
     });
   } catch (error) {
-    return fromError(error, "assignLeadOwnerAction");
+    return fromError(error, "assignLeadOwnerAction", {
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      leadId: parsed.data.leadId,
+    });
   }
   refresh();
   return { status: "ok", message: "Responsável atualizado." };
@@ -426,7 +459,15 @@ export async function registerActivityAction(
       });
     }
   } catch (error) {
-    return { ...fromError(error, "registerActivityAction"), values };
+    return {
+      ...fromError(error, "registerActivityAction", {
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        leadId: d.leadId,
+        orgId: d.orgId,
+      }),
+      values,
+    };
   }
   refresh();
   return { status: "ok", message: "Atividade registrada." };
@@ -446,7 +487,11 @@ export async function completeTaskAction(
     if (!task || task.type !== "tarefa") return fail("Tarefa não encontrada.");
     if (!task.doneAt) await completeTask(ctx, task.id);
   } catch (error) {
-    return fromError(error, "completeTaskAction");
+    return fromError(error, "completeTaskAction", {
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      activityId: parsed.data.activityId,
+    });
   }
   refresh();
   return { status: "ok", message: "Tarefa concluída." };
