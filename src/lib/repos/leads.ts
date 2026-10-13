@@ -53,7 +53,7 @@ import {
   type MoveLeadStageInput,
   type UpdateLeadInput,
 } from "@/lib/validation/leads";
-import { insertSystemActivity, type Activity } from "./activities";
+import { insertSystemActivity, nextTaskPositionSql, type Activity } from "./activities";
 import { insertConsent } from "./consents";
 import { getOpenContributionForLead, recalcRaisedAmount } from "./contributions";
 import type { Ctx } from "./ctx";
@@ -510,6 +510,8 @@ export async function moveLeadStage(ctx: Ctx, input: MoveLeadStageInput): Promis
         reason: data.lostReason ?? data.reason ?? null,
         direction:
           stageIndex(pipeline, data.to) > stageIndex(pipeline, lead.stage) ? "avanco" : "retorno",
+        // "board" quando o diálogo foi aberto pelo quadro (ADR-004, seção 12).
+        origin: data.origin ?? null,
       },
       leadId: row.id,
     });
@@ -734,6 +736,10 @@ export async function recordLeadActivity(
         occurredAt: activityInput.occurredAt ?? new Date(),
         dueAt: activityInput.dueAt ?? null,
         doneAt: activityInput.doneAt ?? null,
+        startedAt: activityInput.startedAt ?? null,
+        // Toda tarefa nasce com prioridade e posição, também por este caminho (plano, P16).
+        priority: activityInput.type === "tarefa" ? (activityInput.priority ?? "media") : null,
+        position: activityInput.type === "tarefa" ? nextTaskPositionSql(ctx) : 0,
         leadId: current.id,
         ownerUserId: activityInput.ownerUserId ?? ctx.userId ?? null,
         createdByUserId: ctx.userId ?? null,

@@ -95,6 +95,9 @@ export const moveLeadStageSchema = z.object({
   lostReason: z.enum(LOST_REASONS, { error: "Escolha o motivo." }).optional(),
   lostReasonDetail: z.string().trim().max(500).optional(),
   reason: z.string().trim().max(500).optional(),
+  // De onde o movimento partiu (quadro ou detalhe): vai para data.origin da atividade "Estágio
+  // alterado" (ADR-004, seção 12; plano, P5).
+  origin: z.enum(["board", "detail"]).optional(),
 });
 export type MoveLeadStageInput = z.input<typeof moveLeadStageSchema>;
 

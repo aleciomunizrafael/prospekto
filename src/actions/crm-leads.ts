@@ -248,6 +248,8 @@ const moveStageFormSchema = z.object({
   art27Checked: z.string().optional(),
   art27At: optionalText(40),
   art27By: optionalText(120),
+  // Quadro ou detalhe: vai para data.origin da atividade "Estágio alterado" (plano, P5).
+  origin: optionalText(20).pipe(z.enum(["board", "detail"]).optional()),
 });
 
 export async function moveLeadStageAction(
@@ -287,6 +289,7 @@ export async function moveLeadStageAction(
       lostReason: d.lostReason,
       lostReasonDetail: d.lostReasonDetail,
       reason: d.reason,
+      origin: d.origin,
     });
     log("info", "estágio do lead alterado", {
       tenantId: ctx.tenantId,

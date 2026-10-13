@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, getTableColumns, inArray, ne, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, ilike, inArray, ne, or, sql, type SQL } from "drizzle-orm";
 import { db, type Db } from "@/lib/db";
 import { contributions, culturalProjects, leads, organizations } from "@/lib/db/schema";
 import { assertCommissionWithinLimits, type CommissionWarning } from "@/lib/domain/commission";
@@ -464,6 +464,8 @@ export async function listContributionSummaries(
     status?: ContributionStatus[];
     // Previsão de fechamento entre as duas datas (YYYY-MM-DD), só proposta e termo_assinado.
     expectedBetween?: { from: string; to: string };
+    // Paleta Ctrl+K: nome do lead, do projeto ou da organização (ADR-004, 6.7).
+    search?: string;
     limit?: number;
   } = {},
 ): Promise<ContributionSummary[]> {
@@ -471,6 +473,16 @@ export async function listContributionSummaries(
   if (filter.projectId) where.push(eq(contributions.projectId, filter.projectId));
   if (filter.leadId) where.push(eq(contributions.leadId, filter.leadId));
   if (filter.status?.length) where.push(inArray(contributions.status, filter.status));
+  if (filter.search?.trim()) {
+    const term = `%${filter.search.trim().replace(/[%_]/g, "")}%`;
+    where.push(
+      or(
+        ilike(leads.name, term),
+        ilike(culturalProjects.name, term),
+        ilike(organizations.name, term),
+      )!,
+    );
+  }
   if (filter.expectedBetween) {
     where.push(
       inArray(contributions.status, ["proposta", "termo_assinado"]),

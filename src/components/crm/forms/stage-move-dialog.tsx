@@ -184,12 +184,15 @@ export function StageMoveDialog({
   trigger,
   open: controlledOpen,
   onOpenChange,
+  origin,
   ...props
 }: LeadStageProps & {
   defaultTarget?: string;
   trigger?: ReactNode | null;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  // De onde o diálogo foi aberto; vai para data.origin da atividade "Estágio alterado" (P5).
+  origin?: "board" | "detail";
 }) {
   const router = useRouter();
   const [ownOpen, setOwnOpen] = useState(false);
@@ -265,6 +268,7 @@ export function StageMoveDialog({
           }}
         >
           <HiddenField name="leadId" value={props.leadId} />
+          {origin ? <HiddenField name="origin" value={origin} /> : null}
 
           <DestinationSelect
             plans={props.plans}
@@ -409,10 +413,12 @@ export function MarkLostDialog({
   trigger,
   open,
   onOpenChange,
+  origin,
 }: LostProps & {
   trigger?: ReactNode | null;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  origin?: "board" | "detail";
 }) {
   const [reason, setReason] = useState("");
   const terminalLabel = stageLabel(terminalStage).toLowerCase();
@@ -440,6 +446,7 @@ export function MarkLostDialog({
     >
       <HiddenField name="leadId" value={leadId} />
       <HiddenField name="to" value={terminalStage} />
+      {origin ? <HiddenField name="origin" value={origin} /> : null}
       <SelectField
         name="lostReason"
         label="Motivo"

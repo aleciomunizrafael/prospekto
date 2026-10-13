@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { ORGANIZATION_TYPES, REGIME_CONFIRMATIONS, TAX_REGIMES } from "@/lib/domain/enums";
-import { cnpjSchema, moneySchema, nullableOptionals, ufSchema, uuidSchema } from "./common";
+import {
+  cnpjSchema,
+  moneySchema,
+  nullableOptionals,
+  phoneSchema,
+  ufSchema,
+  uuidSchema,
+} from "./common";
 
 export const createOrganizationSchema = z.object({
   type: z.enum(ORGANIZATION_TYPES, { error: "Escolha o tipo." }),
@@ -32,6 +39,8 @@ export const createOrganizationSchema = z.object({
   icmsContributorRs: z.boolean().optional(),
   accountantOrgId: z.uuid({ error: "Escolha o escritório contábil." }).optional(),
   ownerUserId: z.string().trim().min(1, { error: "Escolha quem cuida." }).optional(),
+  // Telefone da empresa (central), E.164; o da pessoa fica no contato (ADR-004, 6.4.7; P18).
+  phone: phoneSchema.nullable().optional(),
   notes: z
     .string()
     .trim()
