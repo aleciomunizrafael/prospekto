@@ -135,6 +135,41 @@ describe("ItemCards", () => {
   it("não expõe chaves de enum no texto visível (P20)", () => {
     expect(visible).not.toMatch(/\b(a_ligar|sem_resposta|reuniao_marcada|descartado|retornar)\b/);
   });
+
+  // Empresa já convertida que voltou para a ligar: a conversão seria recusada pelo servidor, então
+  // o cartão não oferece "Reunião marcada"; os outros resultados e o "Ver lead" continuam.
+  it("a_ligar com lead já criado não oferece Reunião marcada; sem lead continua oferecendo", () => {
+    const converted = renderToString(
+      createElement(ItemCards, {
+        items: [
+          item({
+            id: "i5",
+            name: "Voltou Para Ligar",
+            phone: "+5554990000006",
+            status: "a_ligar",
+            leadId: "00000000-0000-4000-8000-00000000000c",
+          }),
+        ],
+        ctx,
+      }),
+    );
+    const convertedText = text(converted);
+    expect(convertedText).toContain("Sem resposta");
+    expect(convertedText).toContain("Retornar");
+    expect(convertedText).toContain("Descartar");
+    expect(convertedText).toContain("Ver lead");
+    expect(converted).toContain('href="/app/leads/00000000-0000-4000-8000-00000000000c"');
+    expect(convertedText).not.toContain("Reunião marcada");
+
+    const fresh = renderToString(
+      createElement(ItemCards, {
+        items: [item({ id: "i6", name: "Nunca Convertida", status: "a_ligar", leadId: null })],
+        ctx,
+      }),
+    );
+    expect(text(fresh)).toContain("Reunião marcada");
+    expect(text(fresh)).not.toContain("Ver lead");
+  });
 });
 
 describe("ListTable", () => {

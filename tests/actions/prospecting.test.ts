@@ -1,7 +1,7 @@
 // Server Actions da Prospecção (src/actions/prospecting.ts) contra PGlite. requireSession é
 // substituído por um contexto do teste; next/cache e next/navigation são neutralizados. O console
 // é espionado do início ao fim: nenhuma linha pode conter telefone (+55) nem e-mail (@example.test).
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   convertProspectingItemAction,
@@ -16,7 +16,9 @@ import { initialCrmActionState } from "@/lib/crm/action-state";
 import { idleState } from "@/lib/crm/form-state";
 import type { Ctx } from "@/lib/repos/ctx";
 import { listActivities } from "@/lib/repos/activities";
+import { createContact } from "@/lib/repos/contacts";
 import { createLead, getLead, moveLeadStage } from "@/lib/repos/leads";
+import { createOrganization } from "@/lib/repos/organizations";
 import { addItems, createList, getItem } from "@/lib/repos/prospecting";
 import { makeTenant, makeUser, uniqueEmail } from "../helpers";
 
@@ -457,6 +459,97 @@ describe("convertProspectingItemAction", () => {
     );
     // perdido (1) + reativar para novo (2) + novo para qualificado (3)
     expect(changes).toHaveLength(3);
+  });
+
+  // Contatos do tenant com este e-mail: a conversão nunca pode criar um segundo para a mesma pessoa.
+  const contactsByEmail = (email: string) =>
+    db
+      .select()
+      .from(contacts)
+      .where(and(eq(contacts.tenantId, ctx.tenantId), eq(contacts.email, email)));
+
+  it("segunda conversão com o mesmo e-mail reaproveita o contato do lead, sem duplicar", async () => {
+    const email = uniqueEmail("mesma-pessoa");
+    const first = await newItem({ name: "Empresa X", phone: "(54) 3000-0020" });
+    const second = await newItem({ name: "Empresa X filial", phone: "(54) 3000-0021" });
+    const one = await convertProspectingItemAction(idleState, convertForm(first.id, { email }));
+    const two = await convertProspectingItemAction(idleState, convertForm(second.id, { email }));
+    expect(one.status).toBe("ok");
+    expect(two).toMatchObject({
+      status: "ok",
+      message: "Já existe um lead com este e-mail; a reunião foi registrada nele.",
+    });
+    const c1 = (one as { conversion?: { leadId: string; contactId: string } }).conversion!;
+    const c2 = (two as { conversion?: { leadId: string; contactId: string } }).conversion!;
+    expect(c2.leadId).toBe(c1.leadId);
+    expect(c2.contactId).toBe(c1.contactId);
+    const rows = await contactsByEmail(email);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe(c1.contactId);
+    expect((await getLead(ctx, c1.leadId))?.contactId).toBe(c1.contactId);
+  });
+
+  it("reconversão de lead perdido vindo da prospecção reaproveita o contato e completa o telefone", async () => {
+    const email = uniqueEmail("reconversao");
+    const first = await newItem({ name: "Empresa G", phone: "(54) 3000-0022" });
+    const one = await convertProspectingItemAction(idleState, convertForm(first.id, { email }));
+    const c1 = (one as { conversion?: { leadId: string; contactId: string; orgId: string } })
+      .conversion!;
+    await moveLeadStage(ctx, { leadId: c1.leadId, to: "perdido", lostReason: "sem_interesse" });
+    // Lista do ano seguinte com a mesma empresa: item diferente, por isso a conversão é aceita.
+    const next = await createList(ctx, { name: "Lista 2027", sourceDetail: "busca pública" });
+    const {
+      items: [again],
+    } = await addItems(ctx, { listId: next.id, items: [{ name: "Empresa G" }] });
+    const two = await convertProspectingItemAction(
+      idleState,
+      convertForm(again.id, { email, contactPhone: "(54) 99000-0030" }),
+    );
+    expect(two).toMatchObject({ status: "ok", message: "Lead reativado em Qualificado." });
+    const c2 = (two as { conversion?: { leadId: string; contactId: string; orgId: string } })
+      .conversion!;
+    expect(c2.leadId).toBe(c1.leadId);
+    expect(c2.orgId).toBe(c1.orgId);
+    expect(c2.contactId).toBe(c1.contactId);
+    const inOrg = await db
+      .select()
+      .from(contacts)
+      .where(and(eq(contacts.tenantId, ctx.tenantId), eq(contacts.orgId, c1.orgId)));
+    expect(inOrg).toHaveLength(1);
+    expect(inOrg[0].phone).toBe("+5554990000030");
+    expect(await contactsByEmail(email)).toHaveLength(1);
+    const lead = (await getLead(ctx, c1.leadId))!;
+    expect(lead.contactId).toBe(c1.contactId);
+    expect(lead.phone).toBe("+5554990000030");
+    expect(lead.stage).toBe("qualificado");
+  });
+
+  it("organização que já tem contato com o mesmo e-mail não ganha um segundo contato", async () => {
+    const email = uniqueEmail("ja-cadastrada");
+    const org = await createOrganization(ctx, { type: "empresa", name: "Empresa C" });
+    const known = await createContact(ctx, {
+      orgId: org.id,
+      name: "Pessoa C",
+      email,
+      sourceDetail: "linkedin:busca",
+    });
+    const item = await newItem({ name: "Empresa C", phone: "(54) 3000-0023" });
+    const state = await convertProspectingItemAction(
+      idleState,
+      convertForm(item.id, { email, title: "Diretora" }),
+    );
+    expect(state.status).toBe("ok");
+    const conversion = (
+      state as { conversion?: { leadId: string; contactId: string; orgId: string } }
+    ).conversion!;
+    expect(conversion.orgId).toBe(org.id);
+    expect(conversion.contactId).toBe(known.id);
+    const rows = await contactsByEmail(email);
+    expect(rows).toHaveLength(1);
+    // Cargo vazio preenchido pelo diálogo; o que já existia não é sobrescrito.
+    expect(rows[0].title).toBe("Diretora");
+    expect(rows[0].name).toBe("Pessoa C");
+    expect((await getLead(ctx, conversion.leadId))?.contactId).toBe(known.id);
   });
 
   it("e-mail obrigatório e campos inválidos devolvem erro de validação sem gravar", async () => {

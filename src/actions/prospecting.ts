@@ -404,6 +404,7 @@ export async function convertProspectingItemAction(
     stage: result.stage,
     created: result.created,
     reactivated: result.reactivated,
+    orgReused: result.orgReused,
   });
   refresh();
   const state: ActionState & { conversion: ConversionResult } = {

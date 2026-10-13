@@ -63,7 +63,13 @@ export default async function ProspectingItemPage({
     defaultCallbackAt: defaultCallbackDate(now),
     discardReason: discardReasons[item.id] ?? null,
   };
-  const resultItem = { id: item.id, name: item.name, status: item.status, notes: item.notes };
+  const resultItem = {
+    id: item.id,
+    name: item.name,
+    status: item.status,
+    notes: item.notes,
+    leadId: item.leadId,
+  };
   const whatsappItem = {
     id: item.id,
     name: item.name,

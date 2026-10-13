@@ -216,6 +216,8 @@ export type ConversionResult = {
   contactId: string;
   created: boolean;
   reactivated: boolean;
+  // A organização de mesmo nome já existia (a mesma empresa em outra lista ou um homônimo).
+  orgReused: boolean;
   // Estágio real do lead ao fim; um lead reaproveitado em outro estágio fica onde estava.
   stage: string;
   // Um moveLeadStage falhou: a reunião ficou registrada e o lead não chegou a Qualificado.
@@ -228,6 +230,9 @@ export function describeConversion(result: ConversionResult): string {
   }
   if (result.reactivated) return "Lead reativado em Qualificado.";
   if (!result.created) return "Já existe um lead com este e-mail; a reunião foi registrada nele.";
+  if (result.orgReused) {
+    return "Reunião marcada. Lead criado em Qualificado e vinculado à organização já cadastrada com este nome; confira a ficha.";
+  }
   return "Reunião marcada. Lead criado em Qualificado.";
 }
 

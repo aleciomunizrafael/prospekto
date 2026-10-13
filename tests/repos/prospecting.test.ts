@@ -1,10 +1,14 @@
 // Listas e itens de prospecção (ADR-004, 6.4 e 6.6; plano, P15 e P10) contra PGlite. A conversão
 // é testada com moveLeadStage substituído por um espião que pode falhar: a transação da conversão
 // tem de permanecer confirmada e o estágio real devolvido (prova da separação pedida na P10).
+import { and, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { db } from "@/lib/db";
+import { contacts, organizations } from "@/lib/db/schema";
 import type { Ctx } from "@/lib/repos/ctx";
 import { createActivity, getActivity, listActivities } from "@/lib/repos/activities";
-import { createLead, getLead, moveLeadStage } from "@/lib/repos/leads";
+import { createLead, getLead, moveLeadStage, updateLead } from "@/lib/repos/leads";
+import { createOrganization } from "@/lib/repos/organizations";
 import {
   addItems,
   convertProspectingItem,
@@ -278,6 +282,110 @@ describe("resultado, WhatsApp, autosave e motivo do descarte", () => {
     expect(
       await listActivities(ctx, { prospectingItemId: item.id, type: "whatsapp" }),
     ).toHaveLength(1);
+  });
+});
+
+describe("convertProspectingItem: organização e contato reaproveitados", () => {
+  async function seedItem(name: string, phone = "(54) 90000-0031") {
+    const list = await createList(ctx, { name: "Reaproveitamento", sourceDetail: "busca pública" });
+    const {
+      items: [item],
+    } = await addItems(ctx, { listId: list.id, items: [{ name, phone }] });
+    return item;
+  }
+  const convert = (itemId: string, email: string) =>
+    convertProspectingItem(ctx, {
+      itemId,
+      contactName: "Pessoa Reaproveitada",
+      email,
+      meetingAt: new Date("2026-10-22T13:00:00Z"),
+    });
+  const contactOf = async (contactId: string) => {
+    const [row] = await db
+      .select({ id: contacts.id, orgId: contacts.orgId })
+      .from(contacts)
+      .where(and(eq(contacts.tenantId, ctx.tenantId), eq(contacts.id, contactId)));
+    return row;
+  };
+
+  it("lead com organização própria não ganha contato de outra organização (regra de updateLead)", async () => {
+    const orgA = await createOrganization(ctx, { type: "empresa", name: "Organização A" });
+    const email = uniqueEmail("org-propria");
+    const { lead } = await createLead(ctx, {
+      segment: "PJ",
+      interest: "rouanet",
+      name: "Lead da A",
+      email,
+      source: "linkedin",
+      attributes: { empresa: "Organização A" },
+    });
+    await updateLead(ctx, { leadId: lead.id, orgId: orgA.id });
+    const item = await seedItem("Empresa B");
+    const result = await convert(item.id, email);
+    expect(result.leadId).toBe(lead.id);
+    expect(result.created).toBe(false);
+    expect(result.orgId).not.toBe(orgA.id);
+    // A pessoa fica cadastrada na Empresa B (ficha de B e retorno), mas o lead continua na A sem
+    // apontar para contato de outra organização: o mesmo estado que updateLead recusa.
+    const contact = await contactOf(result.contactId);
+    expect(contact.orgId).toBe(result.orgId);
+    const after = (await getLead(ctx, lead.id))!;
+    expect(after.orgId).toBe(orgA.id);
+    expect(after.contactId).toBeNull();
+    await expect(updateLead(ctx, { leadId: lead.id, contactId: result.contactId })).rejects.toThrow(
+      /não pertence/,
+    );
+    expect((await getItem(ctx, item.id))?.leadId).toBe(lead.id);
+  });
+
+  it("lead sem organização reaproveitado recebe a organização e o contato do item", async () => {
+    const email = uniqueEmail("sem-org");
+    const { lead } = await createLead(ctx, {
+      segment: "PJ",
+      interest: "rouanet",
+      name: "Lead Sem Organização",
+      email,
+      source: "linkedin",
+      attributes: { empresa: "Empresa D" },
+    });
+    const item = await seedItem("Empresa D");
+    const result = await convert(item.id, email);
+    expect(result.leadId).toBe(lead.id);
+    const after = (await getLead(ctx, lead.id))!;
+    expect(after.orgId).toBe(result.orgId);
+    expect(after.contactId).toBe(result.contactId);
+    expect((await contactOf(result.contactId)).orgId).toBe(result.orgId);
+  });
+
+  it("organização homônima é reaproveitada com aviso (orgReused) e mantém o telefone", async () => {
+    const existing = await createOrganization(ctx, {
+      type: "empresa",
+      name: "Metalúrgica Homônima",
+      phone: "(54) 3000-0040",
+    });
+    const item = await seedItem("metalúrgica homônima", "(51) 3000-0041");
+    const result = await convert(item.id, uniqueEmail("homonimo"));
+    expect(result.orgId).toBe(existing.id);
+    expect(result.orgReused).toBe(true);
+    expect(result.created).toBe(true);
+    const [org] = await db
+      .select({ phone: organizations.phone })
+      .from(organizations)
+      .where(and(eq(organizations.tenantId, ctx.tenantId), eq(organizations.id, existing.id)));
+    expect(org.phone).toBe("+555430000040");
+    expect((await getItem(ctx, item.id))?.orgId).toBe(existing.id);
+  });
+
+  it("sem homônimo, a organização é criada e orgReused é falso", async () => {
+    const item = await seedItem("Empresa Sem Homônimo");
+    const result = await convert(item.id, uniqueEmail("sem-homonimo"));
+    expect(result.orgReused).toBe(false);
+    expect(result.created).toBe(true);
+    const [org] = await db
+      .select({ name: organizations.name, phone: organizations.phone })
+      .from(organizations)
+      .where(and(eq(organizations.tenantId, ctx.tenantId), eq(organizations.id, result.orgId)));
+    expect(org).toMatchObject({ name: "Empresa Sem Homônimo", phone: "+5554900000031" });
   });
 });
 

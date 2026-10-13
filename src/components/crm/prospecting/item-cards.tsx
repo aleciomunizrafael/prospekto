@@ -101,7 +101,13 @@ export function ItemCard({ item, ctx }: { item: ItemCardItem; ctx: ItemCardsCont
           <span className="crm-meta relative z-10 px-1">sem telefone</span>
         )}
         <ResultButtons
-          item={{ id: item.id, name: item.name, status: item.status, notes: item.notes }}
+          item={{
+            id: item.id,
+            name: item.name,
+            status: item.status,
+            notes: item.notes,
+            leadId: item.leadId,
+          }}
           ctx={{
             users: ctx.users,
             defaultOwnerUserId: ctx.defaultOwnerUserId,

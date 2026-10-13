@@ -42,13 +42,16 @@ import { WhatsappDialog, type WhatsappDialogItem } from "./whatsapp-dialog";
 // "Reunião marcada" (ConvertDialog), "Sem resposta" (formulário direto), "Retornar" (data padrão
 // de 2 dias úteis e anotação) e "Descartar" (alertdialog com o motivo). Em descartado ou
 // reuniao_marcada, só "Voltar para a ligar" (com confirmação quando a empresa pediu para não ser
-// contatada). "Anotação" grava notes pela mesma action, sem mudar o status. Enquanto uma gravação
-// está pendente o grupo fica aria-busy e desabilitado; o sucesso vira toast e refresh() pela action.
+// contatada). "Anotação" grava notes pela mesma action, sem mudar o status. Em item já convertido
+// que voltou para a ligar (leadId preenchido), "Reunião marcada" não aparece: a conversão é
+// recusada pelo servidor e a reunião se registra no lead (Ver lead). Enquanto uma gravação está
+// pendente o grupo fica aria-busy e desabilitado; o sucesso vira toast e refresh() pela action.
 export type ResultItem = {
   id: string;
   name: string;
   status: string;
   notes: string | null;
+  leadId: string | null;
 };
 
 export type ResultContext = ConvertDefaults & {
@@ -232,6 +235,7 @@ export function ResultButtons({
   const [open, setOpen] = useState<DialogKey | null>(null);
   const { formAction, pending } = useQuickResult(item.id);
   const actionable = ACTIONABLE.has(item.status);
+  const canConvert = actionable && !item.leadId;
   const btnSize = size === "sm" ? "sm" : "lg";
   const btnClass = size === "sm" ? "h-11 md:h-7" : "h-11 md:h-9";
   const askBeforeBack = ctx.discardReason === "nao_contatar";
@@ -244,17 +248,19 @@ export function ResultButtons({
     >
       {actionable ? (
         <>
-          <Button
-            type="button"
-            variant="outline"
-            size={btnSize}
-            className={btnClass}
-            disabled={pending}
-            onClick={() => setOpen("convert")}
-          >
-            <CalendarCheck aria-hidden="true" />
-            Reunião marcada
-          </Button>
+          {canConvert ? (
+            <Button
+              type="button"
+              variant="outline"
+              size={btnSize}
+              className={btnClass}
+              disabled={pending}
+              onClick={() => setOpen("convert")}
+            >
+              <CalendarCheck aria-hidden="true" />
+              Reunião marcada
+            </Button>
+          ) : null}
           <form action={formAction} className="contents">
             <input type="hidden" name="itemId" value={item.id} />
             <input type="hidden" name="status" value="sem_resposta" />
@@ -428,9 +434,12 @@ export function ItemActionBar({
   const [open, setOpen] = useState<DialogKey | null>(null);
   const { submit } = useQuickResult(item.id);
   const actionable = ACTIONABLE.has(item.status);
+  const canConvert = actionable && !item.leadId;
   const more: ActionBarMoreItem[] = actionable
     ? [
-        ...(phone ? [{ label: "Reunião marcada", onSelect: () => setOpen("convert") }] : []),
+        ...(phone && canConvert
+          ? [{ label: "Reunião marcada", onSelect: () => setOpen("convert") }]
+          : []),
         { label: "Sem resposta", onSelect: () => submit("sem_resposta") },
         { label: "Retornar", onSelect: () => setOpen("retornar") },
         { label: "Descartar", onSelect: () => setOpen("descartar") },
@@ -453,7 +462,7 @@ export function ItemActionBar({
               <Phone aria-hidden="true" />
               Ligar
             </Button>
-          ) : actionable ? (
+          ) : canConvert ? (
             <Button size="touch" onClick={() => setOpen("convert")}>
               <CalendarCheck aria-hidden="true" />
               Reunião marcada

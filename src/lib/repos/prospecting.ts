@@ -590,6 +590,9 @@ export type ConvertProspectingItemResult = {
   contactId: string;
   created: boolean;
   reactivated: boolean;
+  // A organização veio do reaproveitamento por nome (a mesma empresa em outra lista, ou um
+  // homônimo): o toast avisa para a Daniela conferir a ficha.
+  orgReused: boolean;
   stage: string;
   advanceFailed: boolean;
 };
@@ -597,6 +600,78 @@ export type ConvertProspectingItemResult = {
 // Nome igual, sem curingas: `%` e `_` do próprio nome são escapados para o ilike ser exato.
 function exactIlike(value: string): string {
   return value.replace(/[\\%_]/g, "\\$&");
+}
+
+// Contato da conversão: reaproveita o contato do lead PJ com o mesmo e-mail, senão o contato da
+// organização escolhida com o mesmo e-mail (nunca o de outra organização), completando telefone e
+// cargo vazios; só insere quando não há nenhum. Sem isso, cada reconversão (o lead perdido do ano
+// passado é o caso comum) duplicava o dado pessoal da mesma pessoa (LGPD, minimização).
+async function reuseOrCreateContact(
+  tx: Db,
+  ctx: Ctx,
+  input: {
+    orgId: string;
+    leadContactId: string | null;
+    name: string;
+    email: string;
+    phone: string | null;
+    title: string | null;
+    sourceDetail: string;
+  },
+): Promise<{ id: string; orgId: string }> {
+  const columns = {
+    id: contacts.id,
+    orgId: contacts.orgId,
+    phone: contacts.phone,
+    title: contacts.title,
+  };
+  let found: { id: string; orgId: string; phone: string | null; title: string | null } | undefined;
+  if (input.leadContactId) {
+    [found] = await tx
+      .select(columns)
+      .from(contacts)
+      .where(and(eq(contacts.tenantId, ctx.tenantId), eq(contacts.id, input.leadContactId)));
+  }
+  if (!found) {
+    [found] = await tx
+      .select(columns)
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.tenantId, ctx.tenantId),
+          eq(contacts.orgId, input.orgId),
+          eq(contacts.email, input.email),
+        ),
+      )
+      .orderBy(asc(contacts.createdAt))
+      .limit(1);
+  }
+  if (found) {
+    const patch: Partial<typeof contacts.$inferInsert> = {};
+    if (!found.phone && input.phone) patch.phone = input.phone;
+    if (!found.title && input.title) patch.title = input.title;
+    if (Object.keys(patch).length > 0) {
+      await tx
+        .update(contacts)
+        .set(patch)
+        .where(and(eq(contacts.tenantId, ctx.tenantId), eq(contacts.id, found.id)));
+    }
+    return { id: found.id, orgId: found.orgId };
+  }
+  const [created] = await tx
+    .insert(contacts)
+    .values({
+      tenantId: ctx.tenantId,
+      orgId: input.orgId,
+      name: input.name,
+      title: input.title,
+      email: input.email,
+      phone: input.phone,
+      isDecisionMaker: false,
+      sourceDetail: input.sourceDetail,
+    })
+    .returning({ id: contacts.id, orgId: contacts.orgId });
+  return created;
 }
 
 async function fillOrganizationPhone(
@@ -614,7 +689,7 @@ async function fillOrganizationPhone(
 
 // "Reunião marcada" (ADR-004, 6.6; plano, P10): numa transação só com `tx`, a empresa vira
 // organização (com o telefone da empresa), a pessoa vira contato e lead em `novo` (ou o lead com o
-// mesmo e-mail é reaproveitado), a reunião entra como activities.reuniao na data marcada e o item
+// mesmo e-mail é reaproveitado, junto com o contato dele), a reunião entra como activities.reuniao na data marcada e o item
 // fica em reuniao_marcada com a história ligada ao lead. Depois da transação, moveLeadStage leva o
 // lead a `qualificado` (novo → qualificado; perdido → novo → qualificado); se um movimento falhar,
 // o lead fica onde está, a função devolve o estágio real e o aviso vai para o log sem dado pessoal.
@@ -639,6 +714,7 @@ export async function convertProspectingItem(
 
     // 1. Organização: a do item, a de mesmo nome (empresa) ou uma nova, com o telefone da empresa.
     let orgId: string | null = null;
+    let orgReused = false;
     if (item.orgId) {
       const [own] = await tx
         .select({ id: organizations.id, phone: organizations.phone })
@@ -664,6 +740,7 @@ export async function convertProspectingItem(
         .limit(1);
       if (same) {
         orgId = same.id;
+        orgReused = true;
         await fillOrganizationPhone(tx, ctx, same, item.phone);
       }
     }
@@ -691,33 +768,33 @@ export async function convertProspectingItem(
       orgId = org.id;
     }
 
-    // 2. Contato: a pessoa que vai à reunião, com o telefone dela (nunca o da empresa).
-    const [contact] = await tx
-      .insert(contacts)
-      .values({
-        tenantId: ctx.tenantId,
-        orgId,
-        name: data.contactName,
-        title: data.title || null,
-        email: data.email,
-        phone: data.contactPhone || null,
-        isDecisionMaker: false,
-        sourceDetail: `Prospecção: lista ${list.name} (ligação em ${formatDate(now)})`,
-      })
-      .returning({ id: contacts.id });
-
-    // 3. Lead: reaproveita o PJ com o mesmo e-mail; senão nasce em `novo` com origem prospeccao.
+    // 2. O lead PJ com o mesmo e-mail, procurado antes do contato: o contato dele é reaproveitado.
     const [existing] = await tx
       .select({
         id: leads.id,
         stage: leads.stage,
         orgId: leads.orgId,
         contactId: leads.contactId,
+        phone: leads.phone,
       })
       .from(leads)
       .where(
         and(eq(leads.tenantId, ctx.tenantId), eq(leads.email, data.email), eq(leads.segment, "PJ")),
       );
+
+    // 3. Contato: a pessoa que vai à reunião, com o telefone dela (nunca o da empresa); o do lead
+    // ou o da organização com o mesmo e-mail é reaproveitado (reuseOrCreateContact).
+    const contact = await reuseOrCreateContact(tx, ctx, {
+      orgId,
+      leadContactId: existing?.contactId ?? null,
+      name: data.contactName,
+      email: data.email,
+      phone: data.contactPhone || null,
+      title: data.title || null,
+      sourceDetail: `Prospecção: lista ${list.name} (ligação em ${formatDate(now)})`,
+    });
+
+    // 4. Lead: reaproveita o PJ com o mesmo e-mail; senão nasce em `novo` com origem prospeccao.
     let leadId: string;
     let created: boolean;
     let stageBefore: string;
@@ -725,11 +802,16 @@ export async function convertProspectingItem(
       leadId = existing.id;
       created = false;
       stageBefore = existing.stage;
+      // A organização do lead prevalece, e o contato só é vinculado quando pertence a ela: a mesma
+      // regra que assertLeadReferences impõe em updateLead (senão a ficha do lead apontaria para
+      // uma pessoa de outra empresa). O telefone da pessoa, quando o lead não tinha, entra.
+      const leadOrgId = existing.orgId ?? orgId;
       await tx
         .update(leads)
         .set({
-          orgId: existing.orgId ?? orgId,
-          contactId: existing.contactId ?? contact.id,
+          orgId: leadOrgId,
+          contactId: existing.contactId ?? (contact.orgId === leadOrgId ? contact.id : null),
+          phone: existing.phone ?? (data.contactPhone || null),
           lastContactAt: now,
         })
         .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.id, existing.id)));
@@ -776,7 +858,7 @@ export async function convertProspectingItem(
       });
     }
 
-    // 4. A ligação de hoje e a reunião na data marcada, ligadas ao lead e ao item.
+    // 5. A ligação de hoje e a reunião na data marcada, ligadas ao lead e ao item.
     await insertSystemActivity(tx, ctx, {
       type: "ligacao",
       subject: callResultSubject("reuniao_marcada"),
@@ -800,7 +882,7 @@ export async function convertProspectingItem(
       ownerUserId,
     });
 
-    // 5. Item convertido; a história anterior viaja com o lead.
+    // 6. Item convertido; a história anterior viaja com o lead.
     await tx
       .update(prospectingItems)
       .set({ status: "reuniao_marcada", calledAt: now, callbackAt: null, leadId, orgId })
@@ -816,7 +898,7 @@ export async function convertProspectingItem(
         ),
       );
 
-    return { leadId, orgId, contactId: contact.id, created, stageBefore, ownerUserId };
+    return { leadId, orgId, contactId: contact.id, created, orgReused, stageBefore, ownerUserId };
   });
 
   // Fora da transação: moveLeadStage continua o único lugar que grava `stage` (R-3).
@@ -859,6 +941,7 @@ export async function convertProspectingItem(
     contactId: saved.contactId,
     created: saved.created,
     reactivated,
+    orgReused: saved.orgReused,
     stage: final?.stage ?? stage,
     advanceFailed,
   };
