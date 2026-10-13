@@ -19,10 +19,13 @@ export const metadata: Metadata = { title: "Minha conta" };
 
 const ROLE_LABELS = { owner: "Responsável", operator: "Operador(a)" } as const;
 
-// Só "/" é atalho de verdade (decisão D11); Esc, Tab e Enter são o comportamento padrão dos
-// diálogos e menus, listados para a pessoa saber que existem.
+// Dois atalhos de verdade (decisão D11, revisada pelo ADR-004, 6.7): "/" foca o campo de busca do
+// header e Ctrl K (Cmd K no Mac) abre a paleta em qualquer tela, inclusive dentro de um campo.
+// Esc, Tab e Enter são o comportamento padrão dos diálogos e menus, listados para a pessoa saber
+// que existem.
 const SHORTCUTS: { keys: string[]; action: string }[] = [
-  { keys: ["/"], action: "Buscar" },
+  { keys: ["Ctrl K", "Cmd K"], action: "Abrir a busca em qualquer tela" },
+  { keys: ["/"], action: "Focar o campo de busca" },
   { keys: ["Esc"], action: "Fechar diálogo ou menu" },
   { keys: ["Tab", "Enter"], action: "Navegar e abrir" },
 ];
@@ -70,14 +73,14 @@ export default async function AccountPage() {
       <FormSection
         id="atalhos"
         title="Atalhos de teclado"
-        description="Funcionam em qualquer tela do CRM, fora de campos de texto."
+        description="Funcionam em qualquer tela do CRM. A barra (/) não dispara dentro de campos de texto; Ctrl K abre a busca mesmo com o foco num campo."
         contentClassName="-mx-4 md:-mx-5"
       >
         <Table>
           <caption className="sr-only">Atalhos de teclado do CRM</caption>
           <TableHeader>
             <TableRow>
-              <TableHead scope="col" className="w-40 pl-4 md:pl-5">
+              <TableHead scope="col" className="w-48 pl-4 md:pl-5">
                 Tecla
               </TableHead>
               <TableHead scope="col">Ação</TableHead>

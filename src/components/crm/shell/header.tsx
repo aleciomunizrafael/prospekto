@@ -1,15 +1,16 @@
-import { Search } from "lucide-react";
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { HeaderCrumbs } from "./header-crumbs";
 import { NewMenu } from "./new-menu";
 import { SearchForm } from "./search-form";
-import { UserMenu } from "./user-menu";
+import { PaletteTrigger } from "./sidebar-search";
 
-// Header do shell (crm-design-system.md, seções 4.1 e 4.2), uma peça para os dois tamanhos:
-// desktop 56 px com caminho, busca, "Novo ▾" e avatar; celular 52 px com voltar, título e lupa.
-// Server Component: as partes interativas (caminho, menus) são Client Components mínimos.
-export function Header({ userName, className }: { userName: string; className?: string }) {
+// Header do shell (crm-design-system.md, seções 4.1 e 4.2; ADR-004, seção 6.1), uma peça para os
+// dois tamanhos: desktop 56 px com caminho, busca e "Novo ▾" (o avatar foi para o rodapé da
+// sidebar, para não haver dois menus iguais na mesma tela); celular 52 px com voltar, título e a
+// lupa, que abre a paleta Ctrl+K. Server Component: as partes interativas são Client Components
+// mínimos. O formulário de busca continua sendo o destino sem JavaScript (/app/busca) e o alvo da
+// tecla "/" (shortcuts.tsx).
+export function Header({ className }: { className?: string }) {
   return (
     <header
       className={cn(
@@ -19,15 +20,8 @@ export function Header({ userName, className }: { userName: string; className?: 
     >
       <HeaderCrumbs />
       <SearchForm className="hidden md:block" inputClassName="md:w-[17.5rem]" />
-      <Link
-        href="/app/busca"
-        aria-label="Buscar"
-        className="flex size-11 shrink-0 items-center justify-center rounded-lg hover:bg-muted md:hidden"
-      >
-        <Search className="size-5" aria-hidden="true" />
-      </Link>
+      <PaletteTrigger className="md:hidden" />
       <NewMenu className="hidden md:inline-flex" />
-      <UserMenu userName={userName} className="hidden md:inline-flex" />
     </header>
   );
 }
