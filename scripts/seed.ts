@@ -23,7 +23,7 @@ import {
   tenants,
   users as usersTable,
 } from "../src/lib/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 const TENANT_ID = process.env.DEFAULT_TENANT_ID ?? "prospekto";
 const TENANT_NAME = "Prospekto Consultoria & Projetos";
@@ -373,14 +373,26 @@ if (seedDemo) {
       },
     ]);
 
-    // Três tarefas: uma solta, uma em andamento ligada ao lead, uma concluída.
+    // Três tarefas: uma solta, uma em andamento ligada ao lead, uma concluída. Posição acima da
+    // última tarefa aberta do tenant (P16: toda inserção de tarefa grava max + 1).
+    const [{ maxPosition }] = await db
+      .select({ maxPosition: sql<number>`coalesce(max(${activities.position}), 0)::float8` })
+      .from(activities)
+      .where(
+        and(
+          eq(activities.tenantId, TENANT_ID),
+          eq(activities.type, "tarefa"),
+          isNull(activities.doneAt),
+        ),
+      );
+    const basePosition = Number(maxPosition);
     await db.insert(activities).values([
       {
         tenantId: TENANT_ID,
         type: "tarefa",
         subject: "Preparar o roteiro de ligações da semana",
         priority: "alta",
-        position: 1,
+        position: basePosition + 1,
         dueAt: new Date(now.getTime() + day),
         ownerUserId: ownerId,
         createdByUserId: ownerId,
@@ -391,7 +403,7 @@ if (seedDemo) {
         subject: "Enviar proposta de patrocínio",
         body: "Montar a simulação com o contador antes de enviar.",
         priority: "media",
-        position: 2,
+        position: basePosition + 2,
         startedAt: new Date(now.getTime() - day),
         dueAt: new Date(now.getTime() + 3 * day),
         leadId: lead.id,
@@ -403,7 +415,7 @@ if (seedDemo) {
         type: "tarefa",
         subject: "Confirmar a reunião de diagnóstico",
         priority: "baixa",
-        position: 3,
+        position: basePosition + 3,
         dueAt: new Date(now.getTime() - 2 * day),
         doneAt: new Date(now.getTime() - day),
         leadId: lead.id,

@@ -48,6 +48,30 @@ describe("listas", () => {
     expect(updated.name).toBe("Vinícolas");
     expect((await listLists(ctx)).map((l) => l.id)).toContain(list.id);
   });
+
+  it("quem liga tem de ser usuário deste tenant (criar e editar)", async () => {
+    const other = await makeTenant();
+    const stranger = await makeUser(other);
+    const base = { name: "Lista com responsável", sourceDetail: "indicação" };
+    await expect(createList(ctx, { ...base, assigneeUserId: stranger })).rejects.toThrow(
+      /não é usuário deste tenant/,
+    );
+    await expect(
+      createList(ctx, { ...base, assigneeUserId: "usuario-inexistente" }),
+    ).rejects.toThrow(/não é usuário deste tenant/);
+    const list = await createList(ctx, base);
+    expect(list.assigneeUserId).toBeNull();
+    await expect(updateList(ctx, { listId: list.id, assigneeUserId: stranger })).rejects.toThrow(
+      /não é usuário deste tenant/,
+    );
+    const mine = await makeUser(ctx);
+    expect((await updateList(ctx, { listId: list.id, assigneeUserId: mine })).assigneeUserId).toBe(
+      mine,
+    );
+    expect(
+      (await updateList(ctx, { listId: list.id, assigneeUserId: null })).assigneeUserId,
+    ).toBeNull();
+  });
 });
 
 describe("itens", () => {

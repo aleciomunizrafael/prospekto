@@ -56,14 +56,14 @@ export default async function ProspectingListPage({
               key={item.id}
               className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-2"
             >
-              <span className="min-w-0 truncate text-sm">
+              <span className="min-w-0 text-sm break-words">
                 <Link
                   href={`/app/prospeccao/${list.id}/${item.id}`}
                   className="font-medium hover:underline"
                 >
                   {item.name}
                 </Link>
-                <span className="crm-meta">
+                <span className="crm-meta whitespace-nowrap">
                   {" "}
                   {item.phone ? formatPhoneBR(item.phone) : "sem telefone"}
                 </span>

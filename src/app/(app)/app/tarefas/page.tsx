@@ -20,11 +20,14 @@ export const metadata: Metadata = { title: "Tarefas" };
 export default async function TasksPage() {
   const ctx = await requireSession();
   const now = new Date();
-  const board = await listTasksBoard(ctx, { now });
+  // A contagem de atrasadas vem do `total` (count no banco), não das linhas carregadas, que
+  // param no teto de 100 por coluna (P13).
+  const [board, overdueBoard] = await Promise.all([
+    listTasksBoard(ctx, { now }),
+    listTasksBoard(ctx, { now, overdueOnly: true }),
+  ]);
   const open = board.a_fazer.total + board.em_andamento.total;
-  const overdue = [...board.a_fazer.rows, ...board.em_andamento.rows].filter(
-    (t) => t.dueAt && t.dueAt.getTime() < now.getTime(),
-  ).length;
+  const overdue = overdueBoard.a_fazer.total + overdueBoard.em_andamento.total;
   const empty = open === 0 && board.concluida.total === 0;
 
   return (

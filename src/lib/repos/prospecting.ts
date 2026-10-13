@@ -18,7 +18,7 @@ import { db, type Db } from "@/lib/db";
 import { activities, prospectingItems, prospectingLists, users } from "@/lib/db/schema";
 import { DISCARD_REASON_LABELS } from "@/lib/crm/labels";
 import { PROSPECTING_STATUSES, type ProspectingStatus } from "@/lib/domain/enums";
-import { NotFoundError } from "@/lib/errors";
+import { NotFoundError, ValidationError } from "@/lib/errors";
 import {
   createListSchema,
   newItemSchema,
@@ -64,11 +64,22 @@ async function requireItem(tx: Db, ctx: Ctx, itemId: string): Promise<Prospectin
   return row;
 }
 
+// Quem liga tem de ser usuário deste tenant (mesma regra de assertTaskReferences em tasks.ts): a
+// FK sozinha aceitaria um id de outro tenant e trocaria um id inexistente por erro de banco.
+async function assertAssignee(tx: Db, ctx: Ctx, assigneeUserId: string): Promise<void> {
+  const [user] = await tx
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.tenantId, ctx.tenantId), eq(users.id, assigneeUserId)));
+  if (!user) throw new ValidationError("O responsável informado não é usuário deste tenant.");
+}
+
 // ---------------------------------------------------------------------------------------------
 // Listas
 
 export async function createList(ctx: Ctx, input: CreateListInput): Promise<ProspectingList> {
   const data = createListSchema.parse(input);
+  if (data.assigneeUserId) await assertAssignee(db, ctx, data.assigneeUserId);
   const [row] = await db
     .insert(prospectingLists)
     .values({
@@ -92,6 +103,7 @@ export async function updateList(ctx: Ctx, input: UpdateListInput): Promise<Pros
   if (data.notes !== undefined) patch.notes = data.notes || null;
   if (data.sourceDetail !== undefined) patch.sourceDetail = data.sourceDetail;
   if (data.assigneeUserId !== undefined) patch.assigneeUserId = data.assigneeUserId || null;
+  if (patch.assigneeUserId) await assertAssignee(db, ctx, patch.assigneeUserId);
   const [row] = await db
     .update(prospectingLists)
     .set(patch)
@@ -148,9 +160,9 @@ export async function deleteList(ctx: Ctx, listId: string): Promise<void> {
 
 const summaryColumns = {
   ...getTableColumns(prospectingLists),
-  total: sql<number>`(select count(*)::int from ${prospectingItems} where ${prospectingItems.listId} = ${prospectingLists.id})`,
-  contacted: sql<number>`(select count(*)::int from ${prospectingItems} where ${prospectingItems.listId} = ${prospectingLists.id} and ${prospectingItems.status} <> 'a_ligar')`,
-  meetings: sql<number>`(select count(*)::int from ${prospectingItems} where ${prospectingItems.listId} = ${prospectingLists.id} and ${prospectingItems.status} = 'reuniao_marcada')`,
+  total: sql<number>`(select count(*)::int from ${prospectingItems} where ${prospectingItems.tenantId} = ${prospectingLists.tenantId} and ${prospectingItems.listId} = ${prospectingLists.id})`,
+  contacted: sql<number>`(select count(*)::int from ${prospectingItems} where ${prospectingItems.tenantId} = ${prospectingLists.tenantId} and ${prospectingItems.listId} = ${prospectingLists.id} and ${prospectingItems.status} <> 'a_ligar')`,
+  meetings: sql<number>`(select count(*)::int from ${prospectingItems} where ${prospectingItems.tenantId} = ${prospectingLists.tenantId} and ${prospectingItems.listId} = ${prospectingLists.id} and ${prospectingItems.status} = 'reuniao_marcada')`,
   assigneeName: users.name,
 };
 
@@ -307,12 +319,16 @@ export async function listItems(
   if (input.search?.trim()) {
     where.push(ilike(prospectingItems.name, `%${input.search.trim().replace(/[%_]/g, "")}%`));
   }
-  return db
-    .select()
-    .from(prospectingItems)
-    .where(and(...where))
-    .orderBy(asc(prospectingItems.position), asc(prospectingItems.createdAt))
-    .limit(1000);
+  return (
+    db
+      .select()
+      .from(prospectingItems)
+      .where(and(...where))
+      .orderBy(asc(prospectingItems.position), asc(prospectingItems.createdAt))
+      // Teto de leitura: uma lista com mais de 1000 empresas (várias colagens de 500, P13) é
+      // truncada em silêncio; paginação ou aviso na tela ficam com a frente C.
+      .limit(1000)
+  );
 }
 
 export async function countItemsByStatus(
