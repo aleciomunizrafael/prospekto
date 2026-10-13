@@ -71,4 +71,23 @@ describe("links da lista de Leads", () => {
     // Nenhum select mostra "não informado".
     expect(html).not.toContain("não informado");
   });
+
+  it("view serializa em leadFiltersToQuery sem interferir nos demais parâmetros (frente A)", () => {
+    expect(leadFiltersToQuery({ view: "quadro" })).toBe("?view=quadro");
+    expect(
+      leadFiltersToQuery({ pipeline: "contadores", stage: "contato", page: 2, view: "lista" }),
+    ).toBe("?pipeline=contadores&stage=contato&page=2&view=lista");
+    expect(leadFiltersToQuery({ pipeline: "contadores" })).toBe("?pipeline=contadores");
+    // Só valores válidos entram no parse; o resto é ignorado.
+    expect(parseLeadFilters({ view: "quadro" }).view).toBe("quadro");
+    expect(parseLeadFilters({ view: "tabela" }).view).toBeUndefined();
+    // Com ?view=lista na URL, a paginação e os chips preservam a visão (ADR-004, 6.2).
+    const filters = parseLeadFilters({ pipeline: "patrocinadores", view: "lista", page: "2" });
+    const html = renderToString(createElement(Pagination, { filters, total: 60, pageSize: 25 }));
+    for (const href of hrefs(html)) expect(href).toContain("view=lista");
+    const toolbar = renderToString(
+      createElement(LeadToolbar, { filters: { ...filters, temperature: "quente" }, users }),
+    );
+    expect(toolbar).toContain('name="view" value="lista"');
+  });
 });
