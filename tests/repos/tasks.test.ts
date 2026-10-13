@@ -9,6 +9,7 @@ import { createActivity, getActivity, listActivities } from "@/lib/repos/activit
 import { createLead, recordLeadActivity, type Lead } from "@/lib/repos/leads";
 import { createOrganization } from "@/lib/repos/organizations";
 import {
+  countOverdueOpenTasks,
   createTask,
   deleteTask,
   getTask,
@@ -347,6 +348,11 @@ describe("listTasksBoard", () => {
     await createTask(own, { subject: "Futura minha", dueAt: nextWeek });
     await createTask(own, { subject: "Sem prazo minha" });
     await createTask(own, { subject: "Vencida dele", dueAt: yesterday, ownerUserId: other });
+    await createTask(own, {
+      subject: "Vencida em andamento",
+      dueAt: yesterday,
+      status: "em_andamento",
+    });
     for (let i = 0; i < 25; i += 1) {
       await createTask(own, { subject: `Feita ${i}`, status: "concluida", dueAt: yesterday });
     }
@@ -370,6 +376,23 @@ describe("listTasksBoard", () => {
       "Vencida minha",
     ]);
     expect(overdue.a_fazer.total).toBe(2);
+    expect(overdue.em_andamento.total).toBe(1);
+
+    // O cabeçalho conta as atrasadas por um count próprio (G25): A fazer ∪ Em andamento, sem
+    // carregar o quadro; com dono, só as dele.
+    expect(await countOverdueOpenTasks(own, { now })).toBe(
+      overdue.a_fazer.total + overdue.em_andamento.total,
+    );
+    const overdueMine = await listTasksBoard(own, {
+      now,
+      overdueOnly: true,
+      ownerUserId: own.userId!,
+    });
+    expect(await countOverdueOpenTasks(own, { now, ownerUserId: own.userId! })).toBe(
+      overdueMine.a_fazer.total + overdueMine.em_andamento.total,
+    );
+    expect(await countOverdueOpenTasks(own, { now, ownerUserId: own.userId! })).toBe(2);
+    expect(await countOverdueOpenTasks(own, { now: yesterday })).toBe(0);
 
     const today = await listTasksBoard(own, { now, dueToday: true });
     expect(today.a_fazer.rows.map((t) => t.subject).sort()).toEqual([

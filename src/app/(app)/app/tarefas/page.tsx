@@ -15,7 +15,7 @@ import {
 } from "@/lib/crm/task-board";
 import { listOrganizations } from "@/lib/repos/organizations";
 import { listProjects } from "@/lib/repos/projects";
-import { getTask, listTasksBoard } from "@/lib/repos/tasks";
+import { countOverdueOpenTasks, getTask, listTasksBoard } from "@/lib/repos/tasks";
 import { listTenantUsers } from "@/lib/repos/users";
 import { requireSession } from "@/lib/session";
 import { uuidSchema } from "@/lib/validation/common";
@@ -42,16 +42,17 @@ export default async function TasksPage({ searchParams }: PageProps<"/app/tarefa
     ownerUserId: filters.mine ? ctx.userId : undefined,
     dueToday: filters.dueToday,
   };
-  // A contagem de atrasadas vem de um count próprio: as linhas param no teto por coluna (P13).
-  const [board, overdueBoard, users, organizations, projects, task] = await Promise.all([
+  // A contagem de atrasadas vem de um count próprio (countOverdueOpenTasks), sem carregar o
+  // quadro de novo: as linhas param no teto por coluna (P13). O recorte "vencem hoje" não entra
+  // porque toda atrasada (due_at < agora) já vence até o fim de hoje.
+  const [board, overdue, users, organizations, projects, task] = await Promise.all([
     listTasksBoard(ctx, { ...scope, overdueOnly: filters.overdue }),
-    listTasksBoard(ctx, { ...scope, overdueOnly: true }),
+    countOverdueOpenTasks(ctx, { now, ownerUserId: scope.ownerUserId }),
     listTenantUsers(ctx),
     listOrganizations(ctx, { limit: 300 }),
     listProjects(ctx, { limit: 500 }),
     taskParam.success ? getTask(ctx, taskParam.data) : null,
   ]);
-  const overdue = overdueBoard.a_fazer.total + overdueBoard.em_andamento.total;
   const filtered = hasTaskFilters(filters);
   const empty =
     board.a_fazer.rows.length + board.em_andamento.rows.length + board.concluida.rows.length === 0;

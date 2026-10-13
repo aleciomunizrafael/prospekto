@@ -173,6 +173,26 @@ export async function listTasksBoard(
   return { a_fazer: aFazer, em_andamento: emAndamento, concluida };
 }
 
+// Contagem de atrasadas do cabeçalho do quadro: um único count sobre as abertas (done_at nulo =
+// A fazer ∪ Em andamento) com due_at < agora, sem carregar as linhas (que param no teto, P13).
+export async function countOverdueOpenTasks(
+  ctx: Ctx,
+  input: { now: Date; ownerUserId?: string },
+): Promise<number> {
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(activities)
+    .where(
+      and(
+        ...taskScope(ctx),
+        isNull(activities.doneAt),
+        lt(activities.dueAt, input.now),
+        ...(input.ownerUserId ? [eq(activities.ownerUserId, input.ownerUserId)] : []),
+      ),
+    );
+  return Number(total);
+}
+
 export async function getTask(ctx: Ctx, activityId: string): Promise<TaskRow | null> {
   const [row] = await taskQuery(db).where(and(...taskScope(ctx), eq(activities.id, activityId)));
   return row ? toTaskRow(row) : null;

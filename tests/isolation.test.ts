@@ -34,6 +34,7 @@ import {
   listSimulations,
 } from "@/lib/repos/simulations";
 import {
+  countOverdueOpenTasks,
   createTask,
   getTask,
   listOpenTasksForOwner,
@@ -217,6 +218,12 @@ describe("isolamento entre tenants", () => {
       (await searchTasks(a, { search: "Tarefa" })).every((t) => t.tenantId === a.tenantId),
     ).toBe(true);
     expect((await searchTasks(a, { search: "solta b" })).length).toBe(0);
+    // O count de atrasadas do cabeçalho (G25) não enxerga as do outro tenant nem o dono alheio.
+    const overdueB = await countOverdueOpenTasks(b, { now });
+    await createTask(a, { subject: "Atrasada a", dueAt: new Date(now.getTime() - 60_000) });
+    expect(await countOverdueOpenTasks(a, { now })).toBe(2);
+    expect(await countOverdueOpenTasks(b, { now })).toBe(overdueB);
+    expect(await countOverdueOpenTasks(b, { now, ownerUserId: a.userId! })).toBe(0);
   });
 
   it("últimas atividades ficam no próprio tenant", async () => {
