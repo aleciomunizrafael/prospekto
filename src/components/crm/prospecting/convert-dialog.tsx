@@ -32,7 +32,9 @@ import {
 // "Reunião marcada" (ADR-004, 6.6 e 6.12): a empresa vira organização, a pessoa vira contato e lead
 // em Patrocinadores (Qualificado) e a reunião fica no histórico. E-mail obrigatório (o CRM precisa
 // dele); telefone da pessoa opcional e nunca o da empresa. O toast diz o que aconteceu de fato
-// (criado, reaproveitado, reativado, ou estágio não avançado) com a ação "abrir lead".
+// (criado, reaproveitado, reativado, ou estágio não avançado) com a ação "abrir lead". Os campos
+// ficam em `ConvertFields`, puro, para o teste de renderToString (o Dialog do base-ui não
+// renderiza o conteúdo no servidor).
 export type ConvertDefaults = {
   users: Option[];
   defaultOwnerUserId: string | null;
@@ -56,6 +58,81 @@ const MEETING_KIND_OPTIONS: Option[] = [
   { value: "simulacao", label: "Simulação para empresa (20 min)" },
   { value: "diagnostico", label: "Diagnóstico com o contador (30 min)" },
 ];
+
+// "Responsável pelo lead" nunca fica vazio: sem escolha, o servidor usa quem liga pela lista ou o
+// usuário da sessão (convertProspectingItem; sair de Novo exige dono, R-3). A opção vazia diz isso
+// em vez de prometer um "sem responsável" que não existe aqui.
+export function ConvertFields({
+  itemId,
+  users,
+  defaultOwnerUserId,
+  defaultMeetingAt,
+}: ConvertDefaults & { itemId: string }) {
+  return (
+    <>
+      <HiddenField name="itemId" value={itemId} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TextField
+          name="contactName"
+          label="Nome de quem vai à reunião"
+          required
+          autoComplete="off"
+        />
+        <TextField
+          name="email"
+          label="E-mail"
+          type="email"
+          inputMode="email"
+          autoComplete="off"
+          required
+          help="Peça o e-mail na ligação: o convite da reunião e o CRM precisam dele."
+        />
+        <TextField
+          name="contactPhone"
+          label="Telefone de quem vai à reunião"
+          type="tel"
+          inputMode="tel"
+          autoComplete="off"
+          help="Opcional. O telefone da empresa já fica na organização."
+        />
+        <TextField name="title" label="Cargo" autoComplete="off" />
+        <DateTimeField
+          name="meetingAt"
+          label="Data e hora da reunião"
+          required
+          defaultValue={defaultMeetingAt}
+        />
+        <SelectField
+          name="meetingKind"
+          label="Tipo"
+          options={MEETING_KIND_OPTIONS}
+          defaultValue="diagnostico"
+        />
+        <SelectField
+          name="taxRegime"
+          label="Regime tributário, se soube"
+          placeholder="Não perguntei"
+          options={TAX_REGIMES.map((r) => ({ value: r, label: TAX_REGIME_LABELS[r] }))}
+        />
+        <SelectField
+          name="interest"
+          label="Interesse"
+          options={LEAD_INTERESTS.map((i) => ({ value: i, label: INTEREST_LABELS[i] }))}
+          defaultValue="nao_sei"
+        />
+        <SelectField
+          name="ownerUserId"
+          label="Responsável pelo lead"
+          placeholder="Quem liga pela lista (padrão)"
+          help="Sem escolha, o lead fica com quem liga pela lista ou com você."
+          options={users}
+          defaultValue={defaultOwnerUserId ?? ""}
+          className="sm:col-span-2"
+        />
+      </div>
+    </>
+  );
+}
 
 export function ConvertDialog({
   item,
@@ -129,65 +206,12 @@ export function ConvertDialog({
             setOpen(false);
           }}
         >
-          <HiddenField name="itemId" value={item.id} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <TextField
-              name="contactName"
-              label="Nome de quem vai à reunião"
-              required
-              autoComplete="off"
-            />
-            <TextField
-              name="email"
-              label="E-mail"
-              type="email"
-              inputMode="email"
-              autoComplete="off"
-              required
-              help="Peça o e-mail na ligação: o convite da reunião e o CRM precisam dele."
-            />
-            <TextField
-              name="contactPhone"
-              label="Telefone de quem vai à reunião"
-              type="tel"
-              inputMode="tel"
-              autoComplete="off"
-              help="Opcional. O telefone da empresa já fica na organização."
-            />
-            <TextField name="title" label="Cargo" autoComplete="off" />
-            <DateTimeField
-              name="meetingAt"
-              label="Data e hora da reunião"
-              required
-              defaultValue={defaultMeetingAt}
-            />
-            <SelectField
-              name="meetingKind"
-              label="Tipo"
-              options={MEETING_KIND_OPTIONS}
-              defaultValue="diagnostico"
-            />
-            <SelectField
-              name="taxRegime"
-              label="Regime tributário, se soube"
-              placeholder="Não perguntei"
-              options={TAX_REGIMES.map((r) => ({ value: r, label: TAX_REGIME_LABELS[r] }))}
-            />
-            <SelectField
-              name="interest"
-              label="Interesse"
-              options={LEAD_INTERESTS.map((i) => ({ value: i, label: INTEREST_LABELS[i] }))}
-              defaultValue="nao_sei"
-            />
-            <SelectField
-              name="ownerUserId"
-              label="Responsável pelo lead"
-              placeholder="Sem responsável"
-              options={users}
-              defaultValue={defaultOwnerUserId ?? ""}
-              className="sm:col-span-2"
-            />
-          </div>
+          <ConvertFields
+            itemId={item.id}
+            users={users}
+            defaultOwnerUserId={defaultOwnerUserId}
+            defaultMeetingAt={defaultMeetingAt}
+          />
         </ActionForm>
       </DialogContent>
     </Dialog>

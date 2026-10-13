@@ -10,6 +10,7 @@ import {
   type ItemCardItem,
   type ItemCardsContext,
 } from "@/components/crm/prospecting/item-cards";
+import { ConvertFields } from "@/components/crm/prospecting/convert-dialog";
 import { ItemFilters, type ItemCounts } from "@/components/crm/prospecting/item-filters";
 import { ListTable } from "@/components/crm/prospecting/list-table";
 import type { ProspectingListSummary } from "@/lib/repos/prospecting";
@@ -180,6 +181,28 @@ describe("ItemCards", () => {
     );
     expect(text(fresh)).toContain("Reunião marcada");
     expect(text(fresh)).not.toContain("Ver lead");
+  });
+});
+
+// Campos do "Reunião marcada": o responsável nunca fica vazio no servidor (quem liga pela lista ou
+// o usuário da sessão), então a opção vazia diz o padrão em vez de prometer "Sem responsável".
+describe("ConvertFields", () => {
+  it("responsável: opção vazia nomeia o padrão, ajuda explica e o padrão vem selecionado", () => {
+    const html = renderToString(
+      createElement(ConvertFields, {
+        itemId: "i1",
+        users: [{ value: "u1", label: "Daniela Demo" }],
+        defaultOwnerUserId: "u1",
+        defaultMeetingAt: "2026-10-14T10:00",
+      }),
+    );
+    expect(html).not.toContain("Sem responsável");
+    const select = html.match(/<select [^>]*name="ownerUserId"[^>]*>[\s\S]*?<\/select>/)?.[0] ?? "";
+    expect(select).toContain('<option value="">Quem liga pela lista (padrão)</option>');
+    expect(select).toMatch(/<option [^>]*value="u1"[^>]*>Daniela Demo</);
+    expect(select.match(/<option [^>]*value="u1"[^>]*>/)?.[0]).toContain("selected");
+    expect(text(html)).toContain("Sem escolha, o lead fica com quem liga pela lista ou com você.");
+    expect(html).toContain('name="itemId" value="i1"');
   });
 });
 
