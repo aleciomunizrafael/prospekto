@@ -10,9 +10,19 @@ import { chmod, mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { generateRandomString } from "better-auth/crypto";
+import { isDeployed } from "../src/env";
 import { auth } from "../src/lib/auth";
 import { db } from "../src/lib/db";
-import { culturalProjects, organizations, tenants } from "../src/lib/db/schema";
+import {
+  activities,
+  culturalProjects,
+  leads,
+  organizations,
+  prospectingItems,
+  prospectingLists,
+  tenants,
+  users as usersTable,
+} from "../src/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 
 const TENANT_ID = process.env.DEFAULT_TENANT_ID ?? "prospekto";
@@ -160,6 +170,249 @@ if (process.env.SEED_EXAMPLE === "1") {
     });
     console.log(
       `projeto de exemplo criado: ${slug} (estágio avaliacao, sem valor aprovado; publicação no site exige autorização por escrito do proponente)`,
+    );
+  }
+}
+
+// Dados de demonstração da estrutura do CRM (ADR-004; plano, Fundação): uma lista de prospecção
+// com seis empresas fictícias, três tarefas e telefone em duas organizações. Roda por padrão fora
+// de ambiente implantado (SEED_DEMO=0 desliga) e só com SEED_DEMO=1 em produção. Idempotente pelo
+// nome da lista. Nomes, telefones (+5554900000001 a 06) e e-mail (@example.test) são fictícios.
+const seedDemo = process.env.SEED_DEMO === "1" || (process.env.SEED_DEMO !== "0" && !isDeployed);
+if (seedDemo) {
+  const DEMO_LIST = "Vinícolas do Vale";
+  const [existingList] = await db
+    .select({ id: prospectingLists.id })
+    .from(prospectingLists)
+    .where(and(eq(prospectingLists.tenantId, TENANT_ID), eq(prospectingLists.name, DEMO_LIST)));
+  if (existingList) {
+    console.log(`dados de demonstração já existem, pulados: ${DEMO_LIST}`);
+  } else {
+    const [owner] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.tenantId, TENANT_ID))
+      .orderBy(usersTable.createdAt)
+      .limit(1);
+    const ownerId = owner?.id ?? null;
+    const now = new Date();
+    const day = 24 * 60 * 60_000;
+    const calendar = (d: Date) => d.toISOString().slice(0, 10);
+
+    // Organizações da demonstração com o telefone da empresa (ADR-004, 6.4.7).
+    async function ensureCompany(name: string, phone: string, city: string) {
+      const [found] = await db
+        .select({ id: organizations.id, phone: organizations.phone })
+        .from(organizations)
+        .where(
+          and(
+            eq(organizations.tenantId, TENANT_ID),
+            eq(organizations.type, "empresa"),
+            eq(organizations.name, name),
+          ),
+        );
+      if (found) {
+        if (!found.phone) {
+          await db.update(organizations).set({ phone }).where(eq(organizations.id, found.id));
+        }
+        return found.id;
+      }
+      const [created] = await db
+        .insert(organizations)
+        .values({ tenantId: TENANT_ID, type: "empresa", name, phone, city, uf: "RS" })
+        .returning({ id: organizations.id });
+      return created.id;
+    }
+    const vinicolaId = await ensureCompany("Vinícola Exemplo", "+5554900000001", "Bento Gonçalves");
+    await ensureCompany("Metalúrgica Modelo", "+5554900000002", "Caxias do Sul");
+
+    // Lead PJ fictício ligado à vinícola (para a tarefa em andamento ter vínculo).
+    const leadEmail = "rodrigo.exemplo@example.test";
+    let [lead] = await db
+      .select({ id: leads.id })
+      .from(leads)
+      .where(
+        and(eq(leads.tenantId, TENANT_ID), eq(leads.email, leadEmail), eq(leads.segment, "PJ")),
+      );
+    if (!lead) {
+      [lead] = await db
+        .insert(leads)
+        .values({
+          tenantId: TENANT_ID,
+          segment: "PJ",
+          pipeline: "patrocinadores",
+          stage: "novo",
+          interest: "rouanet",
+          name: "Rodrigo Exemplo",
+          email: leadEmail,
+          source: "outro",
+          sourceDetail: "dados de demonstração",
+          orgId: vinicolaId,
+          ownerUserId: ownerId,
+          attributes: { empresa: "Vinícola Exemplo", cargo: "dono_ou_socio" },
+        })
+        .returning({ id: leads.id });
+    }
+
+    const [list] = await db
+      .insert(prospectingLists)
+      .values({
+        tenantId: TENANT_ID,
+        name: DEMO_LIST,
+        region: "Bento Gonçalves/RS",
+        sourceDetail: "busca pública (dados de demonstração)",
+        notes:
+          "Ligar entre 9h e 11h. Abertura: quem é você, o que a Prospekto faz e o convite para contar como decidem apoios.",
+        assigneeUserId: ownerId,
+        createdByUserId: ownerId,
+      })
+      .returning({ id: prospectingLists.id });
+
+    const items = await db
+      .insert(prospectingItems)
+      .values([
+        {
+          tenantId: TENANT_ID,
+          listId: list.id,
+          name: "Vinícola Exemplo",
+          segment: "Vinícolas",
+          phone: "+5554900000001",
+          hook: "Lançaram um rótulo novo em setembro.",
+          address: "Vale dos Vinhedos",
+          size: "Média",
+          position: 1,
+          status: "a_ligar",
+        },
+        {
+          tenantId: TENANT_ID,
+          listId: list.id,
+          name: "Vinícola Modelo",
+          segment: "Vinícolas",
+          phone: "+5554900000002",
+          hook: "Patrocinam a festa da colheita há anos.",
+          position: 2,
+          status: "sem_resposta",
+          calledAt: new Date(now.getTime() - 2 * day),
+        },
+        {
+          tenantId: TENANT_ID,
+          listId: list.id,
+          name: "Adega Fictícia",
+          segment: "Vinícolas",
+          phone: "+5554900000003",
+          hook: "Abriram loja na serra.",
+          position: 3,
+          status: "retornar",
+          calledAt: new Date(now.getTime() - day),
+          callbackAt: calendar(new Date(now.getTime() + 2 * day)),
+          notes: "Falar com o financeiro na quinta.",
+        },
+        {
+          tenantId: TENANT_ID,
+          listId: list.id,
+          name: "Cantina Exemplar",
+          segment: "Vinícolas",
+          phone: null,
+          info: "Telefone informado: ramal interno, sem número externo.",
+          position: 4,
+          status: "a_ligar",
+        },
+        {
+          tenantId: TENANT_ID,
+          listId: list.id,
+          name: "Metalúrgica Modelo",
+          segment: "Metalúrgicas",
+          phone: "+5554900000005",
+          hook: "Ampliaram a fábrica este ano.",
+          position: 5,
+          status: "descartado",
+          calledAt: new Date(now.getTime() - 3 * day),
+        },
+        {
+          tenantId: TENANT_ID,
+          listId: list.id,
+          name: "Espumantes Ilustrativos",
+          segment: "Vinícolas",
+          phone: "+5554900000006",
+          hook: "Prêmio em concurso nacional.",
+          position: 6,
+          status: "a_ligar",
+        },
+      ])
+      .returning({ id: prospectingItems.id, name: prospectingItems.name });
+    const byName = Object.fromEntries(items.map((i) => [i.name, i.id]));
+
+    // Ligações registradas nos itens (sem resposta, retorno e descarte com motivo).
+    await db.insert(activities).values([
+      {
+        tenantId: TENANT_ID,
+        type: "ligacao",
+        subject: "Ligação: sem resposta",
+        data: { result: "sem_resposta" },
+        occurredAt: new Date(now.getTime() - 2 * day),
+        prospectingItemId: byName["Vinícola Modelo"],
+        createdByUserId: ownerId,
+      },
+      {
+        tenantId: TENANT_ID,
+        type: "ligacao",
+        subject: "Ligação: retornar",
+        data: { result: "retornar", callbackAt: calendar(new Date(now.getTime() + 2 * day)) },
+        occurredAt: new Date(now.getTime() - day),
+        prospectingItemId: byName["Adega Fictícia"],
+        createdByUserId: ownerId,
+      },
+      {
+        tenantId: TENANT_ID,
+        type: "ligacao",
+        subject: "Ligação: descartada (sem interesse)",
+        data: { result: "descartado", reason: "sem_interesse" },
+        occurredAt: new Date(now.getTime() - 3 * day),
+        prospectingItemId: byName["Metalúrgica Modelo"],
+        createdByUserId: ownerId,
+      },
+    ]);
+
+    // Três tarefas: uma solta, uma em andamento ligada ao lead, uma concluída.
+    await db.insert(activities).values([
+      {
+        tenantId: TENANT_ID,
+        type: "tarefa",
+        subject: "Preparar o roteiro de ligações da semana",
+        priority: "alta",
+        position: 1,
+        dueAt: new Date(now.getTime() + day),
+        ownerUserId: ownerId,
+        createdByUserId: ownerId,
+      },
+      {
+        tenantId: TENANT_ID,
+        type: "tarefa",
+        subject: "Enviar proposta de patrocínio",
+        body: "Montar a simulação com o contador antes de enviar.",
+        priority: "media",
+        position: 2,
+        startedAt: new Date(now.getTime() - day),
+        dueAt: new Date(now.getTime() + 3 * day),
+        leadId: lead.id,
+        ownerUserId: ownerId,
+        createdByUserId: ownerId,
+      },
+      {
+        tenantId: TENANT_ID,
+        type: "tarefa",
+        subject: "Confirmar a reunião de diagnóstico",
+        priority: "baixa",
+        position: 3,
+        dueAt: new Date(now.getTime() - 2 * day),
+        doneAt: new Date(now.getTime() - day),
+        leadId: lead.id,
+        ownerUserId: ownerId,
+        createdByUserId: ownerId,
+      },
+    ]);
+    console.log(
+      `dados de demonstração criados: lista ${DEMO_LIST} (6 empresas), 3 tarefas, 2 organizações com telefone`,
     );
   }
 }
