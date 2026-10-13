@@ -15,6 +15,7 @@ import { auth } from "../src/lib/auth";
 import { db } from "../src/lib/db";
 import {
   activities,
+  contributions,
   culturalProjects,
   leads,
   organizations,
@@ -174,10 +175,12 @@ if (process.env.SEED_EXAMPLE === "1") {
   }
 }
 
-// Dados de demonstração da estrutura do CRM (ADR-004; plano, Fundação): uma lista de prospecção
-// com seis empresas fictícias, três tarefas e telefone em duas organizações. Roda por padrão fora
-// de ambiente implantado (SEED_DEMO=0 desliga) e só com SEED_DEMO=1 em produção. Idempotente pelo
-// nome da lista. Nomes, telefones (+5554900000001 a 06) e e-mail (@example.test) são fictícios.
+// Dados de demonstração da estrutura do CRM (ADR-004; plano, Fundação e Integração): uma lista de
+// prospecção com seis empresas fictícias, três tarefas, telefone em duas organizações e, no bloco
+// seguinte, leads em todos os estágios de Patrocinadores com um projeto e aportes para o quadro e
+// a régua "Carteira". Roda por padrão fora de ambiente implantado (SEED_DEMO=0 desliga) e só com
+// SEED_DEMO=1 em produção. Idempotente pelo nome da lista e pelo e-mail de cada lead. Nomes,
+// CNPJs, telefones (+5554900000001 a 11) e e-mails (@example.test) são fictícios.
 const seedDemo = process.env.SEED_DEMO === "1" || (process.env.SEED_DEMO !== "0" && !isDeployed);
 if (seedDemo) {
   const DEMO_LIST = "Vinícolas do Vale";
@@ -199,34 +202,18 @@ if (seedDemo) {
     const day = 24 * 60 * 60_000;
     const calendar = (d: Date) => d.toISOString().slice(0, 10);
 
-    // Organizações da demonstração com o telefone da empresa (ADR-004, 6.4.7).
-    async function ensureCompany(name: string, phone: string, city: string) {
-      const [found] = await db
-        .select({ id: organizations.id, phone: organizations.phone })
-        .from(organizations)
-        .where(
-          and(
-            eq(organizations.tenantId, TENANT_ID),
-            eq(organizations.type, "empresa"),
-            eq(organizations.name, name),
-          ),
-        );
-      if (found) {
-        if (!found.phone) {
-          await db.update(organizations).set({ phone }).where(eq(organizations.id, found.id));
-        }
-        return found.id;
-      }
-      const [created] = await db
-        .insert(organizations)
-        .values({ tenantId: TENANT_ID, type: "empresa", name, phone, city, uf: "RS" })
-        .returning({ id: organizations.id });
-      return created.id;
-    }
-    const vinicolaId = await ensureCompany("Vinícola Exemplo", "+5554900000001", "Bento Gonçalves");
-    await ensureCompany("Metalúrgica Modelo", "+5554900000002", "Caxias do Sul");
+    // Organizações da demonstração com o telefone da empresa (ADR-004, 6.4.7) e CNPJ fictício
+    // (dígitos verificadores válidos, para a folha "Editar" aceitar salvar).
+    const vinicolaId = await ensureCompany(
+      "Vinícola Exemplo",
+      "+5554900000001",
+      "Bento Gonçalves",
+      "11222333000181",
+    );
+    await ensureCompany("Metalúrgica Modelo", "+5554900000002", "Caxias do Sul", "12345678000195");
 
-    // Lead PJ fictício ligado à vinícola (para a tarefa em andamento ter vínculo).
+    // Lead PJ fictício ligado à vinícola (para a tarefa em andamento ter vínculo), com o telefone
+    // da pessoa para o "Ligar" e o "Abrir WhatsApp" do lead.
     const leadEmail = "rodrigo.exemplo@example.test";
     let [lead] = await db
       .select({ id: leads.id })
@@ -245,6 +232,7 @@ if (seedDemo) {
           interest: "rouanet",
           name: "Rodrigo Exemplo",
           email: leadEmail,
+          phone: "+5554900000011",
           source: "outro",
           sourceDetail: "dados de demonstração",
           orgId: vinicolaId,
@@ -337,6 +325,8 @@ if (seedDemo) {
           hook: "Prêmio em concurso nacional.",
           position: 6,
           status: "a_ligar",
+          // "WhatsApp aberto há 2 d": o CRM só sabe que a mensagem foi aberta com o texto.
+          whatsappSentAt: new Date(now.getTime() - 2 * day),
         },
       ])
       .returning({ id: prospectingItems.id, name: prospectingItems.name });
@@ -369,6 +359,16 @@ if (seedDemo) {
         data: { result: "descartado", reason: "sem_interesse" },
         occurredAt: new Date(now.getTime() - 3 * day),
         prospectingItemId: byName["Metalúrgica Modelo"],
+        createdByUserId: ownerId,
+      },
+      {
+        tenantId: TENANT_ID,
+        type: "whatsapp",
+        subject: "WhatsApp enviado",
+        body: "Olá! Aqui é a Daniela, da Prospekto. Trabalhamos com projetos culturais nas leis de incentivo e queria entender como a empresa decide apoios e patrocínios. Responda SAIR se não quiser mensagens por aqui.",
+        data: { channel: "whatsapp" },
+        occurredAt: new Date(now.getTime() - 2 * day),
+        prospectingItemId: byName["Espumantes Ilustrativos"],
         createdByUserId: ownerId,
       },
     ]);
@@ -427,6 +427,295 @@ if (seedDemo) {
       `dados de demonstração criados: lista ${DEMO_LIST} (6 empresas), 3 tarefas, 2 organizações com telefone`,
     );
   }
+
+  // Quadro de leads e régua "Carteira" (frente A; Integração): leads fictícios em todos os
+  // estágios de Patrocinadores, um proponente com um projeto captando e aportes em proposta,
+  // termo assinado e depositado. Idempotente por e-mail (um lead a mais numa base antiga entra).
+  const [owner] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.tenantId, TENANT_ID))
+    .orderBy(usersTable.createdAt)
+    .limit(1);
+  const ownerId = owner?.id ?? null;
+  const now = new Date();
+  const day = 24 * 60 * 60_000;
+  const at = (days: number) => new Date(now.getTime() + days * day);
+  const calendar = (d: Date) => d.toISOString().slice(0, 10);
+
+  const metalurgicaId = await ensureCompany(
+    "Metalúrgica Modelo",
+    "+5554900000002",
+    "Caxias do Sul",
+    "12345678000195",
+  );
+  const farmaciasId = await ensureCompany(
+    "Rede Farmácias Fictícia",
+    "+5554900000007",
+    "Garibaldi",
+    "98765432000198",
+  );
+  let [proponent] = await db
+    .select({ id: organizations.id })
+    .from(organizations)
+    .where(
+      and(
+        eq(organizations.tenantId, TENANT_ID),
+        eq(organizations.type, "proponente"),
+        eq(organizations.name, "Produtora Fictícia"),
+      ),
+    );
+  if (!proponent) {
+    [proponent] = await db
+      .insert(organizations)
+      .values({
+        tenantId: TENANT_ID,
+        type: "proponente",
+        name: "Produtora Fictícia",
+        city: "Caxias do Sul",
+        uf: "RS",
+      })
+      .returning({ id: organizations.id });
+  }
+  const projectSlug = "festival-ficticio-de-inverno";
+  let [project] = await db
+    .select({ id: culturalProjects.id })
+    .from(culturalProjects)
+    .where(and(eq(culturalProjects.tenantId, TENANT_ID), eq(culturalProjects.slug, projectSlug)));
+  if (!project) {
+    [project] = await db
+      .insert(culturalProjects)
+      .values({
+        tenantId: TENANT_ID,
+        proponentOrgId: proponent.id,
+        name: "Festival Fictício de Inverno",
+        slug: projectSlug,
+        mechanism: "rouanet_art18",
+        stage: "captando",
+        stageEnteredAt: at(-40),
+        approvedAmount: 1_500_000,
+        // Já conta o aporte depositado abaixo (regra R-6: soma dos depositados).
+        raisedAmount: 150_000,
+        fundraisingDeadline: calendar(at(200)),
+        fundraisingFeeAmount: 150_000,
+        city: "Caxias do Sul",
+        uf: "RS",
+        culturalSegment: "Música",
+        ownerUserId: ownerId,
+      })
+      .returning({ id: culturalProjects.id });
+  }
+
+  type DemoLead = {
+    name: string;
+    email: string;
+    stage: string;
+    segment: "PJ" | "PF";
+    company?: string;
+    orgId?: string | null;
+    temperature: "frio" | "morno" | "quente";
+    nextActionAt?: Date | null;
+    stageEnteredAt: Date;
+    lostReason?: "sem_interesse" | "sem_irpj";
+    contribution?: {
+      amount: number;
+      status: "proposta" | "termo_assinado" | "depositado";
+      deposited?: number;
+    };
+  };
+  const demoLeads: DemoLead[] = [
+    {
+      name: "Fernanda Lorenzi",
+      email: "fernanda.ficticia@example.test",
+      stage: "novo",
+      segment: "PJ",
+      company: "Cooperativa Fictícia",
+      temperature: "morno",
+      nextActionAt: at(-2),
+      stageEnteredAt: at(-3),
+    },
+    {
+      name: "Carlos Bettin",
+      email: "carlos.ficticio@example.test",
+      stage: "novo",
+      segment: "PJ",
+      company: "Transportes Fictícios",
+      temperature: "frio",
+      stageEnteredAt: at(-1),
+    },
+    {
+      name: "Joana Pires",
+      email: "joana.ficticia@example.test",
+      stage: "qualificado",
+      segment: "PJ",
+      company: "Metalúrgica Modelo",
+      orgId: metalurgicaId,
+      temperature: "quente",
+      nextActionAt: at(1),
+      stageEnteredAt: at(-4),
+    },
+    {
+      name: "Marcos Dalla Costa",
+      email: "marcos.ficticio@example.test",
+      stage: "qualificado",
+      segment: "PF",
+      temperature: "morno",
+      nextActionAt: at(3),
+      stageEnteredAt: at(-2),
+    },
+    {
+      name: "Beatriz Maggioni",
+      email: "beatriz.ficticia@example.test",
+      stage: "diagnostico",
+      segment: "PJ",
+      company: "Rede Farmácias Fictícia",
+      orgId: farmaciasId,
+      temperature: "quente",
+      nextActionAt: at(0.2),
+      stageEnteredAt: at(-6),
+    },
+    {
+      name: "Paulo Zanella",
+      email: "paulo.ficticio@example.test",
+      stage: "proposta",
+      segment: "PJ",
+      company: "Rede Farmácias Fictícia",
+      orgId: farmaciasId,
+      temperature: "quente",
+      nextActionAt: at(2),
+      stageEnteredAt: at(-8),
+      contribution: { amount: 250_000, status: "proposta" },
+    },
+    {
+      name: "Lúcia Sartori",
+      email: "lucia.ficticia@example.test",
+      stage: "proposta",
+      segment: "PF",
+      temperature: "morno",
+      nextActionAt: at(5),
+      stageEnteredAt: at(-3),
+      contribution: { amount: 100_000, status: "proposta" },
+    },
+    {
+      name: "André Bortolini",
+      email: "andre.ficticio@example.test",
+      stage: "termo",
+      segment: "PJ",
+      company: "Metalúrgica Modelo",
+      orgId: metalurgicaId,
+      temperature: "quente",
+      nextActionAt: at(4),
+      stageEnteredAt: at(-10),
+      contribution: { amount: 400_000, status: "termo_assinado" },
+    },
+    {
+      name: "Cláudio Bertolini",
+      email: "claudio.ficticio@example.test",
+      stage: "aporte",
+      segment: "PJ",
+      company: "Rede Farmácias Fictícia",
+      orgId: farmaciasId,
+      temperature: "quente",
+      nextActionAt: at(6),
+      stageEnteredAt: at(-12),
+      contribution: { amount: 150_000, status: "depositado", deposited: 150_000 },
+    },
+    {
+      name: "Helena Casagrande",
+      email: "helena.ficticia@example.test",
+      stage: "perdido",
+      segment: "PJ",
+      company: "Vidraçaria Fictícia",
+      temperature: "frio",
+      stageEnteredAt: at(-30),
+      lostReason: "sem_interesse",
+    },
+  ];
+  let createdLeads = 0;
+  for (const d of demoLeads) {
+    const [existing] = await db
+      .select({ id: leads.id })
+      .from(leads)
+      .where(
+        and(eq(leads.tenantId, TENANT_ID), eq(leads.email, d.email), eq(leads.segment, d.segment)),
+      );
+    if (existing) continue;
+    const [lead] = await db
+      .insert(leads)
+      .values({
+        tenantId: TENANT_ID,
+        segment: d.segment,
+        pipeline: "patrocinadores",
+        stage: d.stage,
+        stageEnteredAt: d.stageEnteredAt,
+        interest: "rouanet",
+        name: d.name,
+        email: d.email,
+        source: "outro",
+        sourceDetail: "dados de demonstração",
+        orgId: d.orgId ?? null,
+        ownerUserId: d.stage === "novo" ? null : ownerId,
+        temperature: d.temperature,
+        score: d.temperature === "quente" ? 60 : d.temperature === "morno" ? 30 : 5,
+        nextActionAt: d.nextActionAt ?? null,
+        lastContactAt: d.stage === "novo" ? null : at(-1),
+        lostReason: d.lostReason ?? null,
+        attributes: d.company ? { empresa: d.company, cargo: "dono_ou_socio" } : {},
+      })
+      .returning({ id: leads.id });
+    createdLeads += 1;
+    if (d.contribution) {
+      const c = d.contribution;
+      await db.insert(contributions).values({
+        tenantId: TENANT_ID,
+        projectId: project.id,
+        leadId: lead.id,
+        orgId: d.orgId ?? null,
+        type: "patrocinio",
+        mechanism: "rouanet_art18",
+        status: c.status,
+        proposedAmount: c.amount,
+        expectedCloseAt: c.status === "proposta" ? calendar(at(10)) : null,
+        termSignedAt: c.status === "proposta" ? null : calendar(at(-5)),
+        depositedAmount: c.deposited ?? null,
+        depositedAt: c.deposited ? calendar(at(-2)) : null,
+      });
+    }
+  }
+  if (createdLeads > 0) {
+    console.log(`leads de demonstração criados: ${createdLeads} (projeto ${projectSlug})`);
+  } else {
+    console.log("leads de demonstração já existem, pulados");
+  }
+}
+
+// Organização "empresa" de demonstração por nome: cria com telefone e CNPJ, ou completa o que
+// faltar numa existente. Fora do bloco da lista porque o bloco do quadro também a usa.
+async function ensureCompany(name: string, phone: string, city: string, cnpj: string) {
+  const [found] = await db
+    .select({ id: organizations.id, phone: organizations.phone, cnpj: organizations.cnpj })
+    .from(organizations)
+    .where(
+      and(
+        eq(organizations.tenantId, TENANT_ID),
+        eq(organizations.type, "empresa"),
+        eq(organizations.name, name),
+      ),
+    );
+  if (found) {
+    if (!found.phone || !found.cnpj) {
+      await db
+        .update(organizations)
+        .set({ phone: found.phone ?? phone, cnpj: found.cnpj ?? cnpj })
+        .where(eq(organizations.id, found.id));
+    }
+    return found.id;
+  }
+  const [created] = await db
+    .insert(organizations)
+    .values({ tenantId: TENANT_ID, type: "empresa", name, phone, cnpj, city, uf: "RS" })
+    .returning({ id: organizations.id });
+  return created.id;
 }
 
 process.exit(0);
