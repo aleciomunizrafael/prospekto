@@ -134,6 +134,9 @@ export function ActivityForm({
     form.querySelectorAll<HTMLInputElement>('input[type="datetime-local"]').forEach((input) => {
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
+    // Devolve o foco ao primeiro campo: o botão fica `disabled` enquanto envia e o navegador
+    // solta o foco para o body (WCAG 2.4.3).
+    fieldOf(form, "body")?.focus();
   }, [state]);
 
   const focusBody = useCallback(() => {
