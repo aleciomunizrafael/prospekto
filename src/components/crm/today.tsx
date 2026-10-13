@@ -63,7 +63,10 @@ const TIME_FORMAT = new Intl.DateTimeFormat("pt-BR", {
 
 // --- Casca comum dos blocos -------------------------------------------------------------------
 
-function Block({
+// Exportada para os blocos novos do Painel ("Últimas atividades" e "Minhas tarefas", em
+// components/crm/dashboard/), que seguem a mesma casca: cabeçalho de 44 px com ícone, título em
+// serifa, contagem e um `meta` à direita.
+export function Block({
   id,
   title,
   count,
@@ -108,7 +111,7 @@ function Block({
   );
 }
 
-function BlockEmpty({ children }: { children: ReactNode }) {
+export function BlockEmpty({ children }: { children: ReactNode }) {
   return <p className="px-4 py-3 text-sm text-muted-foreground">{children}</p>;
 }
 
@@ -159,7 +162,7 @@ const STATE_CLASS =
 const ACTION_CLASS =
   "col-start-2 row-span-2 row-start-1 flex items-center justify-end gap-2 self-center md:col-start-3 md:row-span-1";
 
-function TaskDue({ dueAt, now }: { dueAt: Date | null; now: Date }) {
+export function TaskDue({ dueAt, now }: { dueAt: Date | null; now: Date }) {
   const due = describeTaskDue(dueAt, now);
   const Icon = due.tone === "danger" ? CircleAlert : Circle;
   return (

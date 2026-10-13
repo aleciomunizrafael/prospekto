@@ -25,6 +25,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { formatPhoneBR } from "@/lib/crm/format";
 import type { OrganizationType } from "@/lib/domain/enums";
 import { cn } from "@/lib/utils";
 import { fabClassName } from "./shell/fab";
@@ -39,6 +40,7 @@ import {
 } from "./project-forms/action-form";
 import { LeadPicker } from "./project-forms/lead-picker";
 import { OrganizationFields, type OrganizationFormValues } from "./organization-form";
+import { FormSection } from "./ui/form-section";
 
 type NewOrganizationDialogProps = {
   accountants: Option[];
@@ -114,7 +116,8 @@ export function EditOrganizationSheet({
   returnHref,
   trigger,
 }: {
-  org: OrganizationFormValues;
+  // `phone`: telefone da empresa (ADR-004, 6.4.7; plano, P18), campo só desta folha.
+  org: OrganizationFormValues & { phone?: string | null };
   accountants: Option[];
   users: Option[];
   defaultOpen?: boolean;
@@ -165,6 +168,17 @@ export function EditOrganizationSheet({
           }
         >
           <OrganizationFields org={org} accountants={accountants} users={users} />
+          <FormSection title="Telefone" contentClassName="grid gap-4 sm:grid-cols-2">
+            <TextField
+              name="phone"
+              label="Telefone da empresa"
+              type="tel"
+              inputMode="tel"
+              autoComplete="off"
+              help="Central ou recepção, com DDD, por exemplo (54) 3000-0000. O telefone de cada pessoa fica no contato."
+              defaultValue={formatPhoneBR(org.phone) || ""}
+            />
+          </FormSection>
         </ActionForm>
       </SheetContent>
     </Sheet>
@@ -293,14 +307,29 @@ export function EditContactDialog({
   );
 }
 
+// `defaultOpen` abre o diálogo ao carregar (/app/organizacoes/[id]?vincular=1, vindo do "⋯" da
+// ActionBarMobile, que só navega por href); ao fechar, `returnHref` tira o parâmetro da URL.
 export function LinkLeadDialog({
   orgId,
   contacts,
   size,
   className,
-}: { orgId: string; contacts: Option[] } & Omit<TriggerProps, "variant">) {
+  defaultOpen = false,
+  returnHref,
+}: { orgId: string; contacts: Option[]; defaultOpen?: boolean; returnHref?: string } & Omit<
+  TriggerProps,
+  "variant"
+>) {
+  const [open, setOpen] = useState(defaultOpen);
+  const router = useRouter();
+  const onOpenChange = (value: boolean) => {
+    setOpen(value);
+    if (!value && defaultOpen && returnHref) router.replace(returnHref);
+  };
   return (
     <ActionDialog
+      open={open}
+      onOpenChange={onOpenChange}
       triggerLabel="Vincular lead"
       title="Vincular lead a esta organização"
       description="O lead passa a aparecer aqui e a organização aparece no lead."

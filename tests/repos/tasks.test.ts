@@ -325,3 +325,58 @@ describe("listOpenTasksForOwner e searchTasks", () => {
     expect(await getTask(own, mine[0].id)).not.toBeNull();
   });
 });
+
+describe("posições fracionárias em sequência (frente B)", () => {
+  it("dez movimentos seguidos mantêm a ordem esperada", async () => {
+    const own = await makeTenant();
+    const ids: Record<string, string> = {};
+    for (const name of ["A", "B", "C", "D", "E"]) {
+      ids[name] = (await createTask(own, { subject: name })).id;
+    }
+    // Modelo em memória da coluna: a mesma sequência aplicada a uma lista simples.
+    const expected = ["A", "B", "C", "D", "E"];
+    const moves: [string, number][] = [
+      ["E", 0],
+      ["A", 4],
+      ["C", 0],
+      ["B", 2],
+      ["D", 1],
+      ["E", 3],
+      ["A", 0],
+      ["C", 4],
+      ["B", 0],
+      ["D", 2],
+    ];
+    for (const [name, index] of moves) {
+      await moveTask(own, { activityId: ids[name], status: "a_fazer", index });
+      expected.splice(expected.indexOf(name), 1);
+      expected.splice(Math.min(index, expected.length), 0, name);
+      const board = await listTasksBoard(own, { now: new Date() });
+      expect(
+        board.a_fazer.rows.map((t) => t.subject),
+        moves.indexOf([name, index]) + "",
+      ).toEqual(expected);
+    }
+    const final = await listTasksBoard(own, { now: new Date() });
+    const positions = final.a_fazer.rows.map((t) => t.position);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+  });
+
+  it("a renumeração preserva a ordem e deixa distâncias inteiras", async () => {
+    const own = await makeTenant();
+    const a = await createTask(own, { subject: "A" }); // 1
+    await createTask(own, { subject: "B" }); // 2
+    const c = await createTask(own, { subject: "C" }); // 3
+    // Move C para entre A e B muitas vezes alternando com A: as posições colapsam até 1e-6 e o
+    // repositório renumera 1..n.
+    let renumbered = false;
+    for (let i = 0; i < 40 && !renumbered; i += 1) {
+      const moved = await moveTask(own, { activityId: c.id, status: "a_fazer", index: 1 });
+      const back = await moveTask(own, { activityId: a.id, status: "a_fazer", index: 1 });
+      renumbered = Number.isInteger(moved.position) && Number.isInteger(back.position) && i > 0;
+    }
+    const board = await listTasksBoard(own, { now: new Date() });
+    expect(board.a_fazer.rows.map((t) => t.subject)).toEqual(["C", "A", "B"]);
+    expect(board.a_fazer.rows.map((t) => t.position)).toEqual([1, 2, 3]);
+  });
+});

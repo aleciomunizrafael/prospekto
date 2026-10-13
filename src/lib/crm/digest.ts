@@ -23,6 +23,17 @@ export type DigestTask = {
   ownerName: string | null;
 };
 
+// "Tarefas atribuídas a você" (ADR-004, 6.5): por destinatário, abertas com owner_user_id dele,
+// vencidas, que vencem em 7 dias ou sem prazo (a tarefa solta do quadro muitas vezes não tem
+// data). `dueAt` é nulo quando não há prazo, diferente de DigestTask.dueAt (sempre vencida).
+export type DigestAssignedTask = {
+  id: string;
+  subject: string;
+  dueAt: Date | null;
+  createdAt: Date;
+  linkLabel: string | null;
+};
+
 export type DigestNewLead = {
   id: string;
   name: string;
@@ -80,6 +91,8 @@ export type DigestData = {
   projects: DigestProject[];
   projectsTotal: number;
   week: DigestWeek;
+  // Por destinatário (o cron consulta por usuário); ausente = sem a seção.
+  assignedTasks?: DigestAssignedTask[];
 };
 
 export type DigestSection = {
@@ -101,6 +114,7 @@ export type Digest = {
     newLeads: number;
     contributions: number;
     projects: number;
+    assignedTasks: number;
   };
 };
 
@@ -110,6 +124,22 @@ function subjectDate(now: Date): string {
   const weekday = WEEKDAYS[Math.max(0, dayIndex(now))];
   const ddmm = formatDate(now).slice(0, 5);
   return `${weekday} ${ddmm}`;
+}
+
+// "sex., 17/10" da seção de tarefas atribuídas (dia da semana e data numérica, em São Paulo).
+const ASSIGNED_DAY = new Intl.DateTimeFormat("pt-BR", {
+  weekday: "short",
+  day: "2-digit",
+  month: "2-digit",
+  timeZone: "America/Sao_Paulo",
+});
+
+const DAY_MS = 86_400_000;
+
+export function describeAssignedTask(task: DigestAssignedTask, now: Date): string {
+  const due = task.dueAt ? `vence ${ASSIGNED_DAY.format(task.dueAt)}` : "sem prazo";
+  const fresh = now.getTime() - task.createdAt.getTime() < DAY_MS ? " (nova)" : "";
+  return `${task.subject}${task.linkLabel ? `, ${task.linkLabel}` : ""}, ${due}${fresh}`;
 }
 
 function dayIndex(now: Date): number {
@@ -149,14 +179,28 @@ export function buildDigest(data: DigestData, opts: { appUrl: string; now: Date 
       })),
       ...data.tasks.map((t) => ({
         text: `Tarefa: ${t.subject}, vencida em ${formatDateTime(t.dueAt)}${t.ownerName ? `, ${t.ownerName}` : ""}`,
+        // Tarefa solta: abre o diálogo dela no quadro de Tarefas (ADR-004, 6.5).
         href: t.leadId
           ? `${base}/app/leads/${t.leadId}`
           : t.projectId
             ? `${base}/app/projetos/${t.projectId}`
-            : `${base}/app`,
+            : `${base}/app/tarefas?task=${t.id}`,
       })),
     ],
   };
+
+  const assigned: DigestSection | null = data.assignedTasks
+    ? {
+        title: `Tarefas atribuídas a você (${data.assignedTasks.length})`,
+        emptyText: "Nenhuma tarefa atribuída a você.",
+        seeAllHref: `${base}/app/tarefas?dono=eu`,
+        seeAllLabel: "ver todas",
+        lines: data.assignedTasks.map((t) => ({
+          text: describeAssignedTask(t, now),
+          href: `${base}/app/tarefas?task=${t.id}`,
+        })),
+      }
+    : null;
 
   const newLeads: DigestSection = {
     title: `Leads novos sem dono (${data.newLeadsTotal})`,
@@ -206,13 +250,14 @@ export function buildDigest(data: DigestData, opts: { appUrl: string; now: Date 
   return {
     subject,
     alerts,
-    sections: [overdue, newLeads, contributions, projects, week],
+    sections: [overdue, ...(assigned ? [assigned] : []), newLeads, contributions, projects, week],
     counts: {
       overdue: data.overdueLeadsTotal,
       tasks: data.tasksTotal,
       newLeads: data.newLeadsTotal,
       contributions: data.contributionsTotal,
       projects: data.projectsTotal,
+      assignedTasks: data.assignedTasks?.length ?? 0,
     },
   };
 }

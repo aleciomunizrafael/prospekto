@@ -6,7 +6,12 @@ import { sendEmail } from "@/lib/email/send";
 import { renderDigestEmail } from "@/lib/email/templates/digest";
 import { log } from "@/lib/log";
 import type { Ctx } from "@/lib/repos/ctx";
-import { getDigestSentOn, loadDigestData, markDigestSent } from "@/lib/repos/digest";
+import {
+  getDigestSentOn,
+  loadAssignedTasks,
+  loadDigestData,
+  markDigestSent,
+} from "@/lib/repos/digest";
 import { cleanupFormAttempts } from "@/lib/repos/form-attempts";
 import { cleanupOrphanSimulations } from "@/lib/repos/simulations";
 import { listTenantUsers } from "@/lib/repos/users";
@@ -14,7 +19,8 @@ import { listTenantUsers } from "@/lib/repos/users";
 // Cron diário (vercel.json: 10h UTC, 7h em Brasília; proposta-c, 9.3; regra R-13).
 // 1. Monta o resumo do dia (follow-ups vencidos, tarefas vencidas, leads novos sem dono, aportes
 //    previstos em 15 dias, projetos em alerta, últimos 7 dias com o alerta de "zero leads") e envia
-//    um e-mail por usuário do tenant. Idempotente por dia (tenants.settings.daily_email_sent_on);
+//    um e-mail por usuário do tenant, cada um com a própria seção "Tarefas atribuídas a você"
+//    (ADR-004, 6.5). Idempotente por dia (tenants.settings.daily_email_sent_on);
 //    `?force=1` reenvia (uso manual).
 // 2. Limpa form_attempts com mais de um dia e simulações sem lead com mais de 30 dias.
 // Responde JSON só com contagens (regra R-16: nenhum dado pessoal).
@@ -45,11 +51,10 @@ export async function GET(request: Request) {
       const [data, users] = await Promise.all([loadDigestData(ctx, now), listTenantUsers(ctx)]);
       digest.recipients = users.length;
       for (const user of users) {
-        const email = renderDigestEmail(data, {
-          appUrl: appUrl(),
-          now,
-          recipientName: user.name,
-        });
+        const email = renderDigestEmail(
+          { ...data, assignedTasks: await loadAssignedTasks(ctx, user.id, now) },
+          { appUrl: appUrl(), now, recipientName: user.name },
+        );
         digest.counts = email.counts;
         digest.alerts = email.alerts.length;
         const result = await sendEmail({

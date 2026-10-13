@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { BottomBar } from "@/components/crm/shell/bottom-bar";
+import { CommandPalette } from "@/components/crm/shell/command-palette";
 import { Header } from "@/components/crm/shell/header";
 import { Shortcuts } from "@/components/crm/shell/shortcuts";
 import { SIDEBAR_COOKIE } from "@/components/crm/shell/modules";
@@ -10,9 +11,10 @@ import { listOpenTasksWithLead } from "@/lib/repos/activities";
 import { listOverdueLeads } from "@/lib/repos/leads";
 import { getSession, requireSession } from "@/lib/session";
 
-// Shell do CRM (crm-design-system.md, seção 4; plano, lote 1B). Na ordem do DOM: skip link,
-// header, sidebar, conteúdo e barra inferior, para o Tab ir do skip link à busca, "Novo", avatar,
-// itens da sidebar e conteúdo. A grade coloca a sidebar à esquerda ocupando as duas linhas no
+// Shell do CRM (crm-design-system.md, seção 4; plano, lote 1B; ADR-004, seção 6.1). Na ordem do
+// DOM: skip link, header, sidebar, conteúdo e barra inferior, para o Tab ir do skip link à busca,
+// "Novo", "Buscar…", itens da sidebar, usuário e conteúdo. A paleta Ctrl+K e os atalhos ficam no
+// fim, fora do fluxo. A grade coloca a sidebar à esquerda ocupando as duas linhas no
 // desktop; no celular há uma coluna só e a sidebar fica fora da tela (hidden md:flex).
 // O documento é o contêiner de rolagem (header sticky, sidebar sticky, barra fixa);
 // `html:has([data-crm])` em globals.css reserva scroll-padding para as barras fixas.
@@ -23,8 +25,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   // Decisão D12: estado da sidebar em cookie lido no servidor, sem flash na hidratação.
   const collapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "rail";
 
-  // Contador de "Hoje": próximas ações vencidas + tarefas vencidas (as mesmas consultas da página
-  // Hoje, com o mesmo teto de 20 cada).
+  // Contador do "Painel": próximas ações vencidas + tarefas vencidas (as mesmas consultas da
+  // página, com o mesmo teto de 20 cada).
   const now = new Date();
   const [overdueLeads, overdueTasks] = await Promise.all([
     listOverdueLeads(ctx, now, 20),
@@ -32,6 +34,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   ]);
   const overdueCount = overdueLeads.length + overdueTasks.length;
   const userName = session?.user.name ?? "";
+  // E-mail do próprio usuário, só para o rodapé da sidebar; nunca vai ao log (R-16).
+  const userEmail = session?.user.email ?? "";
 
   return (
     <TooltipProvider>
@@ -45,10 +49,12 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         >
           Ir para o conteúdo
         </a>
-        <Header userName={userName} className="md:col-start-2 md:row-start-1" />
+        <Header className="md:col-start-2 md:row-start-1" />
         <Sidebar
           collapsed={collapsed}
           overdueCount={overdueCount}
+          userName={userName}
+          userEmail={userEmail}
           className="md:col-start-1 md:row-start-1 md:row-span-2"
         />
         <main
@@ -63,6 +69,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <BottomBar />
         <CrmToaster />
         <Shortcuts />
+        <CommandPalette />
       </div>
     </TooltipProvider>
   );

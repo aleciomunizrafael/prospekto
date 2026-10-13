@@ -1,142 +1,107 @@
-import { SquareCheck } from "lucide-react";
+import { SearchX, SquareCheck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { NewTaskButton, NewTaskFab, TaskBoard } from "@/components/crm/tasks/task-board";
+import { TaskFilters } from "@/components/crm/tasks/task-filters";
 import { EmptyState } from "@/components/crm/ui/empty-state";
 import { PageHeader } from "@/components/crm/ui/page-header";
-import { StatusBadge } from "@/components/crm/ui/status-badge";
 import { Button } from "@/components/ui/button";
-import { TASK_STATUS_LABELS } from "@/lib/crm/labels";
-import { TASK_STATUSES } from "@/lib/crm/task-status";
-import { describeTaskDue } from "@/lib/crm/task-due";
-import { plural } from "@/lib/crm/text";
-import { listTasksBoard } from "@/lib/repos/tasks";
+import {
+  describeEmptyFiltered,
+  describeTaskCounts,
+  hasTaskFilters,
+  parseTaskFilters,
+  taskFiltersHref,
+} from "@/lib/crm/task-board";
+import { listOrganizations } from "@/lib/repos/organizations";
+import { listProjects } from "@/lib/repos/projects";
+import { getTask, listTasksBoard } from "@/lib/repos/tasks";
+import { listTenantUsers } from "@/lib/repos/users";
 import { requireSession } from "@/lib/session";
-import { cn } from "@/lib/utils";
+import { uuidSchema } from "@/lib/validation/common";
 
 export const metadata: Metadata = { title: "Tarefas" };
 
-// Quadro de Tarefas (ADR-004, 6.5). Fundação: cabeçalho real e as três colunas em lista simples;
-// a frente B entrega o quadro com arrasto, o diálogo Nova/Editar e os filtros.
-export default async function TasksPage() {
+function first(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+// Quadro de Tarefas (ADR-004, 6.5; plano, frente B): três colunas sobre activities.type = tarefa,
+// filtros na URL (?dono=eu, ?atrasadas=1, ?vencem=hoje), deep links ?task=<id> e ?novo=1. O
+// Server Component carrega pelos repositórios; o TaskBoard (Client) cuida do arrasto, do
+// otimista e do diálogo.
+export default async function TasksPage({ searchParams }: PageProps<"/app/tarefas">) {
   const ctx = await requireSession();
+  const params = await searchParams;
+  const filters = parseTaskFilters(params);
+  const taskParam = uuidSchema.safeParse(first(params.task));
+  const openNew = first(params.novo) === "1";
   const now = new Date();
-  // A contagem de atrasadas vem do `total` (count no banco), não das linhas carregadas, que
-  // param no teto de 100 por coluna (P13).
-  const [board, overdueBoard] = await Promise.all([
-    listTasksBoard(ctx, { now }),
-    listTasksBoard(ctx, { now, overdueOnly: true }),
+  const scope = {
+    now,
+    ownerUserId: filters.mine ? ctx.userId : undefined,
+    dueToday: filters.dueToday,
+  };
+  // A contagem de atrasadas vem de um count próprio: as linhas param no teto por coluna (P13).
+  const [board, overdueBoard, users, organizations, projects, task] = await Promise.all([
+    listTasksBoard(ctx, { ...scope, overdueOnly: filters.overdue }),
+    listTasksBoard(ctx, { ...scope, overdueOnly: true }),
+    listTenantUsers(ctx),
+    listOrganizations(ctx, { limit: 300 }),
+    listProjects(ctx, { limit: 500 }),
+    taskParam.success ? getTask(ctx, taskParam.data) : null,
   ]);
-  const open = board.a_fazer.total + board.em_andamento.total;
   const overdue = overdueBoard.a_fazer.total + overdueBoard.em_andamento.total;
-  const empty = open === 0 && board.concluida.total === 0;
+  const filtered = hasTaskFilters(filters);
+  const empty =
+    board.a_fazer.rows.length + board.em_andamento.rows.length + board.concluida.rows.length === 0;
+
+  const emptyState = !empty ? undefined : filtered ? (
+    <EmptyState
+      icon={SearchX}
+      size="sm"
+      title={describeEmptyFiltered(filters)}
+      action={
+        <Button
+          variant="outline"
+          size="sm"
+          nativeButton={false}
+          render={<Link href={taskFiltersHref({})} />}
+        >
+          Limpar filtros
+        </Button>
+      }
+    />
+  ) : (
+    <EmptyState
+      icon={SquareCheck}
+      title="Nenhuma tarefa aberta."
+      description="Crie a primeira ou registre uma tarefa num lead."
+      action={<NewTaskButton variant="outline" />}
+    />
+  );
 
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
         title="Tarefas"
-        description={`${plural(open, "aberta", "abertas")} · ${plural(overdue, "atrasada", "atrasadas")}`}
+        description={describeTaskCounts(board, overdue)}
+        primary={<NewTaskButton />}
       />
-      {empty ? (
-        <EmptyState
-          icon={SquareCheck}
-          title="Nenhuma tarefa aberta."
-          description="Crie a primeira ou registre uma tarefa num lead."
-          action={
-            <Button
-              variant="outline"
-              size="sm"
-              nativeButton={false}
-              render={<Link href="/app/leads" />}
-            >
-              Ir para o Pipeline
-            </Button>
-          }
-        />
-      ) : (
-        <div className="grid gap-3 md:grid-cols-3">
-          {TASK_STATUSES.map((status) => {
-            const column = board[status];
-            return (
-              <section
-                key={status}
-                aria-labelledby={`coluna-${status}`}
-                className="rounded-xl border border-border bg-surface-2"
-              >
-                <header className="flex min-h-11 items-center gap-2 border-b border-divider px-3">
-                  <h2 id={`coluna-${status}`} className="text-sm font-semibold">
-                    {TASK_STATUS_LABELS[status]}
-                  </h2>
-                  <span className="crm-meta tabular-nums">{column.total}</span>
-                </header>
-                {column.rows.length === 0 ? (
-                  <p className="crm-meta px-3 py-3">
-                    Nenhuma tarefa em {TASK_STATUS_LABELS[status].toLowerCase()}.
-                  </p>
-                ) : (
-                  <ul className="flex flex-col gap-2 p-2">
-                    {column.rows.map((task) => {
-                      const due = describeTaskDue(task.dueAt, now);
-                      const link = task.leadId
-                        ? `/app/leads/${task.leadId}`
-                        : task.orgId
-                          ? `/app/organizacoes/${task.orgId}`
-                          : task.projectId
-                            ? `/app/projetos/${task.projectId}`
-                            : task.contributionId
-                              ? `/app/aportes/${task.contributionId}`
-                              : null;
-                      const linkLabel =
-                        task.leadName ??
-                        task.orgName ??
-                        task.projectName ??
-                        task.contributionLabel ??
-                        null;
-                      return (
-                        <li
-                          key={task.id}
-                          className="flex flex-col gap-1 rounded-lg border border-border bg-card p-3"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <span
-                              className={cn(
-                                "text-sm font-medium",
-                                status === "concluida" && "text-muted-foreground line-through",
-                              )}
-                            >
-                              {task.subject}
-                            </span>
-                            <StatusBadge kind="priority" value={task.priority ?? "media"} />
-                          </div>
-                          <span className="crm-meta">
-                            {link && linkLabel ? (
-                              <Link href={link} className="hover:underline">
-                                {linkLabel}
-                              </Link>
-                            ) : (
-                              "sem vínculo"
-                            )}
-                          </span>
-                          <span
-                            className={cn(
-                              "text-xs",
-                              due.tone === "danger" && status !== "concluida"
-                                ? "font-medium text-destructive"
-                                : "text-muted-foreground",
-                            )}
-                          >
-                            {due.text}
-                            {task.ownerName ? ` · ${task.ownerName}` : ""}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </section>
-            );
-          })}
-        </div>
-      )}
+      <TaskFilters filters={filters} />
+      <TaskBoard
+        board={board}
+        now={now}
+        users={users.map((u) => ({ value: u.id, label: u.name }))}
+        organizations={organizations.map((o) => ({ value: o.id, label: o.name }))}
+        projects={projects.map((p) => ({ value: p.id, label: p.name }))}
+        currentUserId={ctx.userId}
+        filters={filters}
+        initialTask={task}
+        initialNew={openNew}
+        empty={emptyState}
+      />
+      <NewTaskFab />
     </div>
   );
 }

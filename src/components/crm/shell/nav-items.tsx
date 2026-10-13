@@ -3,8 +3,10 @@ import {
   Clapperboard,
   Download,
   HandCoins,
-  Sun,
-  Users,
+  LayoutDashboard,
+  PhoneOutgoing,
+  SquareCheck,
+  SquareKanban,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -12,18 +14,22 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { MODULES, isActivePath, type CrmModule } from "./modules";
 
-// Lista de itens da sidebar (crm-design-system.md, seção 4.1). Componente puro, sem "use client":
-// recebe o caminho ativo e o estado recolhido da Sidebar e é testado com renderToString
-// (tests/shell-nav.test.ts, decisão D13). Item de 40 px, ícone 18 px, ativo com fundo branco e
-// barra de 3 px em azul-profundo; o contador de "Hoje" soma próximas ações e tarefas vencidas.
+// Lista de itens da sidebar (crm-design-system.md, seção 4.1; ADR-004, seção 6.1). Componente
+// puro, sem "use client": recebe o caminho ativo e o estado recolhido da Sidebar e é testado com
+// renderToString (tests/shell-nav.test.ts, decisão D13). Item de 40 px, ícone 18 px; o ativo ganha
+// fundo branco, a "moldura" (`ring-1 ring-border`, padrão estrutural do Trilis) e a barra de 3 px
+// em azul-profundo. O contador de "Painel" soma próximas ações e tarefas vencidas.
+// `SquareKanban` é o mesmo glifo que o ADR chama de `KanbanSquare` (nome atual no lucide-react).
 export type NavItem = CrmModule & { icon: LucideIcon; separatorBefore?: boolean };
 
 export const NAV_ITEMS: NavItem[] = [
-  { ...MODULES.hoje, icon: Sun },
-  { ...MODULES.leads, icon: Users },
+  { ...MODULES.painel, icon: LayoutDashboard },
+  { ...MODULES.pipeline, icon: SquareKanban },
+  { ...MODULES.prospeccao, icon: PhoneOutgoing },
   { ...MODULES.organizacoes, icon: Building2 },
   { ...MODULES.projetos, icon: Clapperboard },
   { ...MODULES.aportes, icon: HandCoins },
+  { ...MODULES.tarefas, icon: SquareCheck },
   { ...MODULES.exportar, icon: Download, separatorBefore: true },
 ];
 
@@ -49,7 +55,7 @@ export function NavItems({
       {items.map((item) => {
         const Icon = item.icon;
         const active = isActivePath(item.href, activeHref, item.exact);
-        const count = item.href === MODULES.hoje.href ? overdueCount : 0;
+        const count = item.href === MODULES.painel.href ? overdueCount : 0;
         const link = (
           <Link
             href={item.href}
@@ -57,7 +63,7 @@ export function NavItems({
             className={cn(
               "relative flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors duration-120",
               active
-                ? "bg-background text-foreground before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-r before:bg-primary"
+                ? "bg-background text-foreground ring-1 ring-border before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-r before:bg-primary"
                 : "text-muted-foreground hover:bg-background/60 hover:text-foreground",
               collapsed && "justify-center px-0",
             )}

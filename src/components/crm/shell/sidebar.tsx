@@ -8,18 +8,26 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { SIDEBAR_COOKIE } from "./modules";
 import { NavItems } from "./nav-items";
+import { SidebarSearch } from "./sidebar-search";
+import { SidebarUser } from "./sidebar-user";
 
-// Sidebar do desktop (crm-design-system.md, seção 4.1; decisão D12): 240 px, ou trilho de 64 px
-// quando o cookie `crm-sidebar=rail` está gravado. Client Component mínimo: só `usePathname` e o
-// toggle, que grava o cookie (path /app, 1 ano) e chama `router.refresh()` para o layout reler.
-// O estado local acompanha o clique na hora; sem localStorage, sem flash na hidratação.
+// Sidebar do desktop (crm-design-system.md, seção 4.1; decisão D12; ADR-004, seção 6.1): 240 px,
+// ou trilho de 64 px quando o cookie `crm-sidebar=rail` está gravado. De cima para baixo: wordmark,
+// botão "Buscar…" (Ctrl K), os módulos, e no rodapé o bloco do usuário e "Recolher". Client
+// Component mínimo: só `usePathname` e o toggle, que grava o cookie (path /app, 1 ano) e chama
+// `router.refresh()` para o layout reler. O estado local acompanha o clique na hora; sem
+// localStorage, sem flash na hidratação.
 export function Sidebar({
   collapsed: initialCollapsed,
   overdueCount,
+  userName,
+  userEmail,
   className,
 }: {
   collapsed: boolean;
   overdueCount: number;
+  userName: string;
+  userEmail: string;
   className?: string;
 }) {
   const pathname = usePathname();
@@ -65,7 +73,7 @@ export function Sidebar({
     >
       <Link
         href="/app"
-        aria-label="Prospekto CRM, ir para Hoje"
+        aria-label="Prospekto CRM, ir para o Painel"
         className={cn(
           "flex h-14 shrink-0 flex-col justify-center rounded-lg leading-none outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
           collapsed ? "mx-2 items-center" : "mx-4",
@@ -82,8 +90,12 @@ export function Sidebar({
           </>
         )}
       </Link>
+      <div className="px-2 pb-2">
+        <SidebarSearch collapsed={collapsed} />
+      </div>
       <NavItems activeHref={pathname} collapsed={collapsed} overdueCount={overdueCount} />
-      <div className="mt-auto p-2">
+      <div className="mt-auto flex flex-col gap-1 p-2">
+        <SidebarUser userName={userName} userEmail={userEmail} collapsed={collapsed} />
         {collapsed ? (
           <Tooltip>
             <TooltipTrigger render={toggleButton} />

@@ -6,11 +6,13 @@ import {
   Download,
   HandCoins,
   Keyboard,
+  LayoutDashboard,
   LogOut,
   Menu,
-  Sun,
+  PhoneOutgoing,
+  SquareCheck,
+  SquareKanban,
   UserRound,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -27,26 +29,35 @@ import { cn } from "@/lib/utils";
 import { MODULES, isActivePath, type CrmModule } from "./modules";
 import { useSignOut } from "./user-menu";
 
-// Barra inferior do celular (crm-design-system.md, seção 4.2): cinco alvos de 64 × 56 px com
-// ícone 22 px e rótulo 11 px sempre visível; `aria-current="page"` no ativo; "Mais" abre uma folha
-// inferior com Organizações, Exportar, Minha conta, Atalhos e Sair.
+// Barra inferior do celular (crm-design-system.md, seção 4.2; ADR-004, seção 6.1): cinco alvos de
+// 64 × 56 px com ícone 22 px e rótulo 11 px sempre visível; `aria-current="page"` no ativo. Painel,
+// Pipeline, Prospecção e Tarefas são o que se faz com o telefone na mão; "Mais" abre uma folha
+// inferior com Organizações, Projetos, Aportes, Exportar, Minha conta, Atalhos e Sair.
 type BarItem = CrmModule & { icon: LucideIcon };
 
 const PRIMARY: BarItem[] = [
-  { ...MODULES.hoje, icon: Sun },
-  { ...MODULES.leads, icon: Users },
-  { ...MODULES.projetos, icon: Clapperboard },
-  { ...MODULES.aportes, icon: HandCoins },
+  { ...MODULES.painel, icon: LayoutDashboard },
+  { ...MODULES.pipeline, icon: SquareKanban },
+  { ...MODULES.prospeccao, icon: PhoneOutgoing },
+  { ...MODULES.tarefas, icon: SquareCheck },
 ];
 
 const MORE: BarItem[] = [
   { ...MODULES.organizacoes, icon: Building2 },
+  { ...MODULES.projetos, icon: Clapperboard },
+  { ...MODULES.aportes, icon: HandCoins },
   { ...MODULES.exportar, icon: Download },
   { ...MODULES.conta, icon: UserRound },
   { href: "/app/conta#atalhos", label: "Atalhos de teclado", icon: Keyboard },
 ];
 
-const MORE_PATHS = [MODULES.organizacoes.href, MODULES.exportar.href, MODULES.conta.href];
+const MORE_PATHS = [
+  MODULES.organizacoes.href,
+  MODULES.projetos.href,
+  MODULES.aportes.href,
+  MODULES.exportar.href,
+  MODULES.conta.href,
+];
 
 function itemClass(active: boolean) {
   return cn(
