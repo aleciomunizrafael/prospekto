@@ -16,12 +16,12 @@ Estrutura digital e comercial de captação para a **Prospekto Consultoria & Pro
 
 ## Estado atual
 
-**Kickoff concluído em 03/10/2026; app da Fase 1 construída e revisada em 04/10/2026; primeiro deploy de produção no Vercel em 05/10/2026, domínio próprio `https://prospekto.com.br` apontado em 08/10/2026 e IA no CRM (briefing, ditar e organizar, resposta sugerida; ADR-003) publicada em 09/10/2026.**
+**Kickoff concluído em 03/10/2026; app da Fase 1 construída e revisada em 04/10/2026; primeiro deploy de produção no Vercel em 05/10/2026, domínio próprio `https://prospekto.com.br` apontado em 08/10/2026; IA no CRM (briefing, ditar e organizar, resposta sugerida; ADR-003) publicada em 09/10/2026; estrutura do CRM no padrão do Trilis (Painel, Pipeline em quadro, Prospecção, Tarefas, busca Ctrl+K; ADR-004) integrada em 13/10/2026.**
 
-- `docs/`: visão, briefing e materiais-fonte, referência legal verificada, mercado, personas e funis, especificação do site e do simulador, playbooks, produto digital, ADR-001 (stack), ADR-002 (padrões do simulador), modelo de dados, scaffold e roadmap. Índice em `docs/README.md`.
-- `src/`: site público (home, empresas, contadores, pessoa física, municípios, proponentes, mentoria, diagnóstico, projetos, guia, contato, privacidade, obrigado), simulador de incentivo fiscal (biblioteca pura com todos os casos da especificação, telas, gate de captura, resultado por link assinado e e-mail), captura de leads (Server Action com antispam, consentimento LGPD, deduplicação, e-mails, descadastro de um clique) e CRM em `/app` (login e redefinição de senha, "Hoje", leads com filtros e "Mover para" com campos obrigatórios por estágio, atividades, organizações e contatos, projetos com publicação na carteira, aportes com termo, depósito, recibo e comissão, exportação CSV, e-mail diário por cron, webhook do Resend).
-- Qualidade: `npm run check` verde (lint, typecheck, format, 376 testes contra PGlite em memória, build com 37 rotas); revisão adversarial em quatro lentes (segurança e LGPD, regras de negócio, UX e acessibilidade, convenções do Next 16) com 36 correções aplicadas.
-- O que ainda não existe: deploy (Vercel, Neon, Resend, domínio), a edição revisada do guia em PDF (até lá `/guia` fica em modo "em breve"), páginas de campanha e `/conteudo`, importação de CSV, relatório semanal dentro do CRM, filtros da carteira pública. Pendências que dependem de decisão estão na seção "Perguntas em aberto" e nos marcadores "[verificar]" do código (teste `LAUNCH_GATE=1 npm test` lista os que faltam antes do lançamento).
+- `docs/`: visão, briefing e materiais-fonte, referência legal verificada, mercado, personas e funis, especificação do site e do simulador, playbooks, produto digital (mentoria e o guia da equipe do CRM), ADR-001 (stack), ADR-002 (padrões do simulador), ADR-003 (IA no CRM), ADR-004 (estrutura do CRM no padrão do Trilis) com seus planos, modelo de dados, design system do CRM, scaffold e roadmap. Índice em `docs/README.md`.
+- `src/`: site público (home, empresas, contadores, pessoa física, municípios, proponentes, mentoria, diagnóstico, projetos, guia, contato, privacidade, obrigado), simulador de incentivo fiscal (biblioteca pura com todos os casos da especificação, telas, gate de captura, resultado por link assinado e e-mail), captura de leads (Server Action com antispam, consentimento LGPD, deduplicação, e-mails, descadastro de um clique) e CRM em `/app` com os módulos **Painel** (fila de trabalho mais as réguas "Hoje" e "Carteira", últimas atividades e minhas tarefas), **Pipeline** (leads em Lista ou Quadro por estágio; soltar um cartão abre o "Mover para" com os campos obrigatórios por estágio, nunca grava direto), **Prospecção** (listas de empresas para ligar, "Colar lista", botões de resultado, WhatsApp em três variações e "Reunião marcada", que cria organização, contato e lead em Qualificado), **Organizações** (ficha com registrar atividade, histórico, leads e aportes, contatos, dados e notas com salvamento automático), **Projetos** (publicação na carteira), **Aportes** (termo, depósito, recibo e comissão), **Tarefas** (quadro A fazer, Em andamento e Concluída, com prioridade, responsável, prazo e vínculo opcional) e **Exportar** (CSV por tabela), mais a busca Ctrl+K em qualquer tela, a IA do ADR-003 no lead, login e redefinição de senha, e-mail diário por cron (com "Tarefas atribuídas a você") e webhook do Resend.
+- Qualidade: `npm run check` verde (lint, typecheck, format, 901 testes em 88 arquivos contra PGlite em memória, build); revisões adversariais a cada entrega (segurança e LGPD, regras de negócio, UX e acessibilidade, convenções do Next 16).
+- O que ainda não existe: a edição revisada do guia em PDF (até lá `/guia` fica em modo "em breve"), páginas de campanha e `/conteudo`, importação de CSV, relatório semanal dentro do CRM, filtros da carteira pública, ordem manual dos cartões no quadro (decisão de não modelar; revisão em um mês pela seção 12 do ADR-004). Pendências que dependem de decisão estão na seção "Perguntas em aberto" e nos marcadores "[verificar]" do código (teste `LAUNCH_GATE=1 npm test` lista os que faltam antes do lançamento).
 
 ## Como navegar nos docs
 
@@ -32,8 +32,8 @@ Todo documento deriva de `docs/visao.md` e referencia os demais em vez de repeti
 3. `docs/dominio/`: as leis de incentivo, o glossário e os parâmetros do simulador.
 4. `docs/estrategia/`: mercado, posicionamento, personas, funis, pipelines e KPIs.
 5. `docs/site/` e `docs/playbooks/`: o que o site diz e faz; como a prospecção opera no dia a dia.
-6. `docs/produto/`: a mentoria e o plano de validação.
-7. `docs/arquitetura/`: ADR, modelo de dados, scaffold, convenções do Next.js 16 e as três propostas que o ADR julgou.
+6. `docs/produto/`: a mentoria e o plano de validação; o guia da equipe do CRM (`guia-da-equipe-crm.md`).
+7. `docs/arquitetura/`: ADR-001 a ADR-004 com seus planos, modelo de dados, scaffold, convenções do Next.js 16 e as três propostas que o ADR-001 julgou; `docs/design/`: o design system do CRM.
 8. `docs/roadmap.md`: fases, sprints, histórias, métricas e marcos de decisão.
 
 ## Stack decidida (resumo do ADR-001)
@@ -73,6 +73,8 @@ SEED_EXAMPLE=1 npm run db:seed  # opcional: proponente e projeto de exemplo (nã
 npm run dev                     # http://localhost:3000 (site) e http://localhost:3000/app (CRM)
 npm run check                   # lint + typecheck + format:check + test + build (mesma sequência da CI)
 ```
+
+Fora de ambiente implantado, `npm run db:seed` também cria dados de demonstração fictícios (lista de prospecção, tarefas, leads em todos os estágios de Patrocinadores, um projeto e aportes; `SEED_DEMO=0` desliga). O PGlite não aceita dois processos no mesmo diretório: pare o `npm run dev` antes de `db:seed` e de `npm run build`, ou aponte `PGLITE_DIR` para outro diretório (`docs/arquitetura/scaffold.md`, seção 5.4).
 
 Deploy (Vercel, Neon em São Paulo, Resend, domínio, seed do primeiro acesso, plano Pro, backup cifrado): guia passo a passo em `docs/arquitetura/deploy.md`; variáveis por ambiente em `docs/arquitetura/scaffold.md`, seção 9. Convenções obrigatórias do código em `AGENTS.md`.
 

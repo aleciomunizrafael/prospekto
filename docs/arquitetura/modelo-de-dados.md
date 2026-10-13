@@ -48,6 +48,11 @@ erDiagram
   cultural_projects o|--o{ activities : about
   contributions o|--o{ activities : about
   users o|--o{ activities : "owner_user_id"
+  tenants ||--o{ prospecting_lists : has
+  prospecting_lists ||--o{ prospecting_items : has
+  prospecting_items }o--o| leads : "lead_id"
+  prospecting_items }o--o| organizations : "org_id"
+  prospecting_items o|--o{ activities : about
 ```
 
 `form_attempts` não aparece: não se relaciona com nada.
@@ -92,7 +97,8 @@ Empresa patrocinadora, escritório contábil, município ou proponente. É o `ac
 | `icms_contributor_rs` | boolean | não | Habilita LIC-RS quando o regime não é lucro real |
 | `accountant_org_id` | uuid FK `organizations` | não | Escritório contábil que atende esta organização |
 | `owner_user_id` | text FK `users` | não | Quem cuida da conta |
-| `notes` | text | não | |
+| `phone` | text | não | Telefone da **empresa** (central, recepção), E.164 por `phoneSchema`, como `contacts.phone` e `leads.phone`; ADR-004, 6.4.7. É onde a conversão da prospecção guarda o número colado na lista; `leads.phone` e `contacts.phone` são o telefone da **pessoa** (é o número que "Abrir WhatsApp" e o "Responda SAIR" usam), por isso nunca recebem o da empresa. Alimenta o "Ligar" do cabeçalho da organização quando nenhum contato tem telefone |
+| `notes` | text | não | Texto livre com salvamento automático na ficha (ADR-004, 6.9) |
 
 ### 3.4 `contacts`
 
@@ -243,23 +249,29 @@ Oportunidade e aporte na mesma linha (decisão da Proposta C): nasce em `propost
 
 ### 3.10 `activities`
 
-Interações, tarefas e eventos de sistema. `tarefa` com `due_at` e `done_at` nulo aparece em "Hoje".
+Interações, tarefas e eventos de sistema. `tarefa` com `due_at` e `done_at` nulo aparece no Painel; o quadro de Tarefas (`/app/tarefas`, ADR-004, 6.5) é a tela de todas as tarefas, com o estado **derivado** de `started_at` e `done_at` por `taskStatusOf` (`concluida` se `done_at`; senão `em_andamento` se `started_at`; senão `a_fazer`), nunca gravado.
 
 | Campo | Tipo | Obrig. | Descrição |
 |---|---|---|---|
 | `type` | enum `activity_type` | sim | Seção 4.7 |
 | `subject` | text | sim | Resumo em uma linha |
 | `body` | text | não | |
-| `data` | jsonb | não | Payload estruturado (`{ from, to, reason }` em mudanças de estágio, dono e score; `{ asset, version }` em `download`) |
-| `occurred_at` | timestamptz | sim | |
+| `data` | jsonb | não | Payload estruturado (`{ from, to, reason, origin }` em mudanças de estágio, com `origin = "board"` quando o diálogo "Mover para" foi aberto pelo quadro de leads (ausente nos demais caminhos: página do lead, conversão da prospecção); `{ from, to, reason }` em dono e score; `{ asset, version }` em `download`; na prospecção: `{ result, callbackAt, reason }` em `ligacao`, `{ channel: "whatsapp" }` em `whatsapp`, `{ meetingKind, channel, meetingAt }` em `reuniao`, `{ listId, prospectingItemId }` na `sistema` "Lead criado pela prospecção") |
+| `occurred_at` | timestamptz | sim | Na `reuniao` criada pela conversão da prospecção é a data e hora da reunião marcada, não a da ligação |
 | `due_at`, `done_at` | timestamptz | não | Só `tarefa` |
-| `lead_id` | uuid FK `leads` | não | Pelo menos um entre `lead_id`, `org_id`, `project_id`, `contribution_id` (CHECK) |
-| `org_id` | uuid FK `organizations` | não | |
+| `started_at` | timestamptz | não | Só `tarefa` (ADR-004, 6.4.3): "Em andamento" = `started_at` preenchido e `done_at` nulo; mover para "A fazer" limpa os dois; "Concluída" grava `done_at` e mantém `started_at` |
+| `priority` | text CHECK (`baixa`, `media`, `alta`) | não | Só `tarefa`. **Todo** caminho que insere uma `tarefa` grava `media` por padrão (`createActivity`, `insertSystemActivity`, `recordLeadActivity`, `createTask`); sem `DEFAULT` na coluna porque ele valeria para ligações e notas, que ficam nulas; a migração `0003` preencheu `media` nas tarefas existentes; o quadro trata `null` como `media` por segurança |
+| `position` | double precision | sim (padrão 0) | Ordem dentro da coluna do quadro de Tarefas: fracionária (média entre vizinhos), renumerada 1..n só quando a distância cai abaixo de 1e-6, sempre numa transação do repositório (`moveTask`). Toda inserção de `tarefa` grava `max(position) + 1` das tarefas abertas do tenant (`nextTaskPositionSql`), para a tarefa criada no lead entrar no fim de "A fazer" como a criada no quadro |
+| `lead_id` | uuid FK `leads` | não | CHECK `activities_subject_check`: `type = 'tarefa' OR num_nonnulls(lead_id, org_id, project_id, contribution_id, prospecting_item_id) >= 1`: a tarefa pode ser solta (criada no quadro sem vínculo); qualquer outro tipo continua ligado a alguém |
+| `org_id` | uuid FK `organizations` | não | Gravado também pelo formulário "Registrar atividade" da ficha da organização (`registerActivityAction` com `orgId`); o histórico da ficha lê `org_id = organização OU lead_id IN (leads da organização)` |
 | `contact_id` | uuid FK `contacts` | não | |
 | `project_id` | uuid FK `cultural_projects` | não | |
 | `contribution_id` | uuid FK `contributions` | não | |
-| `owner_user_id` | text FK `users` | não | Responsável pela tarefa |
+| `prospecting_item_id` | uuid FK `prospecting_items` (sem `ON DELETE`: `NO ACTION`) | não | Ligação, WhatsApp e nota registrados numa empresa de prospecção antes de existir lead; ao converter, as atividades do item ganham também `lead_id`. Por que não é `SET NULL`: numa atividade de item ainda não convertido só esta coluna está preenchida, e o `UPDATE` que o `SET NULL` dispararia violaria o CHECK acima, abortando o `DELETE` da lista inteira. `deleteList` e `deleteItem` fazem, na mesma transação e antes de apagar: `DELETE` das atividades dos itens sem `lead_id` (a história pré-lead morre com o item) e `UPDATE ... SET prospecting_item_id = NULL` nas que já têm `lead_id` (a história que viajou para o lead fica) |
+| `owner_user_id` | text FK `users` | não | Responsável pela tarefa; `null` é um valor de verdade ("Ninguém"): no diálogo, `undefined` significa "usuário da sessão" e `null` significa "ninguém" |
 | `created_by_user_id` | text FK `users` | não | Nulo quando criada pelo sistema |
+
+Excluir uma `tarefa` (só pelo quadro, com confirmação) grava antes, na mesma transação e só quando a tarefa tem vínculo, uma `activities.sistema` "Tarefa excluída: {assunto}" no mesmo lead, organização, projeto ou aporte (auditoria mínima, como as trocas de dono).
 
 ### 3.11 `form_attempts`
 
@@ -273,6 +285,44 @@ Limite de 5 envios por IP por hora (`estrutura-e-copy.md`, seção 5.1), sem ser
 | `count` | integer | sim | Envios na janela |
 
 Limpa pelo cron diário (`window_start < now() - interval '1 day'`).
+
+### 3.12 `prospecting_lists`
+
+Lista de empresas para ligar (ADR-004, 6.4.1): o pré-lead do módulo de Prospecção. Uma lista é "Vinícolas do Vale dos Vinhedos", com região, instruções para quem liga e a origem dos dados.
+
+| Campo | Tipo | Obrig. | Descrição |
+|---|---|---|---|
+| `name` | text | sim | "Vinícolas do Vale dos Vinhedos" |
+| `region` | text | não | "Bento Gonçalves/RS" |
+| `notes` | text | não | Instruções para quem liga (abertura, horário bom, o que oferecer); aparece como `Callout` na tela da lista |
+| `source_detail` | text | sim | De onde vieram os dados (busca pública, associação, indicação); obrigatório como em `contacts.source_detail` (LGPD, art. 18) |
+| `assignee_user_id` | text FK `users` | não | Quem liga; conferido no tenant pelo repositório (`ValidationError` para usuário de fora) |
+| `created_by_user_id` | text FK `users` | não | |
+
+Índice `(tenant_id, created_at desc)`. Excluir a lista apaga os itens (`ON DELETE CASCADE` em `prospecting_items.list_id`) e as atividades órfãs dos itens (seção 3.10); leads e organizações criados pela conversão ficam.
+
+### 3.13 `prospecting_items`
+
+Uma empresa dentro de uma lista (ADR-004, 6.4.2), com a cadência de ligação. Não é um lead: vira lead só pela conversão "Reunião marcada" (regra R-19).
+
+| Campo | Tipo | Obrig. | Descrição |
+|---|---|---|---|
+| `list_id` | uuid FK `prospecting_lists` ON DELETE CASCADE | sim | |
+| `name` | text | sim | Nome da empresa |
+| `segment` | text | não | Grupo dentro da lista ("Vinícolas", "Metalúrgicas"); texto livre do `# Segmento` do "Colar lista", não o enum `lead_segment` |
+| `phone` | text | não | E.164 (`+55...`) validado por `phoneSchema`; o parser do "Colar lista" aceita o zero de tronco e exige DDD de dois dígitos de 1 a 9 (um `0800` ou um CNPJ não viram telefone); número não reconhecido vai para `info` como "Telefone informado: …" e `phone` fica nulo. É o telefone da **empresa**: na conversão vai para `organizations.phone`, nunca para `leads.phone` ou `contacts.phone` |
+| `hook` | text | não | Abertura da ligação (o "gancho"); editável na ficha com salvamento automático |
+| `address`, `size`, `info` | text | não | "Sobre a empresa": localização, porte, informações relevantes |
+| `status` | text CHECK `prospecting_items_status_check` (`a_ligar`, `sem_resposta`, `retornar`, `reuniao_marcada`, `descartado`) | sim, padrão `a_ligar` | Cadência. `reuniao_marcada` só pela conversão (a action de resultado o recusa); "Voltar para a ligar" volta a `a_ligar` e limpa `called_at` |
+| `notes` | text | não | Anotação curta da ligação; ao colar um telefone já descartado em outra lista do tenant, nasce com "Descartada em {lista} ({motivo})" |
+| `callback_at` | date | não | Quando retornar (`status = retornar`); se o item já virou lead, a próxima ação do lead acompanha |
+| `called_at` | timestamptz | não | Última tentativa |
+| `whatsapp_sent_at` | timestamptz | não | Último "Abrir no WhatsApp" com o texto; o CRM não sabe se a mensagem foi de fato enviada ("WhatsApp aberto há 2 d" na tela; a métrica da seção 12 do ADR lê com esse sentido) |
+| `position` | double precision | sim, padrão 0 | Ordem de colagem; sem reordenação por arrasto |
+| `lead_id` | uuid FK `leads` ON DELETE SET NULL | não | Preenchido por "Reunião marcada" |
+| `org_id` | uuid FK `organizations` ON DELETE SET NULL | não | Idem |
+
+Índices `(tenant_id, list_id, position)`, `(tenant_id, status)`, `(tenant_id, lead_id) WHERE lead_id IS NOT NULL`. Cada resultado de ligação grava, na mesma transação, uma `activities.ligacao` com `prospecting_item_id` e `data = { result, callbackAt, reason }` ("Descartar" exige o motivo: `sem_interesse`, `nao_contatar`, `numero_errado`, `outro`; "Pediu para não contatar" é a oposição da LGPD registrada de forma consultável); "Voltar para a ligar" grava uma `nota`, não uma ligação; "Anotação" grava `notes` e uma `nota` datada. Leitura da lista com teto de 1000 itens (a tela avisa; os chips por status contam o total real).
 
 ## 4. Enums
 
@@ -325,7 +375,9 @@ Mapeamento de nomes: `personas-e-funis.md` cita `mecanismo` em `termo` com os va
 
 ### 4.4 Origem do lead
 
-`lead_source`: `site`, `guia`, `simulador`, `diagnostico`, `linkedin`, `indicacao_contador`, `indicacao_cliente`, `evento`, `campanha`, `whatsapp`, `outro` (`personas-e-funis.md`, seção 2). Importação por CSV usa `linkedin`, `evento` ou `outro` com `source_detail = importacao:[arquivo]`.
+`lead_source`: `site`, `guia`, `simulador`, `diagnostico`, `linkedin`, `indicacao_contador`, `indicacao_cliente`, `evento`, `campanha`, `whatsapp`, `outro`, `prospeccao` (`personas-e-funis.md`, seção 2; `prospeccao` acrescentado pelo ADR-004, 6.4.4, **depois** de `outro`, fim real do enum, para o `drizzle-kit generate` emitir um único `ALTER TYPE ... ADD VALUE 'prospeccao'` sem `BEFORE`; `SOURCE_LABELS.prospeccao = "Prospecção"`; no score cai em "demais origens: 2 pontos"). Importação por CSV usa `linkedin`, `evento` ou `outro` com `source_detail = importacao:[arquivo]`; o lead criado por "Reunião marcada" usa `prospeccao` com `source_detail` = nome da lista.
+
+Regra para valores de enum em migração: o migrator do Drizzle aplica **todas** as migrações pendentes numa única transação (é o que `tests/setup.ts` e `scripts/migrate.ts` usam), e o PostgreSQL aceita `ADD VALUE` dentro de uma transação mas proíbe usar o valor novo na mesma transação. Logo, **nenhuma migração em `drizzle/*.sql` pode fazer `INSERT` ou `UPDATE` com um valor de enum acrescentado por outra migração**: num banco novo as duas rodam juntas e a segunda quebraria. Backfills em migração só com valores antigos; valores novos entram só pela aplicação. `ADD VALUE` não tem reversão: o valor fica no tipo, e a reversão de uma entrega é da aplicação (voltar o deploy anterior), que continua funcionando sobre o banco migrado porque o código antigo não lê o valor novo.
 
 ### 4.5 Regime tributário e confirmação
 
@@ -391,7 +443,10 @@ Para um projeto Rouanet, `cultural_projects.mechanism` guarda o artigo de enquad
 | `contributions` | UNIQUE `(tenant_id, project_id, receipt_number)` WHERE `receipt_number IS NOT NULL` | Um recibo por aporte (regra R-7) |
 | `contributions` | CHECK `commission_paid_at IS NULL OR deposited_at IS NOT NULL` | Regra R-8 |
 | `contributions` | CHECK `status <> 'termo_assinado' OR term_signed_at IS NOT NULL`; CHECK `status <> 'depositado' OR (deposited_at IS NOT NULL AND deposited_amount > 0)`; CHECK `status <> 'recibo_emitido' OR (receipt_number IS NOT NULL AND receipt_issued_at IS NOT NULL)` | Estados consistentes |
-| `activities` | INDEX `(tenant_id, lead_id, occurred_at DESC)`; INDEX `(tenant_id, due_at)` WHERE `done_at IS NULL AND type = 'tarefa'`; CHECK `num_nonnulls(lead_id, org_id, project_id, contribution_id) >= 1` | Linha do tempo; tarefas vencidas |
+| `activities` | INDEX `(tenant_id, lead_id, occurred_at DESC)`; INDEX `(tenant_id, due_at)` WHERE `done_at IS NULL AND type = 'tarefa'`; INDEX `(tenant_id, position)` WHERE `type = 'tarefa' AND done_at IS NULL`; INDEX `(tenant_id, prospecting_item_id, occurred_at DESC)` WHERE `prospecting_item_id IS NOT NULL`; CHECK `activities_subject_check`: `type = 'tarefa' OR num_nonnulls(lead_id, org_id, project_id, contribution_id, prospecting_item_id) >= 1` (reescrito pela `0003`: tarefa pode ser solta); CHECK `activities_priority_check`: `priority IS NULL OR priority IN ('baixa', 'media', 'alta')` | Linha do tempo; tarefas vencidas; colunas A fazer e Em andamento do quadro; histórico da empresa de prospecção |
+| `activities` | FK `prospecting_item_id` **sem** `ON DELETE` (`NO ACTION`); `lead_id`/`org_id` de `prospecting_items` com `SET NULL`; `list_id` com `CASCADE` | `SET NULL` em `activities.prospecting_item_id` deixaria a atividade pré-lead sem nenhum vínculo e violaria o CHECK, abortando o `DELETE` da lista; a limpeza é explícita no repositório (seção 3.10) |
+| `prospecting_lists` | INDEX `(tenant_id, created_at DESC)` | Índice do módulo |
+| `prospecting_items` | INDEX `(tenant_id, list_id, position)`; INDEX `(tenant_id, status)`; INDEX `(tenant_id, lead_id)` WHERE `lead_id IS NOT NULL`; CHECK `prospecting_items_status_check` | Lista em ordem de colagem; chips por status; item do lead |
 | `form_attempts` | UNIQUE `(ip_hash, window_start)` | Upsert por janela |
 | todas as tabelas de negócio | INDEX em `tenant_id` quando não for o primeiro campo de outro índice | Isolamento e Fase 2 |
 
@@ -417,6 +472,7 @@ Para um projeto Rouanet, `cultural_projects.mechanism` guarda o artigo de enquad
 | R-16 | Logs nunca contêm e-mail, telefone, CPF ou CNPJ; só ids | `src/lib/log.ts` | LGPD, art. 6º, VII |
 | R-17 | Retenção: leads sem contrato, 24 meses após `last_contact_at` [verificar] (com advogado); `contributions`, `consents` e `cultural_projects`, 5 anos após a prestação de contas; a Fase 1 só registra, não apaga | documentado; cron da Fase 2 | `estrutura-e-copy.md`, seção 5.7 |
 | R-18 | Formulário do site: honeypot preenchido ou envio em menos de 3 segundos responde sucesso sem gravar; mais de 5 envios por IP por hora responde erro genérico | `createLead`, `form_attempts` | `estrutura-e-copy.md`, seção 5.1 |
+| R-19 | Um item de prospecção vira lead só por "Reunião marcada" (`convertProspectingItem`): numa transação só com `tx`, a organização (reaproveitada por `org_id` ou por nome exato, senão criada com `phone` da empresa), o contato (telefone só o da pessoa, quando informado), o lead PJ em `patrocinadores`/`novo` com `source = prospeccao` e `next_action_at` na data da reunião (ou o lead já existente com o mesmo e-mail, vinculado à organização e ao contato), a `activities.reuniao` com `occurred_at` = data da reunião e o item em `reuniao_marcada`; **fora** dessa transação, `moveLeadStage` move o lead de `novo` a `qualificado` com dono e próxima ação; um lead reaproveitado no estágio terminal é reativado para `novo` (`reactivate`) e então movido a `qualificado`, pelo mesmo `moveLeadStage`; em qualquer outro estágio nada é movido. A reunião marcada basta para `qualificado` neste caminho, mesmo com regime `nao_sei` (exceção documentada ao critério de entrada de `personas-e-funis.md`, seção 8: regime confirmado e decisor identificado; o diálogo grava o regime em `attributes.regime_tributario` quando a Daniela soube na ligação). Se um movimento falhar, o lead fica onde estava (`novo` com a reunião e a próxima ação; ou `perdido` com a reunião), estado recuperável pela própria tela do lead; a função devolve o `stage` real. Nenhum outro caminho grava `stage` fora de `moveLeadStage` (R-3): criar o lead direto em `qualificado` no `INSERT` foi rejeitado | `convertProspectingItem`, `moveLeadStage` | ADR-004, 6.6; `playbooks/README.md`, "Regras comuns" |
 
 ## 7. Como os formulários do site chegam ao modelo
 
@@ -438,6 +494,9 @@ Para um projeto Rouanet, `cultural_projects.mechanism` guarda o artigo de enquad
 |---|---|---|
 | `pipelines`, `pipeline_stages` | Constantes em `src/lib/domain/pipelines.ts` com `CHECK` no banco | Segundo tenant com estágios próprios (Fase 2) |
 | `deals` ou `opportunities` | `contributions.status = proposta` | Um lead negociar várias propostas simultâneas para o mesmo projeto |
+| `leads.position` (ordem manual do quadro de leads) | Ordem por urgência (`next_action_at` ascendente com nulos por último, depois `stage_entered_at`), a mesma do Painel e do `SlaIndicator`; decisão de não modelar (ADR-004, 6.3 e 9) | A Daniela pedir reordenar à mão depois da revisão de um mês, e isso não mudar o que "prioridade" significa no CRM |
+| `tasks` (tabela própria) | `activities.type = 'tarefa'` com `started_at`, `priority` e `position` (seção 3.10) | Nunca na Fase 1: Painel, linha do tempo, `NextStepCard`, e-mail diário e exportação já leem `activities` |
+| Status gravado da tarefa (`todo/doing/done`) | Derivado de `started_at` e `done_at` (`taskStatusOf`) | Contradiria `done_at`; `listOpenTasks` continua intacto |
 | `campaigns` | `utm_campaign` e `source_detail` no lead | A Daniela quiser cadastrar campanha com datas e orçamento |
 | `partner_referrals` | `leads.referred_by_org_id` e `group by` | Remuneração de parceiro exigir rastro por indicação |
 | `waitlist_entries` | Lead `ALUNO` com `attributes` | Turma com vagas e pagamento |

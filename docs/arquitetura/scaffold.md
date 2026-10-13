@@ -333,7 +333,7 @@ export const dbPromise = (g.__prospektoDb ??= createDb());
 export const db = await dbPromise;
 ```
 
-Em produção o `import` do PGlite nunca executa. O cache em `globalThis` evita um pool por recarga do `next dev`. O `await` de nível superior exige `"type": "module"` no `package.json` (seção 3, nota testada); dentro do Next o arquivo é empacotado como ESM de qualquer forma, mas `scripts/` e `tests/` o importam fora do bundle.
+Em produção o `import` do PGlite nunca executa. O cache em `globalThis` evita um pool por recarga do `next dev`. **O PGlite não aceita dois processos no mesmo diretório** (visto em 13/10/2026, na integração do ADR-004): enquanto o `next dev` está de pé sobre `.pglite/`, qualquer outro processo que abra o mesmo diretório (um `node -e` de consulta, o `npm run db:seed`, os três workers de "Collecting page data" do `npm run build`) provoca `RuntimeError: Aborted()` no WASM, e um diretório que foi aberto assim pode ficar corrompido (`PGlite failed to initialize properly`, arquivos com data de 1970). Regra prática: parar o dev server antes de `db:seed` e de `npm run build`; para um build com o dev de pé, apontar `PGLITE_DIR` para um diretório recém-migrado (`PGLITE_DIR=/tmp/pg-build npm run db:migrate && PGLITE_DIR=/tmp/pg-build npm run build`); se o `.pglite/` corrompeu, `rm -rf .pglite && npm run db:migrate && npm run db:seed`. O `await` de nível superior exige `"type": "module"` no `package.json` (seção 3, nota testada); dentro do Next o arquivo é empacotado como ESM de qualquer forma, mas `scripts/` e `tests/` o importam fora do bundle.
 
 ### 5.5 `scripts/migrate.ts`
 

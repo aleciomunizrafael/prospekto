@@ -80,7 +80,7 @@ Registradas como dadas; o resto do documento assume estas decisões.
 | Chave | Rótulo | Rota | Ícone (lucide) | Sidebar | Barra inferior (celular) | Subpáginas no caminho do header |
 |---|---|---|---|---|---|---|
 | `painel` | Painel | `/app` (exato) | `LayoutDashboard` | sim, com o contador de vencidos | sim | |
-| `pipeline` | Pipeline | `/app/leads` | `KanbanSquare` | sim | sim | `/app/leads/novo` → "Novo lead"; `/app/leads/[id]` → "Lead" |
+| `pipeline` | Pipeline | `/app/leads` | `SquareKanban` (o lucide-react instalado não exporta `KanbanSquare`, nome antigo do mesmo glifo) | sim | sim | `/app/leads/novo` → "Novo lead"; `/app/leads/[id]` → "Lead" |
 | `prospeccao` | Prospecção | `/app/prospeccao` | `PhoneOutgoing` | sim | sim | `/app/prospeccao/[listId]` → "Lista"; `/app/prospeccao/[listId]/[itemId]` → "Empresa" |
 | `organizacoes` | Organizações | `/app/organizacoes` | `Building2` | sim | em "Mais" | `/app/organizacoes/[id]` → "Organização" |
 | `projetos` | Projetos | `/app/projetos` | `Clapperboard` | sim | em "Mais" | `/app/projetos/novo` → "Novo projeto"; `/app/projetos/[id]` → "Projeto" |
