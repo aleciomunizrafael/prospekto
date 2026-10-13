@@ -22,8 +22,10 @@ import { StatusBadge } from "../ui/status-badge";
 // props. Linha 1: assunto como botão "Editar" + pill de prioridade com texto; linha 2: vínculo
 // como link real (ou "sem vínculo"); linha 3: descrição em duas linhas; linha 4: prazo
 // (describeTaskDue) e, nas colunas abertas, "Concluir"; dono à direita. O menu "⋯" é o caminho
-// sem arrasto para mover entre as três colunas (teclado e celular). Links e botões não iniciam
-// arrasto (`draggable={false}`, crítica 28) e ficam acima do cartão (`relative z-10`).
+// sem arrasto para mover entre as três colunas (teclado e celular); `data-task-move` é o gancho
+// que o TaskBoard usa para devolver o foco ao botão depois que o cartão remonta na coluna de
+// destino. Links e botões não iniciam arrasto (`draggable={false}`, crítica 28) e ficam acima do
+// cartão (`relative z-10`).
 export type DropIndicator = "top" | "bottom" | null;
 
 export type TaskCardProps = {
@@ -92,6 +94,7 @@ export function TaskCard({
                   variant="ghost"
                   size="icon-sm"
                   draggable={false}
+                  data-task-move={task.id}
                   aria-label={`Mover tarefa: ${task.subject}`}
                   className="relative z-10 size-11 md:size-7"
                 />

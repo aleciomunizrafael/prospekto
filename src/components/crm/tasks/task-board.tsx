@@ -7,6 +7,7 @@ import {
   useCallback,
   useEffect,
   useOptimistic,
+  useRef,
   useState,
   type DragEvent,
   type ReactNode,
@@ -123,6 +124,10 @@ export function TaskBoard({
   const [dragId, setDragId] = useState<string | null>(null);
   const [over, setOver] = useState<DropTarget>(null);
   const [announce, setAnnounce] = useState("");
+  // Tarefa que acabou de ser movida: o cartão remonta na coluna de destino e o botão "⋯" que abriu
+  // o menu deixa de existir, então o menu não tem para onde devolver o foco (cairia no body e o
+  // próximo Tab recomeçaria do início da página). O efeito abaixo foca o botão do cartão novo.
+  const focusTaskId = useRef<string | null>(null);
 
   useEffect(() => {
     const media = window.matchMedia(DESKTOP);
@@ -169,9 +174,23 @@ export function TaskBoard({
     cleanUrl();
   };
 
+  useEffect(() => {
+    const id = focusTaskId.current;
+    if (!id) return;
+    focusTaskId.current = null;
+    // Depois do microtask em que o menu tenta devolver o foco ao botão antigo (já desmontado).
+    const timer = window.setTimeout(() => {
+      document
+        .querySelector<HTMLElement>(`[data-task-move="${id}"]`)
+        ?.focus({ preventScroll: true });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [optimisticBoard]);
+
   const performMove = useCallback(
     (task: TaskRow, status: TaskStatus, index: number) => {
       const move: TaskMove = { activityId: task.id, status, index };
+      focusTaskId.current = task.id;
       setAnnounce(`Movendo "${task.subject}" para ${TASK_STATUS_LABELS[status]}.`);
       startTransition(async () => {
         applyMove(move);

@@ -132,6 +132,8 @@ describe("TaskBoardColumns", () => {
     const html = render();
     expect(html).toContain('aria-label="Editar tarefa: Tarefa solta"');
     expect(html).toContain('aria-label="Mover tarefa: Tarefa solta"');
+    // Gancho do TaskBoard para devolver o foco ao "⋯" depois que o cartão remonta noutra coluna.
+    expect(html).toMatch(/data-task-move="solta"[^>]*aria-label="Mover tarefa: Tarefa solta"/);
     expect(html).not.toMatch(/tabindex="-1"[^>]*aria-label="Editar/);
   });
 
