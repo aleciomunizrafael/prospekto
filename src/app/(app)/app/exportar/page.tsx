@@ -14,13 +14,17 @@ export const metadata: Metadata = { title: "Exportar" };
 // consulta a mais por tabela sem valor nesta fase (plano, fase opcional).
 const EXPORT_TABLE_DESCRIPTIONS: Record<ExportTable, string> = {
   leads: "Leads de todos os pipelines, com estágio, dono e próxima ação",
-  organizations: "Empresas, contadores, municípios e proponentes, com CNPJ e cidade",
+  organizations: "Empresas, contadores, municípios e proponentes, com CNPJ, cidade e telefone",
   contacts: "Pessoas de contato das organizações, com cargo, e-mail e telefone",
   consents: "Consentimentos LGPD registrados, com canal, data e versão da política",
   simulations: "Simulações feitas no site, com os valores informados e o resultado",
   cultural_projects: "Projetos da carteira, com mecanismo, estágio, valores e prazo",
   contributions: "Aportes, com patrocinador, projeto, status, valores e datas",
-  activities: "Atividades e tarefas registradas nos leads, com tipo, data e autor",
+  activities:
+    "Atividades e tarefas de leads, organizações, projetos, aportes e prospecção, com tipo, data, status e prioridade das tarefas e autor",
+  prospecting_lists: "Listas de prospecção, com região, origem dos dados, instruções e quem liga",
+  prospecting_items:
+    "Empresas de cada lista de prospecção, com telefone, abertura, status da cadência, retorno e o lead criado",
 };
 
 export default async function ExportPage() {

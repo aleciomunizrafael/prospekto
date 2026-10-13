@@ -9,16 +9,21 @@ import {
   culturalProjects,
   leads,
   organizations,
+  prospectingItems,
+  prospectingLists,
   simulations,
   users,
 } from "@/lib/db/schema";
 import { ALL_ATTRIBUTE_KEYS } from "@/lib/crm/attributes";
+import { taskStatusOf } from "@/lib/crm/task-status";
 import type { CsvRow } from "@/lib/csv";
 import type { Ctx } from "./ctx";
 
 // Exportação CSV por tabela, só do tenant da sessão (proposta-c-simplicidade.md, seção 9.4).
 // Cabeçalhos em português; valores de enum no literal do banco. Datas em ISO e números com
-// ponto (src/lib/csv.ts). Consentimentos e simulações têm arquivo próprio nesta onda.
+// ponto (src/lib/csv.ts). Consentimentos e simulações têm arquivo próprio nesta onda. As listas e
+// os itens de prospecção (ADR-004, 6.4.6) saem com o telefone da empresa, coberto pelo mesmo aviso
+// LGPD da página Exportar.
 export const EXPORT_TABLES = [
   "leads",
   "organizations",
@@ -28,6 +33,8 @@ export const EXPORT_TABLES = [
   "cultural_projects",
   "contributions",
   "activities",
+  "prospecting_lists",
+  "prospecting_items",
 ] as const;
 export type ExportTable = (typeof EXPORT_TABLES)[number];
 
@@ -44,6 +51,8 @@ export const EXPORT_TABLE_LABELS: Record<ExportTable, string> = {
   cultural_projects: "Projetos",
   contributions: "Aportes",
   activities: "Atividades",
+  prospecting_lists: "Listas de prospecção",
+  prospecting_items: "Empresas de prospecção",
 };
 
 export type ExportHeader = { key: string; label: string };
@@ -217,6 +226,7 @@ async function exportOrganizations(ctx: Ctx): Promise<ExportResult> {
     "cnpj",
     "cidade",
     "uf",
+    "telefone",
     "setor",
     "regime_tributario",
     "regime_confirmado_por",
@@ -237,6 +247,7 @@ async function exportOrganizations(ctx: Ctx): Promise<ExportResult> {
       cnpj: org.cnpj,
       cidade: org.city,
       uf: org.uf,
+      telefone: org.phone,
       setor: org.sector,
       regime_tributario: org.taxRegime,
       regime_confirmado_por: org.taxRegimeConfirmedBy,
@@ -555,6 +566,7 @@ async function exportActivities(ctx: Ctx): Promise<ExportResult> {
       projectName: culturalProjects.name,
       ownerName: owner.name,
       creatorName: creator.name,
+      prospectingItemName: prospectingItems.name,
     })
     .from(activities)
     .leftJoin(leads, and(eq(leads.id, activities.leadId), eq(leads.tenantId, ctx.tenantId)))
@@ -574,8 +586,16 @@ async function exportActivities(ctx: Ctx): Promise<ExportResult> {
       creator,
       and(eq(creator.id, activities.createdByUserId), eq(creator.tenantId, ctx.tenantId)),
     )
+    .leftJoin(
+      prospectingItems,
+      and(
+        eq(prospectingItems.id, activities.prospectingItemId),
+        eq(prospectingItems.tenantId, ctx.tenantId),
+      ),
+    )
     .where(eq(activities.tenantId, ctx.tenantId))
     .orderBy(desc(activities.occurredAt));
+  // `status` só nas tarefas: derivado de started_at e done_at (ADR-004, 6.5), nunca gravado.
   const headers = [
     "id",
     "tipo",
@@ -583,13 +603,17 @@ async function exportActivities(ctx: Ctx): Promise<ExportResult> {
     "descricao",
     "ocorrido_em",
     "vence_em",
+    "iniciado_em",
     "concluido_em",
+    "status",
+    "prioridade",
     "lead_id",
     "lead",
     "email_lead",
     "organizacao",
     "projeto",
     "aporte_id",
+    "empresa_prospeccao",
     "responsavel",
     "criado_por",
     "dados",
@@ -597,24 +621,154 @@ async function exportActivities(ctx: Ctx): Promise<ExportResult> {
   ].map((k) => h(k));
   return {
     headers,
-    rows: rows.map(({ a, leadName, leadEmail, orgName, projectName, ownerName, creatorName }) => ({
-      id: a.id,
-      tipo: a.type,
-      assunto: a.subject,
-      descricao: a.body,
-      ocorrido_em: a.occurredAt,
-      vence_em: a.dueAt,
-      concluido_em: a.doneAt,
-      lead_id: a.leadId,
-      lead: leadName,
-      email_lead: leadEmail,
-      organizacao: orgName,
-      projeto: projectName,
-      aporte_id: a.contributionId,
-      responsavel: ownerName,
+    rows: rows.map(
+      ({
+        a,
+        leadName,
+        leadEmail,
+        orgName,
+        projectName,
+        ownerName,
+        creatorName,
+        prospectingItemName,
+      }) => ({
+        id: a.id,
+        tipo: a.type,
+        assunto: a.subject,
+        descricao: a.body,
+        ocorrido_em: a.occurredAt,
+        vence_em: a.dueAt,
+        iniciado_em: a.startedAt,
+        concluido_em: a.doneAt,
+        status: a.type === "tarefa" ? taskStatusOf(a) : null,
+        prioridade: a.priority,
+        lead_id: a.leadId,
+        lead: leadName,
+        email_lead: leadEmail,
+        organizacao: orgName,
+        projeto: projectName,
+        aporte_id: a.contributionId,
+        empresa_prospeccao: prospectingItemName,
+        responsavel: ownerName,
+        criado_por: creatorName,
+        dados: a.data,
+        criado_em: a.createdAt,
+      }),
+    ),
+  };
+}
+
+async function exportProspectingLists(ctx: Ctx): Promise<ExportResult> {
+  const assignee = aliasedTable(users, "assignee");
+  const creator = aliasedTable(users, "creator");
+  const rows = await db
+    .select({ list: prospectingLists, assigneeName: assignee.name, creatorName: creator.name })
+    .from(prospectingLists)
+    .leftJoin(
+      assignee,
+      and(eq(assignee.id, prospectingLists.assigneeUserId), eq(assignee.tenantId, ctx.tenantId)),
+    )
+    .leftJoin(
+      creator,
+      and(eq(creator.id, prospectingLists.createdByUserId), eq(creator.tenantId, ctx.tenantId)),
+    )
+    .where(eq(prospectingLists.tenantId, ctx.tenantId))
+    .orderBy(desc(prospectingLists.createdAt));
+  const headers = [
+    "id",
+    "nome",
+    "regiao",
+    "origem_dados",
+    "instrucoes",
+    "quem_liga",
+    "criado_por",
+    "criado_em",
+    "atualizado_em",
+  ].map((k) => h(k));
+  return {
+    headers,
+    rows: rows.map(({ list, assigneeName, creatorName }) => ({
+      id: list.id,
+      nome: list.name,
+      regiao: list.region,
+      origem_dados: list.sourceDetail,
+      instrucoes: list.notes,
+      quem_liga: assigneeName,
       criado_por: creatorName,
-      dados: a.data,
-      criado_em: a.createdAt,
+      criado_em: list.createdAt,
+      atualizado_em: list.updatedAt,
+    })),
+  };
+}
+
+async function exportProspectingItems(ctx: Ctx): Promise<ExportResult> {
+  const rows = await db
+    .select({
+      item: prospectingItems,
+      listName: prospectingLists.name,
+      leadName: leads.name,
+      orgName: organizations.name,
+    })
+    .from(prospectingItems)
+    .leftJoin(
+      prospectingLists,
+      and(
+        eq(prospectingLists.id, prospectingItems.listId),
+        eq(prospectingLists.tenantId, ctx.tenantId),
+      ),
+    )
+    .leftJoin(leads, and(eq(leads.id, prospectingItems.leadId), eq(leads.tenantId, ctx.tenantId)))
+    .leftJoin(
+      organizations,
+      and(eq(organizations.id, prospectingItems.orgId), eq(organizations.tenantId, ctx.tenantId)),
+    )
+    .where(eq(prospectingItems.tenantId, ctx.tenantId))
+    .orderBy(desc(prospectingItems.createdAt));
+  const headers = [
+    "id",
+    "lista_id",
+    "lista",
+    "empresa",
+    "grupo",
+    "telefone",
+    "abertura",
+    "localizacao",
+    "porte",
+    "informacoes",
+    "status",
+    "anotacao",
+    "retornar_em",
+    "ultima_tentativa",
+    "whatsapp_aberto_em",
+    "lead_id",
+    "lead",
+    "organizacao",
+    "criado_em",
+    "atualizado_em",
+  ].map((k) => h(k));
+  return {
+    headers,
+    rows: rows.map(({ item, listName, leadName, orgName }) => ({
+      id: item.id,
+      lista_id: item.listId,
+      lista: listName,
+      empresa: item.name,
+      grupo: item.segment,
+      telefone: item.phone,
+      abertura: item.hook,
+      localizacao: item.address,
+      porte: item.size,
+      informacoes: item.info,
+      status: item.status,
+      anotacao: item.notes,
+      retornar_em: item.callbackAt,
+      ultima_tentativa: item.calledAt,
+      whatsapp_aberto_em: item.whatsappSentAt,
+      lead_id: item.leadId,
+      lead: leadName,
+      organizacao: orgName,
+      criado_em: item.createdAt,
+      atualizado_em: item.updatedAt,
     })),
   };
 }
@@ -637,5 +791,9 @@ export async function exportTable(ctx: Ctx, table: ExportTable): Promise<ExportR
       return exportContributions(ctx);
     case "activities":
       return exportActivities(ctx);
+    case "prospecting_lists":
+      return exportProspectingLists(ctx);
+    case "prospecting_items":
+      return exportProspectingItems(ctx);
   }
 }
