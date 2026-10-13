@@ -1,23 +1,36 @@
-// Listas e itens de prospecção (ADR-004, 6.4 e 6.6; plano, P15) contra PGlite.
-import { beforeAll, describe, expect, it } from "vitest";
+// Listas e itens de prospecção (ADR-004, 6.4 e 6.6; plano, P15 e P10) contra PGlite. A conversão
+// é testada com moveLeadStage substituído por um espião que pode falhar: a transação da conversão
+// tem de permanecer confirmada e o estágio real devolvido (prova da separação pedida na P10).
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Ctx } from "@/lib/repos/ctx";
 import { createActivity, getActivity, listActivities } from "@/lib/repos/activities";
-import { createLead } from "@/lib/repos/leads";
+import { createLead, getLead, moveLeadStage } from "@/lib/repos/leads";
 import {
   addItems,
+  convertProspectingItem,
   countItemsByStatus,
   createList,
   deleteItem,
   deleteList,
   getItem,
   getList,
+  listDiscardReasons,
   listItems,
   listLists,
+  recordCallResult,
+  recordWhatsappSent,
   searchProspectingItems,
   updateItem,
+  updateItemField,
   updateList,
 } from "@/lib/repos/prospecting";
 import { makeTenant, makeUser, uniqueEmail } from "../helpers";
+
+// Espião sobre a função real: por padrão chama a original; cada teste decide quando ela falha.
+vi.mock("@/lib/repos/leads", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/repos/leads")>();
+  return { ...actual, moveLeadStage: vi.fn(actual.moveLeadStage) };
+});
 
 let ctx: Ctx;
 
@@ -230,5 +243,121 @@ describe("exclusão (P15)", () => {
     const list = await createList(ctx, { name: "Alheia", sourceDetail: "busca pública" });
     await expect(deleteList(other, list.id)).rejects.toThrow(/não encontrad/);
     expect(await getList(ctx, list.id)).not.toBeNull();
+  });
+});
+
+describe("resultado, WhatsApp, autosave e motivo do descarte", () => {
+  it("recordCallResult grava o resultado e listDiscardReasons devolve o motivo do descarte", async () => {
+    const list = await createList(ctx, { name: "Resultados", sourceDetail: "busca pública" });
+    const {
+      items: [item],
+    } = await addItems(ctx, { listId: list.id, items: [{ name: "Empresa Resultado" }] });
+    const discarded = await recordCallResult(ctx, {
+      itemId: item.id,
+      status: "descartado",
+      reason: "nao_contatar",
+    });
+    expect(discarded.status).toBe("descartado");
+    expect(discarded.calledAt).toBeInstanceOf(Date);
+    expect(await listDiscardReasons(ctx, { listId: list.id })).toEqual({
+      [item.id]: "nao_contatar",
+    });
+    expect(await listDiscardReasons(ctx, { itemId: item.id })).toEqual({
+      [item.id]: "nao_contatar",
+    });
+    await expect(recordCallResult(ctx, { itemId: item.id, status: "descartado" })).rejects.toThrow(
+      /motivo/,
+    );
+    const back = await recordCallResult(ctx, { itemId: item.id, status: "a_ligar" });
+    expect(back.calledAt).toBeNull();
+    expect(await listDiscardReasons(ctx, { listId: list.id })).toEqual({});
+    const noted = await updateItemField(ctx, { itemId: item.id, field: "notes", value: " ok " });
+    expect(noted.notes).toBe("ok");
+    const wa = await recordWhatsappSent(ctx, { itemId: item.id, text: "Olá" });
+    expect(wa.whatsappSentAt).toBeInstanceOf(Date);
+    expect(
+      await listActivities(ctx, { prospectingItemId: item.id, type: "whatsapp" }),
+    ).toHaveLength(1);
+  });
+});
+
+describe("convertProspectingItem com moveLeadStage falhando (P10)", () => {
+  async function seedItem(name: string) {
+    const list = await createList(ctx, { name: "Conversão", sourceDetail: "busca pública" });
+    const {
+      items: [item],
+    } = await addItems(ctx, { listId: list.id, items: [{ name, phone: "(54) 90000-0021" }] });
+    return item;
+  }
+
+  it("a transação permanece confirmada e o lead fica em novo com next_action_at", async () => {
+    const item = await seedItem("Empresa Sem Avanço");
+    vi.mocked(moveLeadStage).mockImplementationOnce(async () => {
+      throw new Error("falha simulada no movimento");
+    });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const meetingAt = new Date("2026-10-20T13:00:00Z");
+    const result = await convertProspectingItem(ctx, {
+      itemId: item.id,
+      contactName: "Pessoa Sem Avanço",
+      email: uniqueEmail("semavanco"),
+      meetingAt,
+    });
+    expect(result.stage).toBe("novo");
+    expect(result.created).toBe(true);
+    expect(result.reactivated).toBe(false);
+    const lead = (await getLead(ctx, result.leadId))!;
+    expect(lead.stage).toBe("novo");
+    expect(lead.nextActionAt?.toISOString()).toBe(meetingAt.toISOString());
+    const after = (await getItem(ctx, item.id))!;
+    expect(after.status).toBe("reuniao_marcada");
+    expect(after.leadId).toBe(lead.id);
+    expect(await listActivities(ctx, { leadId: lead.id, type: "reuniao" })).toHaveLength(1);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const line = warnSpy.mock.calls[0].map(String).join(" ");
+    expect(line).toContain("estágio não avançado");
+    expect(line).not.toContain("+55");
+    expect(line).not.toContain("@example.test");
+    expect(line).not.toContain("Pessoa Sem Avanço");
+  });
+
+  it("lead perdido reaproveitado: a reativação vale e o segundo movimento falha", async () => {
+    const real = await vi.importActual<typeof import("@/lib/repos/leads")>("@/lib/repos/leads");
+    const email = uniqueEmail("perdido-repo");
+    const { lead } = await real.createLead(ctx, {
+      segment: "PJ",
+      interest: "rouanet",
+      name: "Lead Perdido Repo",
+      email,
+      source: "linkedin",
+      attributes: { empresa: "Empresa Perdida Repo" },
+    });
+    await real.moveLeadStage(ctx, {
+      leadId: lead.id,
+      to: "perdido",
+      lostReason: "sem_interesse",
+      ownerUserId: ctx.userId!,
+      nextActionAt: new Date("2026-10-15T12:00:00Z"),
+    });
+    const item = await seedItem("Empresa Perdida Repo");
+    vi.mocked(moveLeadStage)
+      .mockImplementationOnce(real.moveLeadStage)
+      .mockImplementationOnce(async () => {
+        throw new Error("falha simulada no segundo movimento");
+      });
+    const result = await convertProspectingItem(ctx, {
+      itemId: item.id,
+      contactName: "Pessoa Perdida",
+      email,
+      meetingAt: new Date("2026-10-21T13:00:00Z"),
+    });
+    expect(result.leadId).toBe(lead.id);
+    expect(result.created).toBe(false);
+    expect(result.reactivated).toBe(true);
+    expect(result.stage).toBe("novo");
+    const after = (await getLead(ctx, lead.id))!;
+    expect(after.stage).toBe("novo");
+    expect(after.lostReason).toBeNull();
+    expect(after.lostReasonDetail).toBeNull();
   });
 });
