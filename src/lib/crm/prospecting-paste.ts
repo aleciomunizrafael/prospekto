@@ -8,6 +8,9 @@
 // Função pura, sem Zod: roda no cliente (prévia do diálogo) e no servidor (fonte única da action).
 // A normalização do telefone copia a regra de phoneSchema (src/lib/validation/common.ts) e aceita,
 // além dela, o zero de tronco ("051 3593-0000"), que a máscara da lista telefônica costuma trazer.
+// O parser também aplica os mesmos tetos de newItemSchema (src/lib/validation/prospecting.ts:
+// nome 160, segmento 80, abertura e informações 2.000) para todo item da prévia passar no schema
+// e a action nunca recusar o que a prévia disse que reconheceu (addItems reparseia cada item).
 
 export type ParsedItem = {
   name: string;
@@ -26,6 +29,11 @@ export type ParsedPaste = {
 };
 
 export const PASTE_LINE_LIMIT = 500;
+
+// Tetos de newItemSchema (não importados: o schema traz o Zod, e este módulo roda no cliente).
+const NAME_MAX = 160;
+const SEGMENT_MAX = 80;
+const TEXT_MAX = 2000;
 
 // Subconjunto de phoneSchema: DDD brasileiro (dois dígitos de 1 a 9) e 8 ou 9 dígitos, para um
 // "0800" ou um CNPJ não virarem telefone.
@@ -61,6 +69,8 @@ export function parseProspectingPaste(text: string): ParsedPaste {
         line
           .replace(/^#+\s*/, "")
           .replace(/^\d+[.)]\s*/, "")
+          .trim()
+          .slice(0, SEGMENT_MAX)
           .trim() || null;
       continue;
     }
@@ -88,13 +98,13 @@ export function parseProspectingPaste(text: string): ParsedPaste {
     let info: string | null = null;
     if (rawPhone !== null && phone === null) {
       unrecognizedPhones += 1;
-      info = `Telefone informado: ${rawPhone}`;
+      info = `Telefone informado: ${rawPhone}`.slice(0, TEXT_MAX);
     }
     items.push({
-      name: name.slice(0, 160),
+      name: name.slice(0, NAME_MAX),
       segment,
       phone,
-      hook: hookParts.length ? hookParts.join(" · ").slice(0, 2000) : null,
+      hook: hookParts.length ? hookParts.join(" · ").slice(0, TEXT_MAX) : null,
       info,
     });
   }

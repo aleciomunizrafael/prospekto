@@ -6,7 +6,20 @@ import {
   looksLikePhone,
   normalizeBrazilianPhone,
   parseProspectingPaste,
+  type ParsedItem,
 } from "@/lib/crm/prospecting-paste";
+import { newItemSchema } from "@/lib/validation/prospecting";
+
+// Mesmo mapeamento de pasteItemsAction antes de addItems (null → ausente).
+function toNewItem(item: ParsedItem) {
+  return {
+    name: item.name,
+    segment: item.segment ?? undefined,
+    phone: item.phone ?? undefined,
+    hook: item.hook ?? undefined,
+    info: item.info ?? undefined,
+  };
+}
 
 describe("parseProspectingPaste", () => {
   it("lê # como segmento e aceita |, ; e tabulação como separadores", () => {
@@ -108,6 +121,40 @@ describe("parseProspectingPaste", () => {
     expect(describePastePreview(parsed)).toBe(
       "500 empresas reconhecidas · 5 além do limite de 500 por colagem (ignoradas)",
     );
+  });
+
+  it("corta segmento em 80 e info em 2.000 para todo item da prévia passar em newItemSchema", () => {
+    const header =
+      "# Vinícolas do Vale dos Vinhedos e região de Bento Gonçalves, lista da associação comercial";
+    expect(header.replace(/^#\s*/, "").length).toBeGreaterThan(80);
+    const longName = `Empresa ${"x".repeat(200)}`;
+    const longHook = "y".repeat(2500);
+    const text = [
+      header,
+      `Vinícola Exemplo | ${"9".repeat(3000)} | Lançaram um rótulo novo`,
+      `${longName} | (54) 3000-0000 | ${longHook}`,
+      "Adega Modelo; 54 99000-0001; Abriram loja",
+    ].join("\n");
+    const parsed = parseProspectingPaste(text);
+    expect(describePastePreview(parsed)).toBe(
+      "3 empresas reconhecidas · 1 telefone não reconhecido",
+    );
+    // O 80º caractere é o espaço antes de "comercial": o corte não deixa espaço no fim.
+    expect(parsed.items[0]?.segment).toBe(
+      "Vinícolas do Vale dos Vinhedos e região de Bento Gonçalves, lista da associação",
+    );
+    expect(parsed.items[0]?.segment?.length).toBeLessThanOrEqual(80);
+    expect(parsed.items[0]?.phone).toBeNull();
+    expect(parsed.items[0]?.info?.startsWith("Telefone informado: 999")).toBe(true);
+    expect(parsed.items[0]?.info?.length).toBeLessThanOrEqual(2000);
+    expect(parsed.items[1]?.name).toHaveLength(160);
+    expect(parsed.items[1]?.hook).toHaveLength(2000);
+    // Invariante: o que passa no parser passa no schema (addItems reparseia cada item; um
+    // ZodError ali abortaria a colagem inteira com "Confira os campos destacados.").
+    for (const item of parsed.items) {
+      const result = newItemSchema.safeParse(toNewItem(item));
+      expect(result.success, JSON.stringify(result.error?.issues)).toBe(true);
+    }
   });
 
   it("descreve a prévia no singular e no plural", () => {
