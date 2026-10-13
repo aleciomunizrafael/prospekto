@@ -19,8 +19,12 @@ import { TaskCompleteButton } from "../forms/task-complete-button";
 // Linha do tempo (crm-design-system.md, seção 5.2): agrupada por dia ("Hoje", "Ontem",
 // "30 de setembro"), ícone por tipo, tarefas abertas com "Concluir" e vencimento, eventos do
 // sistema em frase humana (humanize-activity.ts) e agrupados quando consecutivos.
-// Atividades mais recentes primeiro, como chegam de listActivities.
-type Group = { day: string; label: string; items: Activity[] };
+// Atividades mais recentes primeiro, como chegam de listActivities. Na ficha da organização
+// (ADR-004, 6.9) a linha pode trazer `leadName`: o nome do lead aparece "· Rodrigo" depois do
+// assunto, porque o histórico mistura atividades da organização e dos seus leads.
+export type TimelineActivity = Activity & { leadName?: string | null };
+
+type Group = { day: string; label: string; items: TimelineActivity[] };
 
 const DAY_LABEL = new Intl.DateTimeFormat("pt-BR", {
   day: "numeric",
@@ -42,7 +46,7 @@ function dayLabel(day: string, date: Date, today: string): string {
   return (sameYear ? DAY_LABEL : DAY_LABEL_WITH_YEAR).format(date);
 }
 
-function groupByDay(activities: Activity[], now: Date): Group[] {
+function groupByDay(activities: TimelineActivity[], now: Date): Group[] {
   const today = calendarDateInSaoPaulo(now);
   const groups: Group[] = [];
   for (const a of activities) {
@@ -55,9 +59,10 @@ function groupByDay(activities: Activity[], now: Date): Group[] {
 }
 
 // Dentro de um dia, sequências de dois ou mais eventos `sistema` viram um bloco dobrável.
-type Run = { kind: "single"; item: Activity } | { kind: "system"; items: Activity[] };
+type Run =
+  { kind: "single"; item: TimelineActivity } | { kind: "system"; items: TimelineActivity[] };
 
-function runsOf(items: Activity[]): Run[] {
+function runsOf(items: TimelineActivity[]): Run[] {
   const runs: Run[] = [];
   for (const item of items) {
     const last = runs[runs.length - 1];
@@ -111,7 +116,7 @@ function Item({
   projects,
   now,
 }: {
-  a: Activity;
+  a: TimelineActivity;
   users: Map<string, string>;
   projects?: Map<string, string>;
   now: Date;
@@ -147,6 +152,9 @@ function Item({
         <div className="flex min-w-0 flex-col gap-0.5">
           <p className={cn("text-sm font-medium", system && "font-normal text-muted-foreground")}>
             {a.type === "formulario" ? formSubject(a.subject) : a.subject}
+            {a.leadName ? (
+              <span className="font-normal text-muted-foreground"> · {a.leadName}</span>
+            ) : null}
           </p>
           {detail ? (
             <p className={cn("text-sm", system ? "text-muted-foreground" : "text-foreground")}>
@@ -197,7 +205,7 @@ export function Timeline({
   limit,
   className,
 }: {
-  activities: Activity[];
+  activities: TimelineActivity[];
   users: Map<string, string>;
   projects?: Map<string, string>;
   now: Date;

@@ -3,6 +3,8 @@
 // com requireSession() (AGENTS.md); entrada validada pelos schemas Zod dos repositórios.
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
+import type { CrmActionState } from "@/lib/crm/action-state";
 import { failFrom, num, ok, str, triBool, type ActionState } from "@/lib/crm/form-state";
 import { log } from "@/lib/log";
 import { createContact, updateContact } from "@/lib/repos/contacts";
@@ -11,9 +13,11 @@ import {
   createOrganization,
   searchLeads,
   updateOrganization,
+  updateOrganizationNotes,
   type LeadOption,
 } from "@/lib/repos/organizations";
 import { requireSession } from "@/lib/session";
+import { uuidSchema } from "@/lib/validation/common";
 import type { CreateOrganizationInput } from "@/lib/validation/organizations";
 
 function organizationInput(fd: FormData): CreateOrganizationInput {
@@ -34,6 +38,8 @@ function organizationInput(fd: FormData): CreateOrganizationInput {
     icmsContributorRs: triBool(fd, "icmsContributorRs"),
     accountantOrgId: str(fd, "accountantOrgId"),
     ownerUserId: str(fd, "ownerUserId"),
+    // Telefone da empresa (ADR-004, 6.4.7; plano, P18): E.164 pelo phoneSchema do repositório.
+    phone: str(fd, "phone"),
     notes: str(fd, "notes"),
   };
 }
@@ -78,6 +84,7 @@ export async function updateOrganizationAction(
       icmsContributorRs: input.icmsContributorRs ?? null,
       accountantOrgId: input.accountantOrgId ?? null,
       ownerUserId: input.ownerUserId ?? null,
+      phone: input.phone ?? null,
       notes: input.notes ?? null,
     } as Parameters<typeof updateOrganization>[1]);
   } catch (error) {
@@ -87,6 +94,37 @@ export async function updateOrganizationAction(
   revalidatePath("/app/organizacoes");
   revalidatePath(`/app/organizacoes/${orgId}`);
   return ok("Organização salva.");
+}
+
+// Notas da ficha, salvas ao perder o foco pelo AutosaveField (ADR-004, 6.9; plano, P8). O
+// argumento é FormData e passa pelo Zod antes de qualquer leitura de campo; vazio vira nulo.
+const notesFormSchema = z.object({
+  orgId: uuidSchema,
+  notes: z.string().max(8000, { error: "As notas podem ter no máximo 8.000 caracteres." }),
+});
+
+export async function updateOrganizationNotesAction(
+  _prev: CrmActionState,
+  fd: FormData,
+): Promise<CrmActionState> {
+  const ctx = await requireSession();
+  const parsed = notesFormSchema.safeParse({
+    orgId: fd.get("orgId"),
+    notes: typeof fd.get("notes") === "string" ? fd.get("notes") : "",
+  });
+  if (!parsed.success) {
+    return { status: "error", message: "Não foi possível salvar; tente de novo" };
+  }
+  const { orgId, notes } = parsed.data;
+  try {
+    await updateOrganizationNotes(ctx, { orgId, notes: notes.trim() ? notes : null });
+  } catch (error) {
+    // Sem o texto das notas no log (R-16).
+    log("warn", "falha ao salvar notas da organização", { tenantId: ctx.tenantId, orgId, error });
+    return { status: "error", message: "Não foi possível salvar; tente de novo" };
+  }
+  revalidatePath(`/app/organizacoes/${orgId}`);
+  return { status: "ok", message: "Salvo." };
 }
 
 function contactInput(fd: FormData) {

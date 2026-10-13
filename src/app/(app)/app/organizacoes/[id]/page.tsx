@@ -1,42 +1,36 @@
-import { Link2, Theater, Users } from "lucide-react";
+import { Phone, Theater } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ActivityForm } from "@/components/crm/forms/activity-form";
 import {
-  EditContactDialog,
   EditOrganizationSheet,
   LinkLeadDialog,
   NewContactDialog,
-  UnlinkLeadMenu,
 } from "@/components/crm/organization-dialogs";
+import { OrgContactsCard, telHref } from "@/components/crm/organizations/org-contacts-card";
+import { OrgLeadsCard } from "@/components/crm/organizations/org-leads-card";
+import { OrgNotesForm } from "@/components/crm/organizations/org-notes-form";
 import { ActionBarMobile } from "@/components/crm/ui/action-bar-mobile";
-import { DataTable, RowLink, type Column } from "@/components/crm/ui/data-table";
 import { DetailLayout } from "@/components/crm/ui/detail-layout";
 import { EmptyState } from "@/components/crm/ui/empty-state";
+import { FoldsOpenOnDesktop } from "@/components/crm/ui/folds-open-on-desktop";
+import { FormSection } from "@/components/crm/ui/form-section";
 import { KeyValueList, type KeyValueItem } from "@/components/crm/ui/key-value-list";
 import { PageHeader } from "@/components/crm/ui/page-header";
-import { SlaIndicator } from "@/components/crm/ui/sla-indicator";
 import { StatusBadge } from "@/components/crm/ui/status-badge";
+import { Timeline } from "@/components/crm/ui/timeline";
 import { Avatar } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBRL, formatCnpj, formatPhoneBR } from "@/lib/crm/format";
-import {
-  REGIME_CONFIRMATION_LABELS,
-  SEGMENT_LABELS,
-  TAX_REGIME_LABELS,
-} from "@/lib/crm/enum-labels";
-import type { StageInfo } from "@/lib/crm/lead-view";
-import { DECISION_MAKER_TONE } from "@/lib/crm/status-tones";
-import type { LeadSegment } from "@/lib/domain/enums";
-import type { Contact } from "@/lib/repos/contacts";
+import { REGIME_CONFIRMATION_LABELS, TAX_REGIME_LABELS } from "@/lib/crm/enum-labels";
 import { listContacts } from "@/lib/repos/contacts";
 import {
   getOrganizationSummary,
   listLeadsForOrganization,
+  listOrganizationActivities,
   listOrganizations,
-  type OrganizationLead,
 } from "@/lib/repos/organizations";
 import { listProjectSummaries, type ProjectSummary } from "@/lib/repos/projects";
 import { listTenantUsers } from "@/lib/repos/users";
@@ -44,70 +38,12 @@ import { requireSession } from "@/lib/session";
 
 export const metadata: Metadata = { title: "Organização" };
 
-// Detalhe da organização (crm-design-system.md, seção 7.6): cabeçalho com tipo, cidade e quem
-// cuida; principal = Contatos e Leads vinculados em DataTable; lateral = Dados (KeyValueList que
-// esconde o vazio) e, para proponentes, os projetos da carteira. "Editar" abre um Sheet com o
-// formulário; no celular as ações ficam na ActionBarMobile.
-
-// listLeadsForOrganization não traz a data de entrada no estágio: o indicador usa só a próxima
-// ação (ou a nota do estágio). Melhoria futura de repositório: devolver stageEnteredAt.
-function stageInfoFromNextAction(nextActionAt: Date | null, now: Date): StageInfo {
-  return {
-    daysInStage: 0,
-    slaDeadline: null,
-    slaText: "sem prazo",
-    slaOverdue: false,
-    nextActionOverdue: !!nextActionAt && nextActionAt.getTime() < now.getTime(),
-  };
-}
-
-function telHref(phone: string): string {
-  return `tel:${phone.replace(/[^\d+]/g, "")}`;
-}
-
-// "decisor" com ícone e texto (seção 6.3: Crown, família brand).
-function DecisionMakerBadge() {
-  const Icon = DECISION_MAKER_TONE.icon;
-  return (
-    <Badge variant={DECISION_MAKER_TONE.tone}>
-      <Icon aria-hidden="true" />
-      {DECISION_MAKER_TONE.label}
-    </Badge>
-  );
-}
-
-function ContactName({ contact }: { contact: Contact }) {
-  return (
-    <span className="inline-flex min-w-0 flex-wrap items-center gap-2">
-      <span className="font-medium">{contact.name}</span>
-      {contact.isDecisionMaker ? <DecisionMakerBadge /> : null}
-    </span>
-  );
-}
-
-function EmailLink({ email, className }: { email: string | null; className?: string }) {
-  if (!email) return <span className="text-muted-foreground">—</span>;
-  return (
-    <a
-      href={`mailto:${email}`}
-      className={`relative z-10 break-all text-primary underline-offset-2 hover:underline ${className ?? ""}`}
-    >
-      {email}
-    </a>
-  );
-}
-
-function PhoneLink({ phone, className }: { phone: string | null; className?: string }) {
-  if (!phone) return <span className="text-muted-foreground">—</span>;
-  return (
-    <a
-      href={telHref(phone)}
-      className={`relative z-10 text-primary tabular-nums underline-offset-2 hover:underline ${className ?? ""}`}
-    >
-      {formatPhoneBR(phone)}
-    </a>
-  );
-}
+// Ficha da organização (ADR-004, 6.9; crm-design-system.md, seção 7.6) sobre o DetailLayout:
+// cabeçalho com tipo, cidade, quem cuida e "Ligar"; principal = "Registrar atividade" (ActivityForm
+// em modo organização) e o histórico (atividades da organização e dos seus leads); lateral =
+// Leads e aportes, Contatos, Dados, Notas (autosave) e, para proponentes, os projetos. No celular
+// os blocos das duas colunas se intercalam na ordem do ADR por `max-lg:order-*`, e as ações ficam
+// na ActionBarMobile.
 
 export default async function OrganizationPage({
   params,
@@ -116,12 +52,15 @@ export default async function OrganizationPage({
   const ctx = await requireSession();
   const { id } = await params;
   const sp = await searchParams;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const org = await getOrganizationSummary(ctx, id);
   if (!org) notFound();
   const isProponent = org.type === "proponente";
-  const [contacts, leads, accountants, users, projects] = await Promise.all([
+  const now = new Date();
+  const [contacts, leads, activities, accountants, users, projects] = await Promise.all([
     listContacts(ctx, { orgId: org.id }),
     listLeadsForOrganization(ctx, org.id),
+    listOrganizationActivities(ctx, org.id, { limit: 300 }),
     listOrganizations(ctx, { type: "contabilidade", limit: 300 }),
     listTenantUsers(ctx),
     // Não há filtro por proponente no repositório: filtra em memória pelo nome (melhoria futura).
@@ -129,20 +68,43 @@ export default async function OrganizationPage({
       ? listProjectSummaries(ctx, { includeArchived: true, limit: 500 })
       : Promise.resolve([] as ProjectSummary[]),
   ]);
-  const now = new Date();
   const accountantOptions = accountants
     .filter((a) => a.id !== org.id)
     .map((a) => ({ value: a.id, label: a.name }));
   const userOptions = users.map((u) => ({ value: u.id, label: u.name }));
+  const userNames = new Map(users.map((u) => [u.id, u.name]));
+  const projectNames = new Map(projects.map((p) => [p.id, p.name]));
   const contactOptions = contacts.map((c) => ({ value: c.id, label: c.name }));
   const ownerName = users.find((u) => u.id === org.ownerUserId)?.name ?? null;
   const ownProjects = isProponent ? projects.filter((p) => p.proponentName === org.name) : [];
   const pageHref = `/app/organizacoes/${org.id}`;
   const openEdit = sp.editar === "1";
+  const openLink = sp.vincular === "1";
   const cityUf = [org.city, org.uf].filter(Boolean).join("/");
 
-  // Dados (lateral). CNPJ sem valor numa empresa aparece mesmo assim, com a nota: é o que trava o
-  // termo (regra organization.cnpj_when_pj).
+  // "Ligar" (ADR-004, 6.10): o telefone do decisor; na falta, o do primeiro contato com telefone;
+  // na falta, o da empresa (organizations.phone).
+  const callPhone =
+    contacts.find((c) => c.isDecisionMaker && c.phone)?.phone ??
+    contacts.find((c) => c.phone)?.phone ??
+    org.phone ??
+    null;
+  const callButton = (size?: "touch") =>
+    callPhone ? (
+      <Button
+        key="ligar"
+        variant="outline"
+        size={size}
+        nativeButton={false}
+        render={<a href={telHref(callPhone)} />}
+      >
+        <Phone aria-hidden="true" />
+        Ligar {formatPhoneBR(callPhone)}
+      </Button>
+    ) : null;
+
+  // Dados (lateral), sem o item "Notas" (que tem card próprio). CNPJ sem valor numa empresa
+  // aparece mesmo assim, com a nota: é o que trava o termo (regra organization.cnpj_when_pj).
   const needsCnpj = org.type === "empresa" && !org.cnpj;
   const dataItems: KeyValueItem[] = [
     {
@@ -157,6 +119,17 @@ export default async function OrganizationPage({
       ) : null,
       code: true,
       hint: needsCnpj ? "necessário para o termo" : undefined,
+    },
+    {
+      label: "Telefone",
+      value: org.phone ? (
+        <a
+          href={telHref(org.phone)}
+          className="text-primary tabular-nums underline-offset-2 hover:underline"
+        >
+          {formatPhoneBR(org.phone)}
+        </a>
+      ) : null,
     },
     { label: "Cidade/UF", value: cityUf },
     { label: "Setor", value: org.sector },
@@ -179,85 +152,6 @@ export default async function OrganizationPage({
       href: org.accountantOrgId ? `/app/organizacoes/${org.accountantOrgId}` : undefined,
     },
     { label: "Quem cuida", value: ownerName },
-    {
-      label: "Notas",
-      value: org.notes ? <span className="whitespace-pre-line">{org.notes}</span> : null,
-    },
-  ];
-
-  // Contatos: não há página de contato, então a linha não é um link; e-mail e telefone são links
-  // explícitos na tabela e no card.
-  const contactColumns: Column<Contact>[] = [
-    { key: "name", header: "Nome", cell: (c) => <ContactName contact={c} /> },
-    {
-      key: "title",
-      header: "Cargo",
-      priority: 2,
-      cell: (c) => c.title || <span className="text-muted-foreground">—</span>,
-    },
-    { key: "email", header: "E-mail", cell: (c) => <EmailLink email={c.email} /> },
-    { key: "phone", header: "Telefone", cell: (c) => <PhoneLink phone={c.phone} /> },
-    {
-      key: "source",
-      header: "Origem do dado",
-      priority: 3,
-      cell: (c) => <span className="crm-meta">{c.sourceDetail}</span>,
-    },
-    {
-      key: "actions",
-      header: <span className="sr-only">Ações</span>,
-      align: "right",
-      width: "w-24",
-      cell: (c) => <EditContactDialog orgId={org.id} contact={c} size="sm" />,
-    },
-  ];
-
-  const leadHref = (l: OrganizationLead) => `/app/leads/${l.id}`;
-  const leadColumns: Column<OrganizationLead>[] = [
-    {
-      key: "name",
-      header: "Nome",
-      cell: (l) => (
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <RowLink href={leadHref(l)}>{l.name}</RowLink>
-          <span className="crm-meta truncate">{l.email}</span>
-        </div>
-      ),
-    },
-    {
-      key: "segment",
-      header: "Segmento",
-      priority: 2,
-      width: "w-40",
-      cell: (l) => SEGMENT_LABELS[l.segment as LeadSegment] ?? l.segment,
-    },
-    {
-      key: "stage",
-      header: "Estágio",
-      width: "w-44",
-      cell: (l) => <StatusBadge kind="stage" value={l.stage} pipeline={l.pipeline} />,
-    },
-    {
-      key: "next",
-      header: "Próxima ação",
-      priority: 2,
-      width: "w-56",
-      cell: (l) => (
-        <SlaIndicator
-          info={stageInfoFromNextAction(l.nextActionAt, now)}
-          nextActionAt={l.nextActionAt}
-          now={now}
-          stage={l}
-        />
-      ),
-    },
-    {
-      key: "actions",
-      header: <span className="sr-only">Ações</span>,
-      align: "right",
-      width: "w-16",
-      cell: (l) => <UnlinkLeadMenu orgId={org.id} leadId={l.id} leadName={l.name} />,
-    },
   ];
 
   const header = (
@@ -288,92 +182,59 @@ export default async function OrganizationPage({
           defaultOpen={openEdit}
           returnHref={pageHref}
         />,
-        <LinkLeadDialog key="vincular" orgId={org.id} contacts={contactOptions} />,
-      ]}
+        callButton(),
+        <LinkLeadDialog
+          key={openLink ? "vincular-aberto" : "vincular-fechado"}
+          orgId={org.id}
+          contacts={contactOptions}
+          defaultOpen={openLink}
+          returnHref={pageHref}
+        />,
+      ].filter(Boolean)}
     />
   );
 
   const main = (
     <>
-      <section id="contatos" aria-labelledby="contatos-titulo" className="flex flex-col gap-3">
-        <h2 id="contatos-titulo" className="crm-h2">
-          Contatos ({contacts.length})
-        </h2>
-        <DataTable
-          caption={`Contatos de ${org.name}`}
-          columns={contactColumns}
-          rows={contacts}
-          rowKey={(c) => c.id}
-          mobile={{
-            primary: (c) => <ContactName contact={c} />,
-            secondary: (c) => (
-              <>
-                {c.title ? <span>{c.title}</span> : null}
-                {c.email ? <EmailLink email={c.email} className="basis-full truncate" /> : null}
-                {c.phone ? <PhoneLink phone={c.phone} /> : null}
-              </>
-            ),
-            action: (c) => <EditContactDialog orgId={org.id} contact={c} size="touch" />,
-          }}
-          empty={
-            <EmptyState
-              icon={Users}
-              size="sm"
-              title="Nenhum contato ainda."
-              description="Cadastre quem decide e quem assina."
-              action={<NewContactDialog orgId={org.id} size="sm" />}
-            />
-          }
+      <FormSection
+        id="registrar"
+        title="Registrar atividade"
+        collapsible
+        className="crm-fold max-lg:order-1"
+      >
+        <ActivityForm
+          target={{ orgId: org.id }}
+          now={now.toISOString()}
+          suggestedNextActionAt={null}
+          aiEnabled={false}
+          segment={null}
+          autoFocus={sp.registrar === "1"}
         />
-      </section>
-
-      <section id="leads" aria-labelledby="leads-titulo" className="flex flex-col gap-3">
-        <h2 id="leads-titulo" className="crm-h2">
-          Leads vinculados ({leads.length})
+      </FormSection>
+      <section
+        id="historico"
+        aria-labelledby="historico-titulo"
+        className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 text-sm md:p-5 max-lg:order-4"
+      >
+        <h2 id="historico-titulo" className="crm-h2">
+          Histórico ({activities.length})
         </h2>
-        <DataTable
-          caption={`Leads vinculados a ${org.name}`}
-          columns={leadColumns}
-          rows={leads}
-          rowHref={leadHref}
-          rowKey={(l) => l.id}
-          mobile={{
-            primary: (l) => l.name,
-            secondary: (l) => (
-              <>
-                <StatusBadge kind="stage" value={l.stage} pipeline={l.pipeline} />
-                <SlaIndicator
-                  info={stageInfoFromNextAction(l.nextActionAt, now)}
-                  nextActionAt={l.nextActionAt}
-                  now={now}
-                  stage={l}
-                />
-                <span className="basis-full truncate">
-                  {SEGMENT_LABELS[l.segment as LeadSegment] ?? l.segment} · {l.email}
-                </span>
-              </>
-            ),
-            action: (l) => (
-              <UnlinkLeadMenu orgId={org.id} leadId={l.id} leadName={l.name} size="touch" />
-            ),
-          }}
-          empty={
-            <EmptyState
-              icon={Link2}
-              size="sm"
-              title="Nenhum lead vinculado."
-              description="Vincule um lead do CRM para ver aqui o estágio e a próxima ação."
-              action={<LinkLeadDialog orgId={org.id} contacts={contactOptions} size="sm" />}
-            />
-          }
-        />
+        <Timeline activities={activities} users={userNames} projects={projectNames} now={now} />
       </section>
     </>
   );
 
   const aside = (
     <>
-      <Card>
+      <OrgLeadsCard
+        orgId={org.id}
+        leads={leads}
+        contacts={contactOptions}
+        now={now}
+        className="max-lg:order-2"
+      />
+      <OrgContactsCard orgId={org.id} contacts={contacts} className="max-lg:order-3" />
+      <Card className="max-lg:order-5">
         <CardHeader>
           <CardTitle>Dados</CardTitle>
         </CardHeader>
@@ -381,8 +242,16 @@ export default async function OrganizationPage({
           <KeyValueList items={dataItems} columns={1} hideEmpty />
         </CardContent>
       </Card>
+      <Card className="max-lg:order-6">
+        <CardHeader>
+          <CardTitle>Notas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <OrgNotesForm orgId={org.id} notes={org.notes} />
+        </CardContent>
+      </Card>
       {isProponent ? (
-        <Card>
+        <Card className="max-lg:order-7">
           <CardHeader>
             <CardTitle>Projetos deste proponente ({ownProjects.length})</CardTitle>
           </CardHeader>
@@ -432,18 +301,33 @@ export default async function OrganizationPage({
   );
 
   return (
-    <DetailLayout
-      header={header}
-      main={main}
-      aside={aside}
-      asideLabel={`Dados de ${org.name}`}
-      actionsMobile={
-        <ActionBarMobile
-          primary={<NewContactDialog orgId={org.id} variant="default" size="touch" />}
-          secondary={<LinkLeadDialog orgId={org.id} contacts={contactOptions} size="touch" />}
-          more={[{ label: "Editar organização", href: `${pageHref}?editar=1` }]}
-        />
-      }
-    />
+    <>
+      <DetailLayout
+        header={header}
+        main={main}
+        aside={aside}
+        asideLabel={`Dados de ${org.name}`}
+        // No celular os blocos das duas colunas se intercalam (ADR-004, 6.9): os contêineres viram
+        // `display: contents` e cada bloco traz a sua ordem em `max-lg:order-*`.
+        className="max-lg:[&>div.grid>*]:contents"
+        actionsMobile={
+          <ActionBarMobile
+            primary={<NewContactDialog orgId={org.id} variant="default" size="touch" />}
+            secondary={
+              callPhone ? (
+                callButton("touch")
+              ) : (
+                <LinkLeadDialog orgId={org.id} contacts={contactOptions} size="touch" />
+              )
+            }
+            more={[
+              ...(callPhone ? [{ label: "Vincular lead", href: `${pageHref}?vincular=1` }] : []),
+              { label: "Editar organização", href: `${pageHref}?editar=1` },
+            ]}
+          />
+        }
+      />
+      <FoldsOpenOnDesktop selector="details.crm-fold" minWidth="64rem" />
+    </>
   );
 }

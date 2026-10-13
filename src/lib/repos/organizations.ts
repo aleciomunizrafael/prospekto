@@ -1,7 +1,18 @@
 import "server-only";
-import { and, asc, desc, eq, getTableColumns, ilike, or, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getTableColumns,
+  ilike,
+  inArray,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { db, type Db } from "@/lib/db";
-import { contacts, leads, organizations } from "@/lib/db/schema";
+import { activities, contacts, contributions, leads, organizations } from "@/lib/db/schema";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import {
   createOrganizationSchema,
@@ -11,6 +22,7 @@ import {
   type ListOrganizationsInput,
   type UpdateOrganizationInput,
 } from "@/lib/validation/organizations";
+import type { Activity } from "./activities";
 import type { Ctx } from "./ctx";
 
 export type Organization = typeof organizations.$inferSelect;
@@ -161,16 +173,19 @@ export type OrganizationLead = {
   segment: string;
   pipeline: string;
   stage: string;
+  stageEnteredAt: Date;
   nextActionAt: Date | null;
   contactId: string | null;
   createdAt: Date;
+  // Valor do aporte aberto do lead (o mais recente não cancelado), quando existe.
+  openContributionAmount: number | null;
 };
 
 export async function listLeadsForOrganization(
   ctx: Ctx,
   orgId: string,
 ): Promise<OrganizationLead[]> {
-  return db
+  const rows = await db
     .select({
       id: leads.id,
       name: leads.name,
@@ -178,14 +193,68 @@ export async function listLeadsForOrganization(
       segment: leads.segment,
       pipeline: leads.pipeline,
       stage: leads.stage,
+      stageEnteredAt: leads.stageEnteredAt,
       nextActionAt: leads.nextActionAt,
       contactId: leads.contactId,
       createdAt: leads.createdAt,
+      // Colunas de `leads` qualificadas à mão: numa consulta de uma tabela só, o drizzle rende
+      // `${leads.id}` como "id" sem prefixo, que dentro da subconsulta viraria `c.id`.
+      openContributionAmount: sql<
+        number | null
+      >`(select c.proposed_amount::float8 from ${contributions} c where c.tenant_id = leads.tenant_id and c.lead_id = leads.id and c.status <> 'cancelado' order by c.created_at desc, c.id desc limit 1)`,
     })
     .from(leads)
     .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.orgId, orgId)))
     .orderBy(desc(leads.createdAt))
     .limit(200);
+  return rows.map((r) => ({
+    ...r,
+    openContributionAmount:
+      r.openContributionAmount == null ? null : Number(r.openContributionAmount),
+  }));
+}
+
+// Histórico da ficha (ADR-004, 6.9): atividades com org_id = organização OU lead_id em um lead da
+// organização, porque ligações, reuniões e e-mails são registrados no lead (recordLeadActivity)
+// com org_id nulo, e `listActivities({ orgId })` devolveria um histórico quase vazio. O join em
+// leads é restrito ao tenant na condição (plano, regra 11); a subconsulta também.
+export async function listOrganizationActivities(
+  ctx: Ctx,
+  orgId: string,
+  input: { limit?: number } = {},
+): Promise<(Activity & { leadName: string | null })[]> {
+  const orgLeadIds = db
+    .select({ id: leads.id })
+    .from(leads)
+    .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.orgId, orgId)));
+  return db
+    .select({ ...getTableColumns(activities), leadName: leads.name })
+    .from(activities)
+    .leftJoin(leads, and(eq(leads.id, activities.leadId), eq(leads.tenantId, ctx.tenantId)))
+    .where(
+      and(
+        eq(activities.tenantId, ctx.tenantId),
+        or(eq(activities.orgId, orgId), inArray(activities.leadId, orgLeadIds)),
+      ),
+    )
+    .orderBy(desc(activities.occurredAt), desc(activities.createdAt))
+    .limit(Math.min(Math.max(input.limit ?? 300, 1), 1000));
+}
+
+// Notas da ficha, salvas ao perder o foco (AutosaveField; ADR-004, 6.9). `updated_at` é
+// automático ($onUpdate). Vazio vira nulo.
+export async function updateOrganizationNotes(
+  ctx: Ctx,
+  input: { orgId: string; notes: string | null },
+): Promise<Organization> {
+  const notes = input.notes?.trim() ? input.notes.trim() : null;
+  const [row] = await db
+    .update(organizations)
+    .set({ notes })
+    .where(and(eq(organizations.tenantId, ctx.tenantId), eq(organizations.id, input.orgId)))
+    .returning();
+  if (!row) throw new NotFoundError("Organização", input.orgId);
+  return row;
 }
 
 export type LeadOption = {
