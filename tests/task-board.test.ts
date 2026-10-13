@@ -131,9 +131,13 @@ describe("TaskBoardColumns", () => {
     expect(t).not.toMatch(/\ba_fazer\b|\bem_andamento\b|\bconcluida\b|\bmedia\b|\balta\b/);
     const html = render();
     expect(html).toContain('aria-label="Editar tarefa: Tarefa solta"');
-    expect(html).toContain('aria-label="Mover tarefa: Tarefa solta"');
+    // O menu "⋯" reúne Editar e Mover para …, por isso o nome é "Mais ações…" (convenção do CRM).
+    expect(html).toContain('aria-label="Mais ações da tarefa: Tarefa solta"');
+    expect(html).not.toContain('aria-label="Mover tarefa:');
     // Gancho do TaskBoard para devolver o foco ao "⋯" depois que o cartão remonta noutra coluna.
-    expect(html).toMatch(/data-task-move="solta"[^>]*aria-label="Mover tarefa: Tarefa solta"/);
+    expect(html).toMatch(
+      /data-task-move="solta"[^>]*aria-label="Mais ações da tarefa: Tarefa solta"/,
+    );
     expect(html).not.toMatch(/tabindex="-1"[^>]*aria-label="Editar/);
   });
 
