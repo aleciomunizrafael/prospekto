@@ -212,10 +212,7 @@ describe("StatRuler e StatCard variant=ruler", () => {
       }),
     ];
     return renderToString(
-      createElement(StatRuler, {
-        label: "Hoje",
-        children: createElement(Fragment, null, ...cells),
-      }),
+      createElement(StatRuler, { label: "Hoje" }, createElement(Fragment, null, ...cells)),
     );
   }
 
