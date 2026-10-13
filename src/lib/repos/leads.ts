@@ -9,6 +9,7 @@ import {
   getTableColumns,
   gte,
   ilike,
+  inArray,
   isNull,
   lt,
   lte,
@@ -30,6 +31,7 @@ import {
 import {
   INITIAL_STAGES,
   PIPELINES,
+  STAGES,
   TERMINAL_STAGES,
   isPipeline,
   isStageOf,
@@ -603,6 +605,139 @@ export async function searchLeads(
       .where(and(...where)),
   ]);
   return { rows, total: Number(total) };
+}
+
+// Filtros compartilhados entre a lista e o quadro (tudo menos estágio, ordenação e página). A
+// busca cobre nome, e-mail, organização e a empresa dos atributos, como em `searchLeads`.
+function boardWhere(ctx: Ctx, input: ListLeadsBoardInput): SQL[] {
+  const where: SQL[] = [eq(leads.tenantId, ctx.tenantId), eq(leads.pipeline, input.pipeline)];
+  if (input.segment) where.push(eq(leads.segment, input.segment));
+  if (input.temperature) where.push(eq(leads.temperature, input.temperature));
+  if (input.source) where.push(eq(leads.source, input.source));
+  if (input.ownerUserId) where.push(eq(leads.ownerUserId, input.ownerUserId));
+  if (input.search) {
+    const term = `%${input.search.replace(/[%_]/g, "")}%`;
+    where.push(
+      or(
+        ilike(leads.name, term),
+        ilike(leads.email, term),
+        ilike(organizations.name, term),
+        sql`coalesce(${leads.attributes}->>'empresa', ${leads.attributes}->>'escritorio', ${leads.attributes}->>'municipio', ${leads.attributes}->>'proponente', '') ilike ${term}`,
+      )!,
+    );
+  }
+  return where;
+}
+
+export type LeadBoardRow = LeadListRow & {
+  orgCnpj: string | null;
+  // Aporte em aberto (proposta ou termo assinado) do lead: o diálogo "Mover para" linka o projeto
+  // e o cartão mostra o valor.
+  openContributionProjectId: string | null;
+  openContributionAmount: number | null;
+};
+
+export type LeadBoardColumn = {
+  stage: string;
+  rows: LeadBoardRow[];
+  // Contagem total da coluna, além do teto de cartões carregados.
+  total: number;
+  // Soma de proposed_amount dos aportes abertos dos leads da coluna; só em patrocinadores.
+  openAmount: number | null;
+};
+
+export type ListLeadsBoardInput = {
+  pipeline: Pipeline;
+  segment?: Lead["segment"];
+  temperature?: Lead["temperature"];
+  source?: Lead["source"];
+  ownerUserId?: string;
+  search?: string;
+  includeLost?: boolean;
+  limitPerColumn?: number;
+};
+
+const OPEN_CONTRIBUTION_STATUSES = ["proposta", "termo_assinado"] as const;
+
+// Quadro de leads (ADR-004, 6.3): uma coluna por estágio na ordem de STAGES, sem o terminal salvo
+// com `includeLost`; ordem por urgência (próxima ação vencida primeiro, nulos por último, depois o
+// mais antigo no estágio). Uma consulta por coluna (teto `limitPerColumn`), um `count` agrupado por
+// estágio e, em patrocinadores, uma soma agrupada dos aportes abertos. Nenhuma ordem manual.
+export async function listLeadsBoard(
+  ctx: Ctx,
+  input: ListLeadsBoardInput,
+): Promise<{ columns: LeadBoardColumn[] }> {
+  const limit = Math.min(Math.max(input.limitPerColumn ?? 50, 1), 200);
+  const terminal = TERMINAL_STAGES[input.pipeline];
+  const stages = (STAGES[input.pipeline] as readonly string[]).filter(
+    (s) => input.includeLost || s !== terminal,
+  );
+  const where = boardWhere(ctx, input);
+  // Subconsulta correlacionada: o aporte aberto mais recente do lead, sempre dentro do tenant.
+  const openContributionWhere = and(
+    eq(contributions.tenantId, ctx.tenantId),
+    eq(contributions.leadId, leads.id),
+    inArray(contributions.status, [...OPEN_CONTRIBUTION_STATUSES]),
+  )!;
+  const columns = {
+    ...leadListColumns,
+    orgCnpj: organizations.cnpj,
+    openContributionProjectId: sql<
+      string | null
+    >`(select ${contributions.projectId} from ${contributions} where ${openContributionWhere} order by ${contributions.createdAt} desc limit 1)`,
+    openContributionAmount: sql<
+      number | null
+    >`(select ${contributions.proposedAmount}::float8 from ${contributions} where ${openContributionWhere} order by ${contributions.createdAt} desc limit 1)`,
+  };
+  const rowsByStage = Promise.all(
+    stages.map((stage) =>
+      db
+        .select(columns)
+        .from(leads)
+        .leftJoin(organizations, orgJoin(ctx, organizations, leads.orgId))
+        .leftJoin(users, ownerJoin(ctx))
+        .where(and(...where, eq(leads.stage, stage)))
+        .orderBy(sql`${leads.nextActionAt} asc nulls last`, leads.stageEnteredAt, leads.createdAt)
+        .limit(limit),
+    ),
+  );
+  const totals = db
+    .select({ stage: leads.stage, total: count() })
+    .from(leads)
+    .leftJoin(organizations, orgJoin(ctx, organizations, leads.orgId))
+    .where(and(...where))
+    .groupBy(leads.stage);
+  const sums =
+    input.pipeline === "patrocinadores"
+      ? db
+          .select({
+            stage: leads.stage,
+            amount: sql<number>`coalesce(sum(${contributions.proposedAmount}), 0)::float8`,
+          })
+          .from(leads)
+          .leftJoin(organizations, orgJoin(ctx, organizations, leads.orgId))
+          .innerJoin(
+            contributions,
+            and(
+              eq(contributions.leadId, leads.id),
+              eq(contributions.tenantId, ctx.tenantId),
+              inArray(contributions.status, [...OPEN_CONTRIBUTION_STATUSES]),
+            ),
+          )
+          .where(and(...where))
+          .groupBy(leads.stage)
+      : Promise.resolve(null);
+  const [rows, totalRows, sumRows] = await Promise.all([rowsByStage, totals, sums]);
+  const totalByStage = new Map(totalRows.map((r) => [r.stage, Number(r.total)]));
+  const sumByStage = sumRows ? new Map(sumRows.map((r) => [r.stage, Number(r.amount)])) : null;
+  return {
+    columns: stages.map((stage, i) => ({
+      stage,
+      rows: rows[i],
+      total: totalByStage.get(stage) ?? 0,
+      openAmount: sumByStage ? (sumByStage.get(stage) ?? 0) : null,
+    })),
+  };
 }
 
 // Contagem de leads não terminais por pipeline (abas de /app/leads).

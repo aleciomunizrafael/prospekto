@@ -8,6 +8,7 @@ import {
   type LeadTemperature,
 } from "@/lib/domain/enums";
 import { isPipeline, isStageOf, type Pipeline } from "@/lib/domain/pipelines";
+import { isLeadsView, type LeadsView } from "./leads-view";
 
 export const LEADS_PAGE_SIZE = 25;
 export const LEAD_SORTS = ["next_action", "created"] as const;
@@ -24,6 +25,10 @@ export type LeadFilters = {
   includeLost: boolean;
   sort: LeadSort;
   page: number;
+  // Visão explícita na URL (`?view=lista|quadro`); a resolução com o cookie fica em leads-view.ts.
+  // Preservada nos links da lista para a "espiada" pelo "ver todos em Lista" do quadro continuar
+  // na lista ao paginar ou filtrar (ADR-004, 6.2).
+  view?: LeadsView;
 };
 
 type Params = Record<string, string | string[] | undefined>;
@@ -42,6 +47,7 @@ export function parseLeadFilters(params: Params): LeadFilters {
   const temperature = one(params, "temperature");
   const source = one(params, "source");
   const sort = one(params, "sort");
+  const view = one(params, "view");
   const page = Number(one(params, "page") ?? "1");
   return {
     pipeline,
@@ -62,6 +68,7 @@ export function parseLeadFilters(params: Params): LeadFilters {
       ? (sort as LeadSort)
       : "next_action",
     page: Number.isInteger(page) && page >= 1 ? page : 1,
+    view: isLeadsView(view) ? view : undefined,
   };
 }
 
@@ -77,6 +84,7 @@ export function leadFiltersToQuery(f: Partial<LeadFilters>): string {
   if (f.includeLost) q.set("lost", "1");
   if (f.sort && f.sort !== "next_action") q.set("sort", f.sort);
   if (f.page && f.page > 1) q.set("page", String(f.page));
+  if (f.view) q.set("view", f.view);
   const s = q.toString();
   return s ? `?${s}` : "";
 }
