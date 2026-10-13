@@ -1,6 +1,7 @@
 // Helpers puros do quadro de Tarefas (ADR-004, 6.5; plano, frente B): índice de inserção pelo
-// ponteiro durante o arrasto, posição fracionária espelhando a regra do repositório (para o estado
-// otimista), agrupamento por coluna, contagens do cabeçalho e filtros na URL. Sem React, sem banco.
+// ponteiro durante o arrasto, âncoras do movimento pelos vizinhos visíveis, posição fracionária
+// espelhando a regra do repositório (para o estado otimista), agrupamento por coluna, contagens do
+// cabeçalho e filtros na URL. Sem React, sem banco.
 import { TASK_STATUSES, taskStatusOf, type TaskStatus } from "./task-status";
 import { plural } from "./text";
 
@@ -56,7 +57,33 @@ export function groupTasks<T extends TaskLike>(rows: readonly T[]): Record<TaskS
   return groups;
 }
 
-export type TaskMove = { activityId: string; status: TaskStatus; index: number };
+// Movimento que o quadro envia à action (plano, P3). `index` é o índice na coluna como a tela a
+// mostra; `beforeId`/`afterId` são os cartões visíveis logo antes e logo depois do movido. Com um
+// filtro ativo (dono=eu, atrasadas, vencem=hoje) a coluna mostrada é um recorte da coluna inteira
+// que o repositório relê, por isso são as âncoras, não o índice, que fixam onde a tarefa cai.
+export type TaskMove = {
+  activityId: string;
+  status: TaskStatus;
+  index: number;
+  beforeId?: string;
+  afterId?: string;
+};
+
+// Âncoras do movimento: `rows` é a coluna de destino como está na tela e `index` o índice de
+// inserção nela sem o próprio cartão (na mesma coluna o quadro já o desconta). Sem vizinho de um
+// lado (início, fim, coluna vazia) a âncora daquele lado fica de fora.
+export function moveAnchors(
+  rows: readonly { id: string }[],
+  movedId: string,
+  index: number,
+): Pick<TaskMove, "beforeId" | "afterId"> {
+  const rest = rows.filter((t) => t.id !== movedId);
+  const at = Math.max(0, Math.min(Math.floor(index), rest.length));
+  const anchors: Pick<TaskMove, "beforeId" | "afterId"> = {};
+  if (at > 0) anchors.beforeId = rest[at - 1].id;
+  if (at < rest.length) anchors.afterId = rest[at].id;
+  return anchors;
+}
 
 type BoardLike<T extends TaskLike> = Record<TaskStatus, { rows: T[]; total: number }>;
 

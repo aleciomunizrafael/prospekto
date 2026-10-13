@@ -199,6 +199,58 @@ describe("moveTask (P3)", () => {
     ]);
   });
 
+  it("âncoras pelos vizinhos visíveis: com filtro, a tarefa cai entre eles na coluna inteira", async () => {
+    const own = await makeTenant();
+    const colleague = await makeUser(own);
+    const now = new Date();
+    await createTask(own, { subject: "De outra pessoa", ownerUserId: colleague });
+    await createTask(own, { subject: "De outra pessoa 2", ownerUserId: colleague });
+    const mine1 = await createTask(own, { subject: "Minha 1" });
+    const mine2 = await createTask(own, { subject: "Minha 2" });
+    const column = async () =>
+      (await listTasksBoard(own, { now })).a_fazer.rows.map((t) => t.subject);
+    const mine = await listTasksBoard(own, { now, ownerUserId: own.userId! });
+    expect(mine.a_fazer.rows.map((t) => t.subject)).toEqual(["Minha 1", "Minha 2"]);
+
+    // "Só as minhas": arrastar Minha 2 para antes de Minha 1 manda index 0 e afterId = Minha 1;
+    // sem a âncora ela iria para antes de todas.
+    await moveTask(own, { activityId: mine2.id, status: "a_fazer", index: 0, afterId: mine1.id });
+    expect(await column()).toEqual(["De outra pessoa", "De outra pessoa 2", "Minha 2", "Minha 1"]);
+    // Fim da lista filtrada: beforeId = último visível, e a tarefa entra logo depois dele.
+    await moveTask(own, { activityId: mine2.id, status: "a_fazer", index: 1, beforeId: mine1.id });
+    expect(await column()).toEqual(["De outra pessoa", "De outra pessoa 2", "Minha 1", "Minha 2"]);
+
+    // Com cartões escondidos entre as duas âncoras, afterId manda: logo antes dele.
+    await moveTask(own, { activityId: mine1.id, status: "a_fazer", index: 0 });
+    expect(await column()).toEqual(["Minha 1", "De outra pessoa", "De outra pessoa 2", "Minha 2"]);
+    const mine3 = await createTask(own, { subject: "Minha 3", status: "em_andamento" });
+    await moveTask(own, {
+      activityId: mine3.id,
+      status: "a_fazer",
+      index: 1,
+      beforeId: mine1.id,
+      afterId: mine2.id,
+    });
+    expect(await column()).toEqual([
+      "Minha 1",
+      "De outra pessoa",
+      "De outra pessoa 2",
+      "Minha 3",
+      "Minha 2",
+    ]);
+
+    // Âncora que já não está na coluna (movida ou excluída no meio-tempo) cai no índice.
+    const elsewhere = await createTask(own, { subject: "Noutra coluna", status: "em_andamento" });
+    await moveTask(own, {
+      activityId: mine3.id,
+      status: "a_fazer",
+      index: 0,
+      beforeId: elsewhere.id,
+      afterId: elsewhere.id,
+    });
+    expect((await column())[0]).toBe("Minha 3");
+  });
+
   it("tarefa de outro tenant não é movida", async () => {
     const other = await makeTenant();
     const task = await createTask(ctx, { subject: "Minha" });

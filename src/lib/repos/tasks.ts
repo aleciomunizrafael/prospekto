@@ -347,12 +347,40 @@ export async function updateTask(ctx: Ctx, input: UpdateTaskInput): Promise<Acti
   });
 }
 
-// Move entre colunas e/ou reposiciona (plano, P3): relê a coluna de destino sem a tarefa movida,
-// posição = média entre os vizinhos no índice (ou last + 1 / first - 1), renumera 1..n quando a
-// distância cai abaixo de 1e-6. Tudo com `tx` (regra 12).
+// Índice na coluna inteira (já sem a tarefa movida) a partir das âncoras que o quadro manda:
+// logo antes de `afterId`; senão logo depois de `beforeId`; senão o `index` (diálogo, ou âncora
+// movida/excluída no meio-tempo). O quadro manda âncoras porque, com filtro ativo, o índice que
+// ele vê é o de um recorte da coluna.
+function anchoredIndex(
+  neighbors: readonly { id: string }[],
+  anchors: { beforeId?: string; afterId?: string },
+  index: number,
+): number {
+  if (anchors.afterId) {
+    const after = neighbors.findIndex((n) => n.id === anchors.afterId);
+    if (after !== -1) return after;
+  }
+  if (anchors.beforeId) {
+    const before = neighbors.findIndex((n) => n.id === anchors.beforeId);
+    if (before !== -1) return before + 1;
+  }
+  return Math.min(index, neighbors.length);
+}
+
+// Move entre colunas e/ou reposiciona (plano, P3): relê a coluna de destino inteira sem a tarefa
+// movida, escolhe o índice pelas âncoras (anchoredIndex), posição = média entre os vizinhos no
+// índice (ou last + 1 / first - 1), renumera 1..n quando a distância cai abaixo de 1e-6. Tudo com
+// `tx` (regra 12).
 export async function moveTask(
   ctx: Ctx,
-  input: { activityId: string; status: TaskStatus; index: number; now?: Date },
+  input: {
+    activityId: string;
+    status: TaskStatus;
+    index: number;
+    beforeId?: string;
+    afterId?: string;
+    now?: Date;
+  },
 ): Promise<Activity> {
   if (!TASK_STATUSES.includes(input.status)) throw new ValidationError("Status inválido.");
   const index = Math.max(0, Math.floor(input.index));
@@ -365,7 +393,7 @@ export async function moveTask(
       .where(and(...taskScope(ctx), statusCondition(input.status), ne(activities.id, current.id)))
       .orderBy(asc(activities.position), asc(activities.createdAt));
 
-    const at = Math.min(index, neighbors.length);
+    const at = anchoredIndex(neighbors, input, index);
     const before = at > 0 ? neighbors[at - 1].position : null;
     const after = at < neighbors.length ? neighbors[at].position : null;
     let position: number;

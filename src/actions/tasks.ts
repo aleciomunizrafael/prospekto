@@ -277,6 +277,10 @@ const moveTaskInputSchema = z.object({
   activityId: uuidSchema,
   status: z.enum(TASK_STATUSES as [TaskStatus, ...TaskStatus[]]),
   index: z.number().int().min(0).max(1000),
+  // Vizinhos visíveis na tela (plano, P3): com filtro ativo, são eles que fixam a posição na
+  // coluna inteira; o diálogo não os manda (entra no fim).
+  beforeId: uuidSchema.optional(),
+  afterId: uuidSchema.optional(),
 });
 
 export async function moveTaskAction(input: unknown): Promise<ActionState> {
@@ -289,7 +293,13 @@ export async function moveTaskAction(input: unknown): Promise<ActionState> {
     const current = await getTask(ctx, d.activityId);
     if (!current) return fail("Tarefa não encontrada.");
     const from = taskStatusOf(current);
-    await moveTask(ctx, { activityId: d.activityId, status: d.status, index: d.index });
+    await moveTask(ctx, {
+      activityId: d.activityId,
+      status: d.status,
+      index: d.index,
+      beforeId: d.beforeId,
+      afterId: d.afterId,
+    });
     message = describeTaskMove(from, d.status);
     log("info", "tarefa movida", {
       tenantId: ctx.tenantId,

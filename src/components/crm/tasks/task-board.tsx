@@ -19,6 +19,7 @@ import { TASK_STATUS_LABELS } from "@/lib/crm/labels";
 import {
   applyOptimisticMove,
   insertIndexFromPointer,
+  moveAnchors,
   taskFiltersHref,
   type TaskFilters,
   type TaskMove,
@@ -189,7 +190,14 @@ export function TaskBoard({
 
   const performMove = useCallback(
     (task: TaskRow, status: TaskStatus, index: number) => {
-      const move: TaskMove = { activityId: task.id, status, index };
+      // `index` é o da coluna como a tela a mostra; com filtro ativo ela é um recorte da coluna
+      // inteira que o repositório relê, e são as âncoras (vizinhos visíveis) que fixam a posição.
+      const move: TaskMove = {
+        activityId: task.id,
+        status,
+        index,
+        ...moveAnchors(optimisticBoard[status].rows, task.id, index),
+      };
       focusTaskId.current = task.id;
       setAnnounce(`Movendo "${task.subject}" para ${TASK_STATUS_LABELS[status]}.`);
       startTransition(async () => {
@@ -207,10 +215,10 @@ export function TaskBoard({
         }
       });
     },
-    [applyMove],
+    [applyMove, optimisticBoard],
   );
 
-  // Menu "⋯" do cartão: entra no fim da coluna de destino.
+  // Menu "⋯" do cartão: entra logo depois do último cartão visível da coluna de destino.
   const onMenuMove = useCallback(
     (task: TaskRow, status: TaskStatus) => {
       performMove(task, status, optimisticBoard[status].rows.length);

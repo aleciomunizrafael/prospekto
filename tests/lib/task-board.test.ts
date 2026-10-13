@@ -9,6 +9,7 @@ import {
   groupTasks,
   hasTaskFilters,
   insertIndexFromPointer,
+  moveAnchors,
   nextPosition,
   parseTaskFilters,
   taskFiltersHref,
@@ -87,6 +88,27 @@ describe("groupTasks", () => {
     expect(groups.a_fazer.map((t) => t.id)).toEqual(["a", "b", "same0", "same1"]);
     expect(groups.em_andamento.map((t) => t.id)).toEqual(["doing"]);
     expect(groups.concluida.map((t) => t.id)).toEqual(["done-new", "done-old"]);
+  });
+});
+
+describe("moveAnchors", () => {
+  const rows = [task("a", 1), task("b", 2), task("c", 3)];
+
+  it.each([
+    ["início: só afterId", "x", 0, { afterId: "a" }],
+    ["entre a e b", "x", 1, { beforeId: "a", afterId: "b" }],
+    ["fim: só beforeId", "x", 3, { beforeId: "c" }],
+    ["além do fim cai no fim", "x", 10, { beforeId: "c" }],
+    ["índice negativo cai no início", "x", -1, { afterId: "a" }],
+    ["mesma coluna: o próprio cartão sai da conta", "b", 1, { beforeId: "a", afterId: "c" }],
+    ["mesma coluna, para o fim", "a", 2, { beforeId: "c" }],
+  ])("%s", (_label, movedId, index, expected) => {
+    expect(moveAnchors(rows, movedId, index)).toEqual(expected);
+  });
+
+  it("coluna vazia, ou só com o próprio cartão, não tem âncoras", () => {
+    expect(moveAnchors([], "x", 0)).toEqual({});
+    expect(moveAnchors([task("x", 1)], "x", 0)).toEqual({});
   });
 });
 

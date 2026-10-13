@@ -237,6 +237,46 @@ describe("moveTaskAction", () => {
     }
   });
 
+  it("aceita as âncoras beforeId/afterId (uuid) e recusa âncora inválida sem gravar", async () => {
+    const own = await makeTenant();
+    session.ctx = own;
+    try {
+      const first = await createTask(own, { subject: "Primeira" });
+      const second = await createTask(own, { subject: "Segunda" });
+      const third = await createTask(own, { subject: "Terceira" });
+      const order = async () =>
+        (await listTasksBoard(own, { now: new Date() })).a_fazer.rows.map((t) => t.subject);
+      // A âncora vence o índice (o índice é o da coluna como a tela a mostra, talvez filtrada).
+      const anchored = await moveTaskAction({
+        activityId: third.id,
+        status: "a_fazer",
+        index: 2,
+        afterId: first.id,
+      });
+      expect(anchored).toEqual({ status: "ok", message: "Ordem atualizada." });
+      expect(await order()).toEqual(["Terceira", "Primeira", "Segunda"]);
+      const after = await moveTaskAction({
+        activityId: third.id,
+        status: "a_fazer",
+        index: 0,
+        beforeId: second.id,
+      });
+      expect(after.status).toBe("ok");
+      expect(await order()).toEqual(["Primeira", "Segunda", "Terceira"]);
+      const bad = await moveTaskAction({
+        activityId: third.id,
+        status: "concluida",
+        index: 0,
+        afterId: "x",
+      });
+      expect(bad).toEqual({ status: "error", message: "Movimento inválido." });
+      expect((await getTask(own, third.id))?.doneAt).toBeNull();
+      expect(await order()).toEqual(["Primeira", "Segunda", "Terceira"]);
+    } finally {
+      session.ctx = ctx;
+    }
+  });
+
   it.each([
     ["índice negativo", { status: "concluida", index: -1 }],
     ["índice fracionário", { status: "concluida", index: 1.5 }],
