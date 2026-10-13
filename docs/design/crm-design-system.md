@@ -963,7 +963,7 @@ Módulo novo (ADR-004, 6.5; D-E): quadro de três colunas sobre `activities.type
 | Sucesso em página | `FormMessage` `success-soft` `role="status"` | "Senha trocada. Os outros aparelhos foram desconectados." |
 | Erro de validação | `FormMessage` `error-soft` `role="alert"` + erro sob o campo + foco no primeiro `[aria-invalid]` | "Antes de mover, preencha:" + lista · "Informe um e-mail válido." |
 | Erro de rede/servidor | `(app)/app/error.tsx` com `Callout danger` e botão "Tentar de novo" (`reset()`) | "Não foi possível carregar esta tela. Tente de novo em instantes." |
-| Não encontrado | `(app)/app/not-found.tsx` | "Este registro não existe ou foi movido." + "Voltar para Hoje" |
+| Não encontrado | `(app)/app/not-found.tsx` | "Este registro não existe ou foi movido." + "Voltar para o Painel" |
 | Ação bloqueada por regra | botão `disabled` + checklist + `Callout warning` | "Depende do aporte: registre o termo assinado em Projetos ›" |
 | Dado vencido | `CircleAlert` + `text-destructive` | "Ação atrasada há 3 dias", "Sem contato há 6 dias (prazo: 1 dia útil)" |
 | Dado quase vencido | `Clock` + `text-warning` | "Ação em 17 h", "70 dias de prazo" |
