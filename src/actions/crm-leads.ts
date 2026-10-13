@@ -22,7 +22,7 @@ import {
 import { ALL_STAGES } from "@/lib/domain/pipelines";
 import { DomainError, MissingFieldsError } from "@/lib/errors";
 import { log } from "@/lib/log";
-import { completeTask, getActivity } from "@/lib/repos/activities";
+import { completeTask, createActivity, getActivity } from "@/lib/repos/activities";
 import {
   createLead,
   getLead,
@@ -30,6 +30,7 @@ import {
   recordLeadActivity,
   updateLead,
 } from "@/lib/repos/leads";
+import { getOrganization } from "@/lib/repos/organizations";
 import { requireSession } from "@/lib/session";
 import { emailSchema, phoneSchema, ufSchema, uuidSchema } from "@/lib/validation/common";
 
@@ -348,9 +349,13 @@ export async function claimLeadAction(formData: FormData): Promise<void> {
 const CONTACT_TYPES = ["ligacao", "reuniao", "email", "whatsapp", "visita"] as const;
 const ACTIVITY_FORM_TYPES = [...CONTACT_TYPES, "nota", "tarefa"] as const;
 
+// O formulário vem do lead (`leadId`) ou da ficha da organização (`orgId`): exatamente um dos
+// dois (ADR-004, 6.9). No lead, a atividade passa por recordLeadActivity (último contato e
+// próxima ação); na organização grava activities.org_id e nada em leads.
 const activityFormSchema = z
   .object({
-    leadId: uuidSchema,
+    leadId: uuidSchema.optional(),
+    orgId: uuidSchema.optional(),
     type: z.enum(ACTIVITY_FORM_TYPES, { error: "Escolha o tipo da atividade." }),
     subject: optionalText(200),
     body: optionalText(8000),
@@ -360,6 +365,13 @@ const activityFormSchema = z
     nextActionAt: dateTimeLocal,
   })
   .superRefine((v, ctx) => {
+    if (!!v.leadId === !!v.orgId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["leadId"],
+        message: "Informe o lead ou a organização da atividade (um dos dois).",
+      });
+    }
     if (v.type === "tarefa" && !v.dueAt) {
       ctx.addIssue({ code: "custom", path: ["dueAt"], message: "Informe o vencimento da tarefa." });
     }
@@ -376,6 +388,8 @@ export async function registerActivityAction(
   const values = formDataToStrings(formData);
   const parsed = activityFormSchema.safeParse({
     ...values,
+    leadId: values.leadId || undefined,
+    orgId: values.orgId || undefined,
     meetingKind: values.meetingKind || undefined,
   });
   if (!parsed.success) {
@@ -390,20 +404,27 @@ export async function registerActivityAction(
     d.type === "reuniao" ? MEETING_KINDS.find((m) => m.value === d.meetingKind) : null;
   const subject =
     d.subject ?? (meeting ? `Reunião: ${meeting.label}` : ACTIVITY_TYPE_LABELS[d.type]);
+  const activity = {
+    type: d.type,
+    subject,
+    body: d.body,
+    occurredAt: d.occurredAt,
+    dueAt: d.type === "tarefa" ? d.dueAt : undefined,
+    data: meeting ? { meetingKind: meeting.value } : undefined,
+  };
   try {
-    await recordLeadActivity(ctx, {
-      leadId: d.leadId,
-      activity: {
-        type: d.type,
-        subject,
-        body: d.body,
-        occurredAt: d.occurredAt,
-        dueAt: d.type === "tarefa" ? d.dueAt : undefined,
-        data: meeting ? { meetingKind: meeting.value } : undefined,
-      },
-      touchLastContact: isContact,
-      nextActionAt: d.nextActionAt,
-    });
+    if (d.orgId) {
+      const org = await getOrganization(ctx, d.orgId);
+      if (!org) return { ...fail("Organização não encontrada."), values };
+      await createActivity(ctx, { ...activity, orgId: org.id });
+    } else {
+      await recordLeadActivity(ctx, {
+        leadId: d.leadId!,
+        activity,
+        touchLastContact: isContact,
+        nextActionAt: d.nextActionAt,
+      });
+    }
   } catch (error) {
     return { ...fromError(error, "registerActivityAction"), values };
   }

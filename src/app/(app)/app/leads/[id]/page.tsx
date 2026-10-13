@@ -1,4 +1,4 @@
-import { Mail, Shield, ShieldCheck, ShieldX } from "lucide-react";
+import { Mail, Phone, Shield, ShieldCheck, ShieldX } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -562,7 +562,7 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
         className="crm-fold max-lg:order-4"
       >
         <ActivityForm
-          leadId={lead.id}
+          target={{ leadId: lead.id }}
           segment={lead.segment}
           aiEnabled={aiEnabled}
           suggestedNextActionAt={suggestedNext ? suggestedNext.toISOString() : null}
@@ -594,9 +594,24 @@ export default async function LeadPage({ params, searchParams }: PageProps<"/app
       <Card className="max-lg:order-3">
         <CardHeader>
           <CardTitle>Contato</CardTitle>
-          {whatsappHref ? (
-            <CardAction>
-              <LeadWhatsappButton lead={{ ...lead, company }} variant="icon" />
+          {whatsappHref || lead.phone ? (
+            <CardAction className="flex items-center gap-2">
+              {/* "Ligar" (ADR-004, 6.10): link tel: com o número visível, ao lado do WhatsApp. */}
+              {lead.phone ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-11 md:h-7"
+                  nativeButton={false}
+                  render={<a href={`tel:${lead.phone}`} />}
+                >
+                  <Phone aria-hidden="true" />
+                  Ligar {formatPhoneBR(lead.phone)}
+                </Button>
+              ) : null}
+              {whatsappHref ? (
+                <LeadWhatsappButton lead={{ ...lead, company }} variant="icon" />
+              ) : null}
             </CardAction>
           ) : null}
         </CardHeader>

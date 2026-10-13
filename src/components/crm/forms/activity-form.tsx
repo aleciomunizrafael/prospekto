@@ -34,7 +34,8 @@ export function openActivityForm() {
 }
 
 // Mensagem do toast (crm-design-system.md, seção 8): "Contato registrado. Próxima ação: qui., 9 de out."
-function successMessage(type: ActivityKind, formData: FormData): string {
+// No modo organização não há "Próxima ação" (ela é do lead).
+function successMessage(type: ActivityKind, formData: FormData, withNextAction: boolean): string {
   const dateOf = (key: string) => {
     const value = formData.get(key);
     return typeof value === "string" && value ? fromDateTimeLocal(value) : null;
@@ -44,9 +45,13 @@ function successMessage(type: ActivityKind, formData: FormData): string {
     return due ? `Tarefa criada. Vence ${formatShortDay(due)}` : "Tarefa criada.";
   }
   if (type === "nota") return "Nota registrada.";
-  const next = dateOf("nextActionAt");
+  const next = withNextAction ? dateOf("nextActionAt") : null;
   return next ? `Contato registrado. Próxima ação: ${formatShortDay(next)}` : "Contato registrado.";
 }
+
+// Para quem a atividade é registrada: o lead (com próxima ação e IA) ou a organização (ADR-004,
+// 6.9: tipos ligação, reunião, e-mail, WhatsApp, visita, nota e tarefa; sem próxima ação nem IA).
+export type ActivityTarget = { leadId: string } | { orgId: string };
 
 // Valores do formulário guardados antes de "Aplicar ao formulário", para o "Desfazer" (frente B).
 type FormSnapshot = { type: ActivityKind; subject: string; body: string; nextActionAt: string };
@@ -80,27 +85,30 @@ export function notesBody(notes: Pick<Notes, "resumo" | "tarefas">): string {
 // IA) só sugerem: "Aplicar ao formulário" preenche os campos para revisão e o registro continua
 // pelo botão "Registrar" (registerActivityAction).
 export function ActivityForm({
-  leadId,
-  segment,
-  aiEnabled,
+  target,
+  segment = null,
+  aiEnabled = false,
   suggestedNextActionAt,
   now,
   autoFocus = false,
 }: {
-  leadId: string;
-  // Segmento do lead e estado da IA: alimentam "Ditar" e "Organizar com IA" (DictationTools).
-  segment: LeadSegment;
-  aiEnabled: boolean;
+  target: ActivityTarget;
+  // Segmento do lead e estado da IA: alimentam "Ditar" e "Organizar com IA" (DictationTools);
+  // só no modo lead.
+  segment?: LeadSegment | null;
+  aiEnabled?: boolean;
   suggestedNextActionAt: string | null;
   // Instante do servidor (ISO): o "Data e hora" padrão e o DateHint usam o mesmo valor no SSR e
   // na hidratação. `new Date()` no cliente mudava de minuto entre os dois e quebrava a hidratação.
   now: string;
   autoFocus?: boolean;
 }) {
+  const leadId = "leadId" in target ? target.leadId : null;
+  const orgId = "orgId" in target ? target.orgId : null;
   const [state, action] = useActionState(async (prev: CrmActionState, formData: FormData) => {
     const kind = String(formData.get("type") ?? "ligacao") as ActivityKind;
     const result = await registerActivityAction(prev, formData);
-    if (result.status === "ok") toast.success(successMessage(kind, formData));
+    if (result.status === "ok") toast.success(successMessage(kind, formData, leadId !== null));
     return result;
   }, initialCrmActionState);
   const [type, setType] = useState<ActivityKind>("ligacao");
@@ -197,17 +205,23 @@ export function ActivityForm({
 
   return (
     <form ref={formRef} action={action} className="flex flex-col gap-4" noValidate>
-      <input type="hidden" name="leadId" value={leadId} />
+      {leadId ? (
+        <input type="hidden" name="leadId" value={leadId} />
+      ) : (
+        <input type="hidden" name="orgId" value={orgId ?? ""} />
+      )}
       <FormMessage status={state.status === "error" ? "error" : "idle"} message={state.message} />
-      <DictationTools
-        key={toolsKey}
-        leadId={leadId}
-        segment={segment}
-        enabled={aiEnabled}
-        textareaId={ids("body").id}
-        onOrganized={applyNotes}
-        onUndo={undoNotes}
-      />
+      {leadId && segment ? (
+        <DictationTools
+          key={toolsKey}
+          leadId={leadId}
+          segment={segment}
+          enabled={aiEnabled}
+          textareaId={ids("body").id}
+          onOrganized={applyNotes}
+          onUndo={undoNotes}
+        />
+      ) : null}
       <SegmentedControl
         name="type"
         label="Tipo de atividade"
@@ -267,7 +281,7 @@ export function ActivityForm({
             required
             error={e.dueAt}
           />
-        ) : (
+        ) : leadId ? (
           <TextField
             key={`${isContact ? "contato" : "outro"}-${suggested}`}
             name="nextActionAt"
@@ -284,7 +298,7 @@ export function ActivityForm({
                   : "Este estágio não tem prazo fixo. Deixe em branco para manter a atual."
             }
           />
-        )}
+        ) : null}
       </div>
       <div className="flex justify-end">
         <SubmitButton size="touch" className="md:h-9" pendingLabel="Registrando…">
