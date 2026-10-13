@@ -20,6 +20,9 @@ export const LEAD_SOURCES = [
   "campanha",
   "whatsapp",
   "outro",
+  // Acrescentado no fim de propósito (ADR-004, 6.4.4): o drizzle-kit emite um único
+  // `ALTER TYPE ... ADD VALUE 'prospeccao'`, sem BEFORE nem recriação do tipo.
+  "prospeccao",
 ] as const;
 export type LeadSource = (typeof LEAD_SOURCES)[number];
 
@@ -106,6 +109,24 @@ export const ACTIVITY_TYPES = [
   "sistema",
 ] as const;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
+
+// Cadência de um item de prospecção (ADR-004, 6.4.2 e 6.6): text + CHECK no banco.
+export const PROSPECTING_STATUSES = [
+  "a_ligar",
+  "sem_resposta",
+  "retornar",
+  "reuniao_marcada",
+  "descartado",
+] as const;
+export type ProspectingStatus = (typeof PROSPECTING_STATUSES)[number];
+
+// Motivo do descarte, gravado em `data.reason` da activities.ligacao (ADR-004, 6.6 e 8).
+export const DISCARD_REASONS = ["sem_interesse", "nao_contatar", "numero_errado", "outro"] as const;
+export type DiscardReason = (typeof DISCARD_REASONS)[number];
+
+// Prioridade de tarefa (activities.priority, só type = tarefa; ADR-004, 6.4.3).
+export const TASK_PRIORITIES = ["baixa", "media", "alta"] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
 export const CONTRIBUTION_TYPES = ["patrocinio", "doacao"] as const;
 export type ContributionType = (typeof CONTRIBUTION_TYPES)[number];

@@ -3,13 +3,17 @@
 import type {
   ActivityType,
   ConsentPurpose,
+  DiscardReason,
   LeadInterest,
   LeadSegment,
   LeadSource,
   LeadTemperature,
   LostReason,
+  ProspectingStatus,
+  TaskPriority,
 } from "@/lib/domain/enums";
 import type { Pipeline, Stage } from "@/lib/domain/pipelines";
+import type { TaskStatus } from "./task-status";
 import { AVAILABILITY_LABELS } from "@/lib/validation/forms/diagnostico-options";
 
 export const PIPELINE_LABELS: Record<Pipeline, string> = {
@@ -79,6 +83,35 @@ export const SOURCE_LABELS: Record<LeadSource, string> = {
   campanha: "Campanha",
   whatsapp: "WhatsApp",
   outro: "Outro",
+  prospeccao: "Prospecção",
+};
+
+// Prospecção e Tarefas (ADR-004, 6.4.5).
+export const PROSPECTING_STATUS_LABELS: Record<ProspectingStatus, string> = {
+  a_ligar: "A ligar",
+  sem_resposta: "Sem resposta",
+  retornar: "Retornar",
+  reuniao_marcada: "Reunião marcada",
+  descartado: "Descartado",
+};
+
+export const DISCARD_REASON_LABELS: Record<DiscardReason, string> = {
+  sem_interesse: "Sem interesse",
+  nao_contatar: "Pediu para não contatar",
+  numero_errado: "Número errado",
+  outro: "Outro",
+};
+
+export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
+  baixa: "Baixa",
+  media: "Média",
+  alta: "Alta",
+};
+
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  a_fazer: "A fazer",
+  em_andamento: "Em andamento",
+  concluida: "Concluída",
 };
 
 export const INTEREST_LABELS: Record<LeadInterest, string> = {

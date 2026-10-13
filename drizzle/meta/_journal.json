@@ -22,6 +22,13 @@
       "when": 1791584618106,
       "tag": "0002_awesome_katie_power",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791905426426,
+      "tag": "0003_gigantic_malcolm_colcord",
+      "breakpoints": true
     }
   ]
 }

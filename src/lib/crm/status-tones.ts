@@ -7,15 +7,22 @@ import type {
   ContributionStatus,
   LeadTemperature,
   OrganizationType,
+  ProspectingStatus,
+  TaskPriority,
 } from "@/lib/domain/enums";
 import type { Pipeline } from "@/lib/domain/pipelines";
 import {
   Archive,
+  ArrowDown,
+  ArrowUp,
   Award,
   BadgeCheck,
+  Ban,
   Banknote,
   Building2,
   Calculator,
+  CalendarCheck,
+  CalendarClock,
   CheckSquare,
   Circle,
   CircleCheck,
@@ -38,8 +45,10 @@ import {
   Mail,
   MapPin,
   MessageCircle,
+  Minus,
   PenLine,
   Phone,
+  PhoneMissed,
   Play,
   Presentation,
   Receipt,
@@ -155,6 +164,33 @@ const ORG_TYPE_TONES: Record<OrganizationType, ToneAndIcon> = {
 
 export function orgTypeTone(type: string): ToneAndIcon {
   return (ORG_TYPE_TONES as Record<string, ToneAndIcon>)[type] ?? UNKNOWN;
+}
+
+// Cadência da prospecção e prioridade de tarefa (ADR-004, seção 7; design system, 6.3): sempre
+// com texto visível ao lado do ícone.
+const PROSPECTING_TONES: Record<ProspectingStatus, ToneAndIcon> = {
+  a_ligar: { tone: "neutral", icon: Phone },
+  sem_resposta: { tone: "warning", icon: PhoneMissed },
+  retornar: { tone: "info", icon: CalendarClock },
+  reuniao_marcada: { tone: "success", icon: CalendarCheck },
+  descartado: { tone: "outline", icon: Ban },
+};
+
+export function prospectingTone(status: string): ToneAndIcon {
+  return (PROSPECTING_TONES as Record<string, ToneAndIcon>)[status] ?? UNKNOWN;
+}
+
+const PRIORITY_TONES: Record<TaskPriority, ToneAndIcon> = {
+  alta: { tone: "warning", icon: ArrowUp },
+  media: { tone: "neutral", icon: Minus },
+  baixa: { tone: "outline", icon: ArrowDown },
+};
+
+// Prioridade nula (dado antigo) é tratada como média, por segurança (ADR-004, 6.4.3).
+export function priorityTone(priority: string | null | undefined): ToneAndIcon {
+  return (
+    (PRIORITY_TONES as Record<string, ToneAndIcon>)[priority ?? "media"] ?? PRIORITY_TONES.media
+  );
 }
 
 // Alertas de projeto (regra R-13), decisor e publicação: texto fixo ao lado do ícone.

@@ -1,9 +1,16 @@
 import { Badge } from "@/components/ui/badge";
 import { CONTRIBUTION_STATUS_LABELS, ORGANIZATION_TYPE_LABELS } from "@/lib/crm/enum-labels";
-import { TEMPERATURE_LABELS, stageLabel } from "@/lib/crm/labels";
+import {
+  PROSPECTING_STATUS_LABELS,
+  TASK_PRIORITY_LABELS,
+  TEMPERATURE_LABELS,
+  stageLabel,
+} from "@/lib/crm/labels";
 import {
   contributionTone,
   orgTypeTone,
+  priorityTone,
+  prospectingTone,
   stageTone,
   temperatureTone,
   type ToneAndIcon,
@@ -15,7 +22,8 @@ import { cn } from "@/lib/utils";
 // o rótulo de labels.ts/enum-labels.ts; texto sempre visível, ícone decorativo. Temperatura "frio"
 // some nas tabelas (`size="sm"`) e aparece como "Frio" no detalhe. É o único badge de status do
 // CRM.
-export type StatusBadgeKind = "stage" | "contribution" | "temperature" | "orgType";
+export type StatusBadgeKind =
+  "stage" | "contribution" | "temperature" | "orgType" | "prospecting" | "priority";
 
 function resolve(
   kind: StatusBadgeKind,
@@ -41,6 +49,16 @@ function resolve(
       return {
         ...orgTypeTone(value),
         label: (ORGANIZATION_TYPE_LABELS as Record<string, string>)[value] ?? value,
+      };
+    case "prospecting":
+      return {
+        ...prospectingTone(value),
+        label: (PROSPECTING_STATUS_LABELS as Record<string, string>)[value] ?? value,
+      };
+    case "priority":
+      return {
+        ...priorityTone(value),
+        label: (TASK_PRIORITY_LABELS as Record<string, string>)[value || "media"] ?? value,
       };
   }
 }

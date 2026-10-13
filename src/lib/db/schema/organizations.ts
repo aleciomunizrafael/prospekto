@@ -35,6 +35,8 @@ export const organizations = pgTable(
     icmsContributorRs: boolean(),
     accountantOrgId: uuid().references((): AnyPgColumn => organizations.id),
     ownerUserId: text().references(() => users.id),
+    // Telefone da empresa (central, recepção), E.164; o da pessoa fica em contacts/leads (ADR-004, 6.4.7).
+    phone: text(),
     notes: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true })
