@@ -14,6 +14,7 @@ import type { Ctx } from "@/lib/repos/ctx";
 import { listActivities, listOpenTasks } from "@/lib/repos/activities";
 import { listConsents } from "@/lib/repos/consents";
 import { createLead, getLead } from "@/lib/repos/leads";
+import { createOrganization } from "@/lib/repos/organizations";
 import { makeTenant, makeUser, uniqueEmail } from "../helpers";
 
 const session = vi.hoisted(() => ({ ctx: null as Ctx | null }));
@@ -306,6 +307,86 @@ describe("registerActivityAction e completeTaskAction", () => {
     const done = await completeTaskAction(initialCrmActionState, fd({ activityId: open[0].id }));
     expect(done.status).toBe("ok");
     expect((await listOpenTasks(ctx)).filter((t) => t.leadId === lead.id)).toHaveLength(0);
+  });
+});
+
+// Modo organização do formulário (ADR-004, 6.9): `orgId` em vez de `leadId`.
+describe("registerActivityAction com orgId", () => {
+  it("grava activities.org_id e não toca em leads", async () => {
+    const org = await createOrganization(ctx, { type: "empresa", name: "Empresa da Ficha" });
+    const lead = await newLead();
+    const before = await getLead(ctx, lead.id);
+    const state = await registerActivityAction(
+      initialCrmActionState,
+      fd({
+        orgId: org.id,
+        type: "ligacao",
+        subject: "Ligação para a central",
+        body: "Pedi o contato do financeiro.",
+        occurredAt: "2026-10-03T15:30",
+      }),
+    );
+    expect(state.status).toBe("ok");
+    const rows = await listActivities(ctx, { orgId: org.id });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      type: "ligacao",
+      subject: "Ligação para a central",
+      orgId: org.id,
+      leadId: null,
+    });
+    expect(rows[0].occurredAt.toISOString()).toBe("2026-10-03T18:30:00.000Z");
+    const after = await getLead(ctx, lead.id);
+    expect(after?.lastContactAt).toEqual(before?.lastContactAt);
+    expect(after?.nextActionAt).toEqual(before?.nextActionAt);
+  });
+
+  it("tarefa na organização grava prioridade média e vencimento", async () => {
+    const org = await createOrganization(ctx, { type: "empresa", name: "Empresa com Tarefa" });
+    const state = await registerActivityAction(
+      initialCrmActionState,
+      fd({
+        orgId: org.id,
+        type: "tarefa",
+        subject: "Enviar apresentação",
+        dueAt: "2026-10-20T09:00",
+      }),
+    );
+    expect(state.status).toBe("ok");
+    const [task] = await listActivities(ctx, { orgId: org.id, type: "tarefa" });
+    expect(task.priority).toBe("media");
+    expect(task.dueAt?.toISOString()).toBe("2026-10-20T12:00:00.000Z");
+    expect(task.doneAt).toBeNull();
+  });
+
+  it("com leadId e orgId juntos devolve erro de validação; sem nenhum também", async () => {
+    const org = await createOrganization(ctx, { type: "empresa", name: "Empresa Dupla" });
+    const lead = await newLead();
+    const both = await registerActivityAction(
+      initialCrmActionState,
+      fd({ leadId: lead.id, orgId: org.id, type: "nota", subject: "x" }),
+    );
+    expect(both.status).toBe("error");
+    expect(both.fieldErrors?.leadId).toBeDefined();
+    const none = await registerActivityAction(
+      initialCrmActionState,
+      fd({ type: "nota", subject: "x" }),
+    );
+    expect(none.status).toBe("error");
+    expect(none.fieldErrors?.leadId).toBeDefined();
+    expect(await listActivities(ctx, { orgId: org.id })).toHaveLength(0);
+  });
+
+  it("orgId de outro tenant devolve erro e não grava", async () => {
+    const other = await makeTenant();
+    const foreign = await createOrganization(other, { type: "empresa", name: "Alheia" });
+    const state = await registerActivityAction(
+      initialCrmActionState,
+      fd({ orgId: foreign.id, type: "nota", subject: "Nota indevida" }),
+    );
+    expect(state.status).toBe("error");
+    expect(state.message).toBe("Organização não encontrada.");
+    expect(await listActivities(other, { orgId: foreign.id })).toHaveLength(0);
   });
 });
 
