@@ -1,8 +1,9 @@
 // Quadro de leads (ADR-004, 6.3; plano, frente A) renderizado com renderToString, como o
 // servidor faz (decisão D13): uma coluna por estágio com rótulo em português e contagem, cartão
 // com link real, botão "Mover … para", valor em R$, `draggable="false"` nos links, colunas
-// bloqueadas durante o arrasto, zona "Marcar perdido" só com arrasto, nenhuma chave de enum no
-// texto visível (P20) e a alternância com `aria-current` só no ativo (P19).
+// bloqueadas durante o arrasto (só a lista de cartões esmaece; a frase do motivo fica legível no
+// cabeçalho), zona "Marcar perdido" só com arrasto, nenhuma chave de enum no texto visível (P20) e
+// a alternância com `aria-current` só no ativo (P19).
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -125,9 +126,9 @@ function render(props: Partial<LeadBoardColumnsProps> = {}): string {
 
 const text = (html: string) => html.replace(/<[^>]+>/g, " ");
 
-// Tag de abertura do elemento com o data-stage pedido.
+// Tag de abertura da coluna (`section`) com o data-stage pedido.
 function columnTag(html: string, stage: string): string {
-  return html.match(new RegExp(`<div [^>]*data-stage="${stage}"[^>]*>`))?.[0] ?? "";
+  return html.match(new RegExp(`<section [^>]*data-stage="${stage}"[^>]*>`))?.[0] ?? "";
 }
 
 describe("LeadBoardColumns", () => {
@@ -136,9 +137,14 @@ describe("LeadBoardColumns", () => {
     const stages = [...html.matchAll(/data-stage="([a-z_]+)"/g)].map((m) => m[1]);
     expect(stages).toEqual(STAGES.patrocinadores.filter((s) => s !== "perdido"));
     expect(html).toContain('aria-label="Quadro de Patrocinadores"');
+    // Rótulo em `h2` logo abaixo do h1 da página (sem pular para h3), como o quadro de tarefas, e a
+    // coluna é uma `section` nomeada por ele.
     for (const label of ["Novo", "Qualificado", "Diagnóstico", "Proposta", "Termo", "Aporte"]) {
-      expect(html).toContain(`>${label}</h3>`);
+      expect(html).toContain(`>${label}</h2>`);
     }
+    expect(html).not.toContain("<h3");
+    expect(html).toContain('id="coluna-novo"');
+    expect(columnTag(html, "novo")).toContain('aria-labelledby="coluna-novo"');
     expect(html).toContain("73 leads");
     expect(html).toContain("R$\u00a0350.000,00 em propostas");
     expect(html).toContain("ver todos os 73 em Lista ›");
@@ -193,6 +199,12 @@ describe("LeadBoardColumns", () => {
       expect(columnTag(html, stage), stage).toContain('data-blocked="true"');
     }
     expect(html).toContain("Avance um estágio por vez");
+    // Só a lista de cartões esmaece: a coluna e o cabeçalho com a frase do motivo ficam em opacidade
+    // plena (a frase vem antes, fora do contêiner com `opacity-50`), para continuar legível.
+    expect(columnTag(html, "diagnostico")).not.toContain("opacity-50");
+    expect(html.slice(html.indexOf('data-stage="diagnostico"'))).toMatch(
+      /Avance um estágio por vez<\/p><\/header><div class="[^"]*opacity-50/,
+    );
     expect(html).toContain('data-drop-zone="terminal"');
     expect(html).toContain("Marcar perdido");
     expect(render()).not.toContain('data-drop-zone="terminal"');

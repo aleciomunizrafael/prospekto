@@ -16,9 +16,11 @@ import { LeadCard } from "./lead-card";
 
 // Colunas do quadro de leads (ADR-004, 6.3; plano, frente A). Puro: recebe o estado do arrasto e
 // os manipuladores do LeadBoard, e é o que tests/lead-board.test.ts renderiza com renderToString.
-// Uma coluna por estágio na ordem do domínio; durante o arrasto as colunas fora de
-// `allowedStageMoves` ficam esmaecidas com a frase no cabeçalho, e a coluna terminal (oculta por
-// padrão) aparece como zona "Marcar perdido" fixa à direita do contêiner com rolagem horizontal.
+// Uma coluna por estágio na ordem do domínio (`section` nomeada pelo `h2` do rótulo, como o quadro
+// de tarefas); durante o arrasto as colunas fora de `allowedStageMoves` ficam com a lista de cartões
+// esmaecida e a frase do motivo no cabeçalho em opacidade plena (esmaecer a coluna inteira derrubava
+// o contraste da frase para 2:1), e a coluna terminal (oculta por padrão) aparece como zona "Marcar
+// perdido" fixa à direita do contêiner com rolagem horizontal.
 // No celular as colunas têm 85 vw com `snap-center` e a página rola na vertical (sem `max-h`).
 
 export type DragState = { leadId: string; stage: string; name: string };
@@ -97,18 +99,18 @@ export function LeadBoardColumns({
           view: "lista",
         })}`;
         return (
-          <div
+          <section
             key={column.stage}
             data-stage={column.stage}
             data-blocked={blocked ? "true" : undefined}
+            aria-labelledby={`coluna-${column.stage}`}
             onDragOver={(event) => onColumnDragOver(column.stage, event)}
             onDragLeave={(event) => onColumnDragLeave(column.stage, event)}
             onDrop={(event) => onColumnDrop(column.stage, event)}
             className={cn(
               // `relative`: o texto sr-only da contagem é absoluto e, sem um ancestral posicionado
               // dentro da rolagem, escaparia do clip e alargaria a página (rolagem horizontal).
-              "relative flex w-[85vw] shrink-0 snap-center flex-col rounded-xl border border-border bg-surface-2 transition-opacity duration-120 md:w-64 md:snap-start",
-              blocked && "opacity-50",
+              "relative flex w-[85vw] shrink-0 snap-center flex-col rounded-xl border border-border bg-surface-2 md:w-64 md:snap-start",
               over && "ring-2 ring-primary/40",
             )}
           >
@@ -118,7 +120,12 @@ export function LeadBoardColumns({
                   aria-hidden="true"
                   className={cn("size-2 shrink-0 rounded-full", DOT_BY_TONE[tone])}
                 />
-                <h3 className="min-w-0 truncate text-sm font-semibold">{label}</h3>
+                <h2
+                  id={`coluna-${column.stage}`}
+                  className="min-w-0 truncate text-sm font-semibold"
+                >
+                  {label}
+                </h2>
                 <span className="ml-auto text-sm tabular-nums text-muted-foreground">
                   <span className="sr-only">
                     {column.total === 1 ? "1 lead" : `${column.total} leads`}
@@ -131,7 +138,14 @@ export function LeadBoardColumns({
               ) : null}
               {blocked ? <p className="crm-meta">{blockedHint}</p> : null}
             </header>
-            <div className="flex flex-1 flex-col gap-2 p-2 pt-0 max-h-none md:max-h-[70vh] md:overflow-y-auto">
+            <div
+              className={cn(
+                // Só a lista esmaece quando a coluna está bloqueada: o cabeçalho (rótulo, contagem e
+                // a frase do motivo) fica em opacidade plena para continuar legível durante o arrasto.
+                "flex flex-1 flex-col gap-2 p-2 pt-0 max-h-none transition-opacity duration-120 md:max-h-[70vh] md:overflow-y-auto",
+                blocked && "opacity-50",
+              )}
+            >
               {column.rows.length === 0 ? (
                 <p className="crm-meta px-1 py-2">Nenhum lead em {label}.</p>
               ) : (
@@ -158,7 +172,7 @@ export function LeadBoardColumns({
                 </Link>
               ) : null}
             </div>
-          </div>
+          </section>
         );
       })}
 
