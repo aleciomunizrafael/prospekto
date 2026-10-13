@@ -1,8 +1,20 @@
 // Listas e itens de prospecção (ADR-004, 6.4.1, 6.4.2 e 6.6). `sourceDetail` da lista é
 // obrigatório (LGPD, art. 18), como em contacts. O telefone passa por phoneSchema (E.164).
 import { z } from "zod";
-import { DISCARD_REASONS, PROSPECTING_STATUSES } from "@/lib/domain/enums";
-import { calendarDateSchema, nullableOptionals, phoneSchema, uuidSchema } from "./common";
+import {
+  DISCARD_REASONS,
+  LEAD_INTERESTS,
+  PROSPECTING_STATUSES,
+  TAX_REGIMES,
+} from "@/lib/domain/enums";
+import {
+  calendarDateSchema,
+  emailSchema,
+  nullableOptionals,
+  phoneSchema,
+  timestampSchema,
+  uuidSchema,
+} from "./common";
 
 const text = (max: number, what: string) =>
   z
@@ -63,3 +75,81 @@ export const updateItemSchema = z
     callbackAt: calendarDateSchema.nullable().optional(),
   });
 export type UpdateItemInput = z.input<typeof updateItemSchema>;
+
+// ---------------------------------------------------------------------------------------------
+// Frente C: resultado da ligação, WhatsApp, autosave e conversão (ADR-004, 6.6; plano, regra 10)
+
+// Resultados que um botão grava; "reuniao_marcada" só pela conversão (convertItemSchema).
+export const CALL_RESULT_STATUSES = ["a_ligar", "sem_resposta", "retornar", "descartado"] as const;
+
+export const recordCallResultSchema = z
+  .object({
+    itemId: uuidSchema,
+    // Ausente = só a anotação (botão "Anotação").
+    status: z.enum(CALL_RESULT_STATUSES, { error: "Escolha o resultado." }).optional(),
+    callbackAt: calendarDateSchema.optional(),
+    reason: discardReasonSchema.optional(),
+    note: text(2000, "A anotação").optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.status === "descartado" && !v.reason) {
+      ctx.addIssue({ code: "custom", path: ["reason"], message: "Escolha o motivo." });
+    }
+    if (v.status === "retornar" && !v.callbackAt) {
+      ctx.addIssue({ code: "custom", path: ["callbackAt"], message: "Informe a data do retorno." });
+    }
+    if (!v.status && !v.note) {
+      ctx.addIssue({ code: "custom", path: ["note"], message: "Escreva a anotação." });
+    }
+  });
+export type RecordCallResultInput = z.input<typeof recordCallResultSchema>;
+
+export const recordWhatsappSentSchema = z.object({
+  itemId: uuidSchema,
+  text: z
+    .string({ error: "Escreva a mensagem." })
+    .trim()
+    .min(1, { error: "Escreva a mensagem." })
+    .max(2000, { error: "A mensagem pode ter no máximo 2.000 caracteres." }),
+});
+export type RecordWhatsappSentInput = z.input<typeof recordWhatsappSentSchema>;
+
+export const ITEM_AUTOSAVE_FIELDS = ["hook", "address", "size", "info", "notes"] as const;
+export type ItemAutosaveField = (typeof ITEM_AUTOSAVE_FIELDS)[number];
+
+export const updateItemFieldSchema = z.object({
+  itemId: uuidSchema,
+  field: z.enum(ITEM_AUTOSAVE_FIELDS, { error: "Campo desconhecido." }),
+  value: z.string().max(2000, { error: "O texto pode ter no máximo 2.000 caracteres." }),
+});
+export type UpdateItemFieldInput = z.input<typeof updateItemFieldSchema>;
+
+export const PROSPECTING_MEETING_KINDS = ["simulacao", "diagnostico"] as const;
+
+// "Reunião marcada": e-mail obrigatório (leads.email é NOT NULL); telefone da pessoa opcional e
+// nunca o da empresa (P10, P18).
+export const convertItemSchema = z.object({
+  itemId: uuidSchema,
+  contactName: z
+    .string({ error: "Informe quem vai à reunião." })
+    .trim()
+    .min(2, { error: "Informe quem vai à reunião." })
+    .max(120, { error: "O nome pode ter no máximo 120 caracteres." }),
+  email: emailSchema,
+  contactPhone: phoneSchema.optional(),
+  title: text(120, "O cargo").optional(),
+  meetingAt: timestampSchema,
+  meetingKind: z.enum(PROSPECTING_MEETING_KINDS).default("diagnostico"),
+  taxRegime: z.enum(TAX_REGIMES).optional(),
+  interest: z.enum(LEAD_INTERESTS).default("nao_sei"),
+  ownerUserId: z.string().trim().min(1).optional(),
+});
+export type ConvertItemInput = z.input<typeof convertItemSchema>;
+
+export const pasteItemsSchema = z.object({
+  listId: uuidSchema,
+  text: z
+    .string({ error: "Cole a lista." })
+    .max(200_000, { error: "O texto colado é grande demais (máximo de 200.000 caracteres)." }),
+});
+export type PasteItemsInput = z.input<typeof pasteItemsSchema>;

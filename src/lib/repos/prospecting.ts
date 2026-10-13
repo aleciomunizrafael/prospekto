@@ -15,21 +15,45 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { db, type Db } from "@/lib/db";
-import { activities, prospectingItems, prospectingLists, users } from "@/lib/db/schema";
-import { DISCARD_REASON_LABELS } from "@/lib/crm/labels";
-import { PROSPECTING_STATUSES, type ProspectingStatus } from "@/lib/domain/enums";
-import { NotFoundError, ValidationError } from "@/lib/errors";
 import {
+  activities,
+  contacts,
+  leads,
+  organizations,
+  prospectingItems,
+  prospectingLists,
+  users,
+} from "@/lib/db/schema";
+import { formatDate, fromDateTimeLocal } from "@/lib/crm/format";
+import { DISCARD_REASON_LABELS } from "@/lib/crm/labels";
+import { callResultSubject, formatMeetingAt } from "@/lib/crm/prospecting-view";
+import { PROSPECTING_STATUSES, type ProspectingStatus } from "@/lib/domain/enums";
+import { TERMINAL_STAGES } from "@/lib/domain/pipelines";
+import { scoreLead } from "@/lib/domain/scoring";
+import { NotFoundError, ValidationError } from "@/lib/errors";
+import { log } from "@/lib/log";
+import { parseAttributes } from "@/lib/validation/lead-attributes";
+import {
+  convertItemSchema,
   createListSchema,
   newItemSchema,
+  recordCallResultSchema,
+  recordWhatsappSentSchema,
+  updateItemFieldSchema,
   updateItemSchema,
   updateListSchema,
+  type ConvertItemInput,
   type CreateListInput,
   type NewItemInput,
+  type RecordCallResultInput,
+  type RecordWhatsappSentInput,
+  type UpdateItemFieldInput,
   type UpdateItemInput,
   type UpdateListInput,
 } from "@/lib/validation/prospecting";
+import { insertSystemActivity } from "./activities";
 import type { Ctx } from "./ctx";
+import { moveLeadStage } from "./leads";
 
 // Módulo de Prospecção (ADR-004, 6.4.1, 6.4.2 e 6.6; plano, P6, P7, P15). Listas de empresas
 // para ligar e itens (pré-lead). Toda consulta filtra por tenant; dentro de uma transação só
@@ -403,4 +427,436 @@ export async function searchProspectingItems(
     .where(and(eq(prospectingItems.tenantId, ctx.tenantId), ilike(prospectingItems.name, term)))
     .orderBy(asc(prospectingItems.name))
     .limit(Math.min(Math.max(input.limit ?? 5, 1), 50));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Frente C: resultado da ligação, WhatsApp, autosave e conversão (ADR-004, 6.6; plano, P7 e P10)
+
+// Motivo do último descarte por item (data.reason da activities.ligacao mais recente), para o
+// "Voltar para a ligar" pedir confirmação quando a empresa pediu para não ser contatada.
+export async function listDiscardReasons(
+  ctx: Ctx,
+  input: { listId?: string; itemId?: string },
+): Promise<Record<string, string>> {
+  const where: SQL[] = [
+    eq(activities.tenantId, ctx.tenantId),
+    eq(activities.type, "ligacao"),
+    eq(prospectingItems.status, "descartado"),
+  ];
+  if (input.listId) where.push(eq(prospectingItems.listId, input.listId));
+  if (input.itemId) where.push(eq(prospectingItems.id, input.itemId));
+  const rows = await db
+    .select({
+      itemId: prospectingItems.id,
+      reason: sql<string | null>`${activities.data}->>'reason'`,
+    })
+    .from(activities)
+    .innerJoin(
+      prospectingItems,
+      and(
+        eq(prospectingItems.id, activities.prospectingItemId),
+        eq(prospectingItems.tenantId, ctx.tenantId),
+      ),
+    )
+    .where(and(...where))
+    .orderBy(desc(activities.occurredAt), desc(activities.createdAt))
+    .limit(2000);
+  const out: Record<string, string> = {};
+  for (const r of rows) {
+    if (r.reason && !(r.itemId in out)) out[r.itemId] = r.reason;
+  }
+  return out;
+}
+
+// Um botão de resultado: status, called_at (nulo ao voltar para a ligar), callback_at (só em
+// retornar), a anotação quando vier, e uma activities.ligacao com o resultado (ADR-004, 6.6).
+// Sem status, só a anotação (activities.nota). Se o item já virou lead e o resultado é retornar,
+// leads.next_action_at passa para o dia do retorno às 9h de São Paulo.
+export async function recordCallResult(
+  ctx: Ctx,
+  input: RecordCallResultInput,
+): Promise<ProspectingItem> {
+  const data = recordCallResultSchema.parse(input);
+  return db.transaction(async (tx) => {
+    const item = await requireItem(tx, ctx, data.itemId);
+    const now = new Date();
+    const patch: Partial<typeof prospectingItems.$inferInsert> = {};
+    if (data.note !== undefined) patch.notes = data.note || null;
+    if (data.status) {
+      patch.status = data.status;
+      patch.calledAt = data.status === "a_ligar" ? null : now;
+      patch.callbackAt = data.status === "retornar" ? (data.callbackAt ?? null) : null;
+    }
+    const [updated] = await tx
+      .update(prospectingItems)
+      .set(patch)
+      .where(itemScope(ctx, item.id))
+      .returning();
+    if (data.status) {
+      await insertSystemActivity(tx, ctx, {
+        // "De volta para a ligar" não é uma ligação: fica como nota na linha do tempo.
+        type: data.status === "a_ligar" ? "nota" : "ligacao",
+        subject: callResultSubject(data.status, {
+          callbackAt: data.callbackAt,
+          reason: data.reason,
+        }),
+        body: data.note || null,
+        data: {
+          result: data.status,
+          callbackAt: data.status === "retornar" ? (data.callbackAt ?? null) : null,
+          reason: data.reason ?? null,
+        },
+        occurredAt: now,
+        prospectingItemId: item.id,
+        leadId: item.leadId,
+        ownerUserId: ctx.userId ?? null,
+      });
+      if (item.leadId && data.status === "retornar" && data.callbackAt) {
+        const nextActionAt = fromDateTimeLocal(`${data.callbackAt}T09:00`);
+        if (nextActionAt) {
+          await tx
+            .update(leads)
+            .set({ nextActionAt })
+            .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.id, item.leadId)));
+        }
+      }
+    } else {
+      await insertSystemActivity(tx, ctx, {
+        type: "nota",
+        subject: "Anotação",
+        body: data.note ?? null,
+        data: { result: null },
+        occurredAt: now,
+        prospectingItemId: item.id,
+        leadId: item.leadId,
+        ownerUserId: ctx.userId ?? null,
+      });
+    }
+    return updated;
+  });
+}
+
+// "Abrir no WhatsApp": o CRM só sabe que abriu com este texto (ADR-004, 6.6): whatsapp_sent_at e
+// uma activities.whatsapp com o texto editado em body.
+export async function recordWhatsappSent(
+  ctx: Ctx,
+  input: RecordWhatsappSentInput,
+): Promise<ProspectingItem> {
+  const data = recordWhatsappSentSchema.parse(input);
+  return db.transaction(async (tx) => {
+    const item = await requireItem(tx, ctx, data.itemId);
+    const now = new Date();
+    const [updated] = await tx
+      .update(prospectingItems)
+      .set({ whatsappSentAt: now })
+      .where(itemScope(ctx, item.id))
+      .returning();
+    await insertSystemActivity(tx, ctx, {
+      type: "whatsapp",
+      subject: "WhatsApp aberto pela prospecção",
+      body: data.text,
+      data: { channel: "whatsapp" },
+      occurredAt: now,
+      prospectingItemId: item.id,
+      leadId: item.leadId,
+      ownerUserId: ctx.userId ?? null,
+    });
+    return updated;
+  });
+}
+
+// Autosave da ficha (abertura, localização, porte, informações, anotação): um campo por vez.
+export async function updateItemField(
+  ctx: Ctx,
+  input: UpdateItemFieldInput,
+): Promise<ProspectingItem> {
+  const data = updateItemFieldSchema.parse(input);
+  const value = data.value.trim() || null;
+  const [row] = await db
+    .update(prospectingItems)
+    .set({ [data.field]: value })
+    .where(itemScope(ctx, data.itemId))
+    .returning();
+  if (!row) throw new NotFoundError("Empresa de prospecção", data.itemId);
+  return row;
+}
+
+export type ConvertProspectingItemResult = {
+  leadId: string;
+  orgId: string;
+  contactId: string;
+  created: boolean;
+  reactivated: boolean;
+  stage: string;
+  advanceFailed: boolean;
+};
+
+// Nome igual, sem curingas: `%` e `_` do próprio nome são escapados para o ilike ser exato.
+function exactIlike(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
+async function fillOrganizationPhone(
+  tx: Db,
+  ctx: Ctx,
+  org: { id: string; phone: string | null },
+  phone: string | null,
+): Promise<void> {
+  if (org.phone || !phone) return;
+  await tx
+    .update(organizations)
+    .set({ phone })
+    .where(and(eq(organizations.tenantId, ctx.tenantId), eq(organizations.id, org.id)));
+}
+
+// "Reunião marcada" (ADR-004, 6.6; plano, P10): numa transação só com `tx`, a empresa vira
+// organização (com o telefone da empresa), a pessoa vira contato e lead em `novo` (ou o lead com o
+// mesmo e-mail é reaproveitado), a reunião entra como activities.reuniao na data marcada e o item
+// fica em reuniao_marcada com a história ligada ao lead. Depois da transação, moveLeadStage leva o
+// lead a `qualificado` (novo → qualificado; perdido → novo → qualificado); se um movimento falhar,
+// o lead fica onde está, a função devolve o estágio real e o aviso vai para o log sem dado pessoal.
+export async function convertProspectingItem(
+  ctx: Ctx,
+  input: ConvertItemInput,
+): Promise<ConvertProspectingItemResult> {
+  const data = convertItemSchema.parse(input);
+  const now = new Date();
+  const kindLabel = data.meetingKind === "simulacao" ? "simulação" : "diagnóstico";
+
+  const saved = await db.transaction(async (tx) => {
+    const item = await requireItem(tx, ctx, data.itemId);
+    if (item.status === "reuniao_marcada" || item.leadId) {
+      throw new ValidationError(
+        "Esta empresa já foi convertida: a reunião fica registrada no lead.",
+      );
+    }
+    const list = await requireList(tx, ctx, item.listId);
+    const ownerUserId = data.ownerUserId ?? list.assigneeUserId ?? ctx.userId ?? null;
+    if (ownerUserId) await assertAssignee(tx, ctx, ownerUserId);
+
+    // 1. Organização: a do item, a de mesmo nome (empresa) ou uma nova, com o telefone da empresa.
+    let orgId: string | null = null;
+    if (item.orgId) {
+      const [own] = await tx
+        .select({ id: organizations.id, phone: organizations.phone })
+        .from(organizations)
+        .where(and(eq(organizations.tenantId, ctx.tenantId), eq(organizations.id, item.orgId)));
+      if (own) {
+        orgId = own.id;
+        await fillOrganizationPhone(tx, ctx, own, item.phone);
+      }
+    }
+    if (!orgId) {
+      const [same] = await tx
+        .select({ id: organizations.id, phone: organizations.phone })
+        .from(organizations)
+        .where(
+          and(
+            eq(organizations.tenantId, ctx.tenantId),
+            eq(organizations.type, "empresa"),
+            ilike(organizations.name, exactIlike(item.name)),
+          ),
+        )
+        .orderBy(asc(organizations.createdAt))
+        .limit(1);
+      if (same) {
+        orgId = same.id;
+        await fillOrganizationPhone(tx, ctx, same, item.phone);
+      }
+    }
+    if (!orgId) {
+      const notes = [
+        `Origem: prospecção, lista ${list.name}`,
+        item.address ? `Localização: ${item.address}` : null,
+        item.size ? `Porte: ${item.size}` : null,
+        item.info ? `Informações: ${item.info}` : null,
+        item.hook ? `Abertura usada: ${item.hook}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const [org] = await tx
+        .insert(organizations)
+        .values({
+          tenantId: ctx.tenantId,
+          type: "empresa",
+          name: item.name,
+          sector: item.segment,
+          phone: item.phone,
+          notes,
+        })
+        .returning({ id: organizations.id });
+      orgId = org.id;
+    }
+
+    // 2. Contato: a pessoa que vai à reunião, com o telefone dela (nunca o da empresa).
+    const [contact] = await tx
+      .insert(contacts)
+      .values({
+        tenantId: ctx.tenantId,
+        orgId,
+        name: data.contactName,
+        title: data.title || null,
+        email: data.email,
+        phone: data.contactPhone || null,
+        isDecisionMaker: false,
+        sourceDetail: `Prospecção: lista ${list.name} (ligação em ${formatDate(now)})`,
+      })
+      .returning({ id: contacts.id });
+
+    // 3. Lead: reaproveita o PJ com o mesmo e-mail; senão nasce em `novo` com origem prospeccao.
+    const [existing] = await tx
+      .select({
+        id: leads.id,
+        stage: leads.stage,
+        orgId: leads.orgId,
+        contactId: leads.contactId,
+      })
+      .from(leads)
+      .where(
+        and(eq(leads.tenantId, ctx.tenantId), eq(leads.email, data.email), eq(leads.segment, "PJ")),
+      );
+    let leadId: string;
+    let created: boolean;
+    let stageBefore: string;
+    if (existing) {
+      leadId = existing.id;
+      created = false;
+      stageBefore = existing.stage;
+      await tx
+        .update(leads)
+        .set({
+          orgId: existing.orgId ?? orgId,
+          contactId: existing.contactId ?? contact.id,
+          lastContactAt: now,
+        })
+        .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.id, existing.id)));
+    } else {
+      const attributes = parseAttributes("PJ", {
+        empresa: item.name,
+        ...(data.taxRegime ? { regime_tributario: data.taxRegime } : {}),
+      });
+      const scored = scoreLead("PJ", "prospeccao", attributes, now);
+      const [lead] = await tx
+        .insert(leads)
+        .values({
+          tenantId: ctx.tenantId,
+          segment: "PJ",
+          pipeline: "patrocinadores",
+          stage: "novo",
+          stageEnteredAt: now,
+          interest: data.interest,
+          name: data.contactName,
+          email: data.email,
+          phone: data.contactPhone || null,
+          source: "prospeccao",
+          sourceDetail: list.name,
+          orgId,
+          contactId: contact.id,
+          ownerUserId,
+          attributes,
+          score: scored.score,
+          temperature: scored.temperature,
+          lastContactAt: now,
+          // A próxima ação já é a reunião: se o movimento a `qualificado` falhar, o lead fica em
+          // `novo` com a data certa (ADR-004, 6.6).
+          nextActionAt: data.meetingAt,
+        })
+        .returning({ id: leads.id });
+      leadId = lead.id;
+      created = true;
+      stageBefore = "novo";
+      await insertSystemActivity(tx, ctx, {
+        subject: `Lead criado pela prospecção (lista ${list.name})`,
+        data: { listId: list.id, prospectingItemId: item.id },
+        leadId,
+        occurredAt: now,
+      });
+    }
+
+    // 4. A ligação de hoje e a reunião na data marcada, ligadas ao lead e ao item.
+    await insertSystemActivity(tx, ctx, {
+      type: "ligacao",
+      subject: callResultSubject("reuniao_marcada"),
+      data: { result: "reuniao_marcada", callbackAt: null, reason: null },
+      occurredAt: now,
+      leadId,
+      prospectingItemId: item.id,
+      ownerUserId,
+    });
+    await insertSystemActivity(tx, ctx, {
+      type: "reuniao",
+      subject: `Reunião de ${kindLabel} marcada para ${formatMeetingAt(data.meetingAt)} (via prospecção, lista ${list.name})`,
+      data: {
+        meetingKind: data.meetingKind,
+        channel: "ligacao",
+        meetingAt: data.meetingAt.toISOString(),
+      },
+      occurredAt: data.meetingAt,
+      leadId,
+      prospectingItemId: item.id,
+      ownerUserId,
+    });
+
+    // 5. Item convertido; a história anterior viaja com o lead.
+    await tx
+      .update(prospectingItems)
+      .set({ status: "reuniao_marcada", calledAt: now, callbackAt: null, leadId, orgId })
+      .where(itemScope(ctx, item.id));
+    await tx
+      .update(activities)
+      .set({ leadId })
+      .where(
+        and(
+          eq(activities.tenantId, ctx.tenantId),
+          eq(activities.prospectingItemId, item.id),
+          isNull(activities.leadId),
+        ),
+      );
+
+    return { leadId, orgId, contactId: contact.id, created, stageBefore, ownerUserId };
+  });
+
+  // Fora da transação: moveLeadStage continua o único lugar que grava `stage` (R-3).
+  let reactivated = false;
+  let advanceFailed = false;
+  let stage = saved.stageBefore;
+  const move = (to: string) =>
+    moveLeadStage(ctx, {
+      leadId: saved.leadId,
+      to,
+      ownerUserId: saved.ownerUserId ?? undefined,
+      nextActionAt: data.meetingAt,
+    });
+  try {
+    if (stage === "novo") {
+      stage = (await move("qualificado")).stage;
+    } else if (stage === TERMINAL_STAGES.patrocinadores) {
+      stage = (await move("novo")).stage;
+      reactivated = true;
+      stage = (await move("qualificado")).stage;
+    }
+    // Lead reaproveitado em outro estágio: nenhum movimento (ADR-004, 6.6).
+  } catch (error) {
+    advanceFailed = true;
+    log("warn", "conversão: estágio não avançado", {
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      leadId: saved.leadId,
+      stage,
+      error,
+    });
+  }
+  const [final] = await db
+    .select({ stage: leads.stage })
+    .from(leads)
+    .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.id, saved.leadId)));
+  return {
+    leadId: saved.leadId,
+    orgId: saved.orgId,
+    contactId: saved.contactId,
+    created: saved.created,
+    reactivated,
+    stage: final?.stage ?? stage,
+    advanceFailed,
+  };
 }
