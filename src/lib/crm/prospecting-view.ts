@@ -6,6 +6,7 @@ import {
   CRM_TIME_ZONE,
   addCalendarDays,
   calendarDateInSaoPaulo,
+  diffCalendarDays,
   formatCalendarDate,
 } from "./format";
 import { plural } from "./text";
@@ -121,9 +122,13 @@ export function formatMeetingAt(value: Date): string {
   return `${SHORT_DATE_SP.format(value)}, ${Number(hour)}h${m === "00" ? "" : m}`;
 }
 
-// "hoje", "há 1 d", "há 2 d" (última tentativa, WhatsApp aberto).
+// "hoje", "há 1 d", "há 2 d" (última tentativa, WhatsApp aberto). Conta dias de calendário em
+// São Paulo, como relativeDayTime no Painel: uma ligação de ontem à noite é "há 1 d" de manhã.
 export function agoShort(date: Date, now: Date): string {
-  const days = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 86_400_000));
+  const days = Math.max(
+    0,
+    diffCalendarDays(calendarDateInSaoPaulo(date), calendarDateInSaoPaulo(now)),
+  );
   return days === 0 ? "hoje" : `há ${days} d`;
 }
 
