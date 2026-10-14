@@ -8,10 +8,12 @@ import { Logo } from "@/components/brand/logo";
 import { site } from "@/config/site";
 import { cn } from "@/lib/utils";
 
-// Cabeçalho do site (estrutura-e-copy.md, seções 3 e 8): logo oficial (40px no desktop, 32px no
-// celular; o nome acessível fica no link, e o SVG é decorativo), menu (Empresas,
-// Contadores, Pessoa física, Projetos, Sobre), botão "Simular" visível em qualquer largura e menu
-// em lista de tela cheia abaixo de 960px, com aria-expanded e aria-controls (seção 7.6).
+// Cabeçalho do site (estrutura-e-copy.md, seções 3 e 8): logo oficial (compacto a 32px no
+// celular, horizontal a 40px no desktop, conforme marca.md, seção 4: o horizontal nunca abaixo de
+// 40px; a troca é por CSS, sem hook de largura, para o HTML do servidor e o do cliente coincidirem;
+// o nome acessível fica no link, e os dois SVGs são decorativos), menu (Empresas, Contadores,
+// Pessoa física, Projetos, Sobre), botão "Simular" visível em qualquer largura e menu em lista de
+// tela cheia abaixo de 960px, com aria-expanded e aria-controls (seção 7.6).
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -42,10 +44,11 @@ export function SiteHeader() {
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3">
         <Link
           href="/"
-          className="focus-visible:ring-brand inline-flex shrink-0 items-center rounded-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+          className="focus-visible:ring-brand touch-target inline-flex shrink-0 items-center rounded-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
           aria-label={`${site.name}, página inicial`}
         >
-          <Logo variant="horizontal" className="text-brand-ink h-8 w-auto md:h-10" />
+          <Logo variant="compacto" className="text-brand-ink h-8 w-auto md:hidden" />
+          <Logo variant="horizontal" className="text-brand-ink hidden h-10 w-auto md:block" />
         </Link>
 
         <nav aria-label="Principal" className="hidden md:block">

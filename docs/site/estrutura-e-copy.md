@@ -594,7 +594,7 @@ Escala: corpo 18px no desktop e 17px no celular, entrelinha 1,6; H1 44/36px; H2 
 | Acordeão de objeções | Pergunta como botão com `aria-expanded`; resposta com fonte quando houver número |
 | Formulário | Campos empilhados, rótulos acima, erros abaixo, caixa de consentimento com texto completo visível (sem "li e aceito" genérico) |
 | Faixa de prazo | Fundo areia, número de dias úteis restantes em acento, texto do prazo e fonte |
-| Cabeçalho | Logo oficial à esquerda (`src/components/brand/logo.tsx`, variante horizontal: 40px de altura no desktop, 32px no celular, texto em cinza da marca `#363435`), dentro do link para a home com `aria-label`; menu; botão "Simular" |
+| Cabeçalho | Logo oficial à esquerda (`src/components/brand/logo.tsx`, variante compacta a 32px de altura no celular e horizontal a 40px no desktop, conforme marca.md, seção 4; texto em cinza da marca `#363435`), dentro do link para a home com `aria-label` e alvo de toque de 44px; menu; botão "Simular" |
 | Rodapé | Quatro colunas: assinatura oficial (logo com ~180px de largura, responsável, e-mail, WhatsApp, endereço, CNPJ), páginas, legal, fontes; ressalva legal em texto corrido |
 
 ### 7.5 Imagens

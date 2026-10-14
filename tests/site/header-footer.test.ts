@@ -1,8 +1,9 @@
 // Cabeçalho e rodapé do site (src/components/site/site-header.tsx e site-footer.tsx), renderizados
-// como o servidor faz (renderToString): o logo oficial aparece uma vez em cada um com o nome da
-// empresa como texto acessível (no cabeçalho, pelo aria-label do link para a home, com o SVG
-// decorativo; no rodapé, pelo próprio SVG com role="img"), e a assinatura oficial (endereço e
-// CNPJ de site.legal) está no rodapé e em /contato.
+// como o servidor faz (renderToString): o logo oficial aparece com o nome da empresa como texto
+// acessível (no cabeçalho, pelo aria-label do link para a home, com dois SVGs decorativos
+// alternados por CSS: compacto a 32px no celular e horizontal a 40px no desktop, como manda
+// docs/design/marca.md, seção 4; no rodapé, um único SVG com role="img"), e a assinatura oficial
+// (endereço e CNPJ de site.legal) está no rodapé e em /contato.
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -34,17 +35,39 @@ function text(html: string): string {
     .replace(/\s+/g, " ");
 }
 
+// Classes de uma tag como tokens inteiros ("hidden" não casa com "md:hidden").
+function classes(tag: string): string[] {
+  return (tag.match(/class="([^"]*)"/)?.[1] ?? "").split(/\s+/).filter(Boolean);
+}
+
 describe("cabeçalho do site", () => {
-  it("tem o logo oficial uma vez, decorativo, dentro do link para a home com nome acessível", () => {
-    expect(count(header, "<svg ")).toBe(1);
+  it("tem o logo oficial dentro do link para a home, com nome acessível só no link e alvo de toque", () => {
     const link = header.match(/<a [^>]*href="\/"[^>]*>/)?.[0] ?? "";
     expect(link).toContain(`aria-label="${ACCESSIBLE_NAME}"`);
     expect(count(header, `aria-label="${ACCESSIBLE_NAME}"`)).toBe(1);
-    const svg = header.match(/<svg [^>]*>/)?.[0] ?? "";
-    expect(svg).toContain('aria-hidden="true"');
-    expect(svg).not.toContain("role=");
-    // 32px no celular, 40px no desktop (o SVG é 302:80, largura automática).
-    expect(svg).toMatch(/class="[^"]*\bh-8\b[^"]*\bmd:h-10\b/);
+    // Alvo de toque de 44px, como os vizinhos (menu e botão "Menu"; estrutura-e-copy.md, 7.6).
+    expect(classes(link)).toContain("touch-target");
+  });
+
+  it("alterna por CSS o compacto a 32px no celular e o horizontal a 40px no desktop, ambos decorativos", () => {
+    // marca.md, seção 4: o horizontal (com tagline) nunca abaixo de 40px; abaixo disso, o compacto.
+    expect(count(header, "<svg ")).toBe(2);
+    const svgs = header.match(/<svg [^>]*>/g) ?? [];
+    expect(svgs).toHaveLength(2);
+    for (const svg of svgs) {
+      expect(svg).toContain('aria-hidden="true"');
+      expect(svg).not.toContain("role=");
+      expect(svg).not.toContain("aria-label");
+    }
+    // A prop `variant` não sai no HTML: a variante é reconhecida pelo viewBox (302:61 sem tagline,
+    // 302:80 com tagline).
+    const compacto = classes(svgs.find((s) => s.includes('viewBox="36 0 302 61"')) ?? "");
+    const horizontal = classes(svgs.find((s) => s.includes('viewBox="36 0 302 80"')) ?? "");
+    expect(compacto).toEqual(expect.arrayContaining(["h-8", "w-auto", "md:hidden"]));
+    expect(compacto).not.toContain("hidden");
+    expect(horizontal).toEqual(expect.arrayContaining(["hidden", "h-10", "w-auto", "md:block"]));
+    // Nenhum dos dois usa o horizontal a 32px (h-8 só no compacto).
+    expect(horizontal).not.toContain("h-8");
   });
 
   it("não repete o nome da empresa como texto visível ao lado do logo", () => {
