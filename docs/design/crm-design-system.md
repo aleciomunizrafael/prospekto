@@ -14,7 +14,7 @@ As propostas e os dois pareceres divergem em alguns pontos. A tabela abaixo fech
 | D2 | Onde o próximo passo é calculado | Arquivo novo e puro `src/lib/crm/next-step.ts` (`nextStepForLead`, `nextStepForProject`, `nextStepForContribution`), com testes em `tests/lib/next-step.test.ts`. Ordem para o lead: tarefa vencida > próxima ação vencida > "registrar primeiro contato" (estágio inicial sem `lastContactAt`) > "próximo estágio: X, exige Y" (de `stageMovePlans`). | Função de apresentação nova; nenhuma função existente de `src/lib/crm/` ou `src/lib/domain/` muda (restrição dos dois juízes). A ordem da fila "Precisa de ação agora" de Hoje fica na própria `page.tsx`, sem `priorities.ts`. |
 | D3 | Frases humanas de SLA | Função nova `describeSla(info, nextActionAt, now)` em `src/lib/crm/describe-sla.ts`, usada só por `SlaIndicator` e pelo `NextStepCard`. `stageInfo`, `describeOverdue` e `dates.ts` não mudam. Nunca "SLA estourado há 151 h" na tela. | Enxerto dos dois juízes; preserva as funções cobertas por `tests/lib/deadline.test.ts`. |
 | D4 | Campos do art. 27 no formulário "Novo lead" | Os três campos continuam enviados e gravados (nada funcional muda), mas `AttributeFields` passa a agrupar em "Empresa e regime", "Qualificação" e "Checagem do art. 27 (só antes de Termo)"; na criação, o grupo do art. 27 fica num `<details>` fechado dentro da seção colapsada "Mais sobre a empresa". Em "Editar" e no diálogo "Mover para Termo" os campos aparecem abertos. | Juiz 1 queria tirá-los da criação; juiz 2 vetou por ser mudança funcional. Esconder atrás de dois níveis de `<details>` atende aos dois: a Daniela não os vê ao cadastrar e nada deixa de existir. |
-| D5 | Cor da ação primária | Azul-profundo (`--primary`) é a única cor de botão sólido. Não existe `variant="brand"` em `button.tsx`. Vinho (`--brand`) fica reservado a: anel de foco, fundo `--brand-soft` dos badges de fechamento, barra de 3 px à esquerda do `NextStepCard` e o rótulo "CRM" do wordmark. | Rejeição do juiz 1 (vinho = urgência e vinho = ação no mesmo viewport confundem) prevalece sobre o enxerto do juiz 2; a regra "um acento por viewport" fica garantida por construção. |
+| D5 | Cor da ação primária | Azul-profundo (`--primary`) é a única cor de botão sólido. Não existe `variant="brand"` em `button.tsx`. O vermelho da marca (`--brand`; vinho até o logo oficial de 14/10/2026) fica reservado a: anel de foco, fundo `--brand-soft` dos badges de fechamento, barra de 3 px à esquerda do `NextStepCard` e o rótulo "CRM" sob o logo. A marca vermelha do logo é o único lugar onde o vermelho vivo (`--brand-vivid`) aparece no shell. | Rejeição do juiz 1 (vinho = urgência e vinho = ação no mesmo viewport confundem) prevalece sobre o enxerto do juiz 2; a regra "um acento por viewport" fica garantida por construção. |
 | D6 | Canvas areia | Escopado em `[data-crm]` no `(app)/layout.tsx`: o `<main>` do CRM usa `bg-canvas` (`--canvas: #F4F1EB`) e os cartões são brancos com `border border-border`. `--background` continua branco (inputs, popovers, sheets e cards dependem dele). O site público não muda. | Enxerto do juiz 1 com a restrição de escopo dos dois juízes. |
 | D7 | Serifa | `CardTitle` mantém `font-heading`; h1 28/34 serif, h2 (título de seção e de card) 18/24 serif, KPI 32/36 serif. Só `DialogTitle` passa a sans 16/600. | Enxerto do juiz 1: a inconsistência de `projeto-detalhe-desktop.png` se resolve pondo o h1 em serif, não apagando a serif dos cards. |
 | D8 | Borda de campo (`--input`) | `#8F8A80` dentro de `[data-crm]`: 3,43 : 1 sobre branco e 3,05 : 1 sobre areia. O `#9A958B` da proposta #0 dá 2,98 : 1 sobre branco (calculado), abaixo de 3 : 1. | WCAG 1.4.11. |
@@ -52,7 +52,7 @@ As propostas e os dois pareceres divergem em alguns pontos. A tabela abaixo fech
 ## 2. Princípios
 
 1. **A primeira tela responde "o que eu faço agora?".** Hoje ganha quatro `StatCard` clicáveis e uma fila "Precisa de ação agora" ordenada por urgência; cada detalhe (lead, projeto, aporte) abre com um `NextStepCard` com o botão do passo.
-2. **Hierarquia por peso e espaço; cor só quando significa algo.** Serifa em h1, h2 e números grandes; badges em cinco famílias semânticas sempre com texto; temperatura "frio" some da tabela; azul-profundo em uma única ação primária por tela; vinho como acento raro (D5).
+2. **Hierarquia por peso e espaço; cor só quando significa algo.** Serifa em h1, h2 e números grandes; badges em cinco famílias semânticas sempre com texto; temperatura "frio" some da tabela; azul-profundo em uma única ação primária por tela; vermelho da marca como acento raro (D5).
 3. **Tudo a um clique, nada a quatro.** Linha inteira clicável; "Registrar atividade" no topo do lead; "Mover para" fixo no cabeçalho; "Novo" no header para criar qualquer coisa de qualquer tela; busca global; filtros aplicam no `change`.
 4. **Mostrar o que existe, esconder o que não existe.** `KeyValueList` omite vazios e oferece "Mostrar todos (14 sem valor)"; "Novo lead" mostra 7 campos e dobra o resto; a linha do tempo traduz dados do sistema em frases.
 5. **Celular é um modo, não uma degradação.** Barra inferior de cinco destinos; tabelas viram cards; `ActionBarMobile` fixa nos detalhes; diálogos viram folha inferior; alvos de 44 px; nenhuma rolagem horizontal de página.
@@ -77,8 +77,9 @@ Tudo entra em `src/app/globals.css`. Os valores abaixo são finais; os contraste
 | `--input` | `#8F8A80` **só em `[data-crm]`** | borda de campos de formulário | 3,43 : 1 branco; 3,05 : 1 areia |
 | `--primary` | `#163B5C` (mantido) | ação primária, item ativo, links, barra de progresso | 11,58 : 1; branco sobre ele 11,58 : 1 |
 | `--primary-soft` (novo) | `#E6EEF5` | badge "meio de funil", linha selecionada | `--primary` sobre ele 9,87 : 1 |
-| `--brand` / `--ring` | `#7A2230` (mantido) | anel de foco, barra do `NextStepCard`, rótulo "CRM" do wordmark | 10,00 : 1 branco; 8,87 : 1 areia |
-| `--brand-soft` (novo) | `#F7E6E8` | badge "fechamento" | `--brand` sobre ele 8,31 : 1 |
+| `--brand` / `--ring` | `#C52E32` (vermelho escuro da marca; era o vinho provisório `#7A2230`) | anel de foco, barra do `NextStepCard`, rótulo "CRM" sob o logo, badge "fechamento", ícone "decisor", pontos das colunas de fechamento do quadro; no site, rótulos de seção e números grandes | 5,51 : 1 branco; 4,89 : 1 areia; 5,11 : 1 `--surface-2`; branco sobre ele 5,51 : 1 |
+| `--brand-vivid` (novo) | `#EB3236` (vermelho vivo da marca) | **só a marca do logo e acentos grandes** (≥ 24 px, sem texto); nunca texto pequeno nem borda de campo | 4,17 : 1 branco; 3,69 : 1 areia (passa de 3 : 1 como elemento gráfico, não como texto) |
+| `--brand-soft` (novo) | `#F7E6E8` | badge "fechamento" | `--brand` sobre ele 4,58 : 1 |
 | `--success` | `#2F6B3A` (mantido) | depositado, recibo, consentimento válido, concluído | 6,39 : 1 branco; 5,67 : 1 areia |
 | `--success-soft` (novo) | `#E4F1E6` | badge e `Callout` de sucesso | `--success` sobre ele 5,49 : 1 |
 | `--warning` (novo) | `#7A4A00` | prazo < 6 meses, SLA perto do fim, avisos | 7,48 : 1 branco; 6,64 : 1 areia |
@@ -93,9 +94,10 @@ Regras:
 
 - Badges e estados usam texto escuro sobre fundo `*-soft`, nunca texto branco sobre cor saturada (exceto o botão primário e o FAB).
 - Substituir todo uso de `amber-50/300/500/700/900/950` e `emerald-50/300/600/700/900` em `src/` (hoje em `stage-move-dialog.tsx`, `fields.tsx`, `today.tsx`, `exportar/page.tsx`, `projetos/novo/page.tsx`, `(site)/entrar/page.tsx`, `project-forms/action-form.tsx`, `leads/[id]/page.tsx`) pelos tokens `warning*`, `success*` e `error*`: as cores Tailwind avulsas não têm par no modo escuro e `amber-700` dá só 4,52 : 1.
-- `:focus-visible` em botões de fundo `--primary` ou em qualquer fundo escuro usa `outline-color: #fff` (vinho sobre azul-profundo dá 1,16 : 1); nos fundos claros o anel é vinho.
+- `:focus-visible` em botões de fundo `--primary` ou em qualquer fundo escuro usa `outline-color: #fff` (`--brand` sobre azul-profundo dá 2,10 : 1); nos fundos claros o anel é o vermelho da marca.
+- **Por que o acento mudou (14/10/2026).** O vinho `#7A2230` foi escolhido antes de existir um logo. A assinatura oficial (`assinatura_PROSPEKTO_com_CNPJ.psd`) fixou a marca em dois vermelhos, o vivo `#EB3236` nas faces de cima e o escuro `#C52E32` nas laterais, e o cinza `#363435` no texto (docs/design/marca.md). Dois vermelhos de famílias diferentes na mesma tela (vinho no acento, vermelho vivo na marca) brigariam; o acento passou a ser o vermelho escuro da própria marca, que é o único dos dois que passa de 4,5 : 1 sobre branco e sobre a areia. O vivo fica em `--brand-vivid`, restrito à marca e a acentos grandes. `--destructive` (`#A32D2D`) continua sendo o vermelho dos erros e do "perdido": mais escuro e dessaturado que o acento, sempre acompanhado de ícone e texto (nada se comunica só por cor), e os dois nunca dividem um mesmo componente.
 
-Modo escuro (`.dark`): acrescentar `--canvas: #121A20`, `--surface-2: #16202A`, `--divider: #28333C`, `--placeholder: #8E98A1`, `--primary-soft: #1D3147`, `--brand-soft: #3A1F25`, `--success-soft: #1C3322`, `--warning: #E6B566`, `--warning-soft: #332A14`, `--error-soft: #3A1F1F`. Não é prioridade e não há UI para alternar; fica coerente para o caso de alguém ativar a classe.
+Modo escuro (`.dark`): acrescentar `--canvas: #121A20`, `--surface-2: #16202A`, `--divider: #28333C`, `--placeholder: #8E98A1`, `--primary-soft: #1D3147`, `--brand-soft: #3D1F21`, `--success-soft: #1C3322`, `--warning: #E6B566`, `--warning-soft: #332A14`, `--error-soft: #3A1F1F`. O acento sobe para `--brand` / `--ring: #F0797C` (6,47 : 1 sobre `--background`, 5,88 : 1 sobre `--card`, 5,38 : 1 sobre `--sand`, 5,46 : 1 sobre `--brand-soft`; `--brand-foreground: #121A20` dá 6,47 : 1 sobre ele) e `--brand-vivid` não muda (`#EB3236`, 4,22 : 1 sobre o fundo e 3,84 : 1 sobre a sidebar: a marca nunca é recolorida; o texto do logo, em `currentColor`, herda `--foreground` e fica claro). Não é prioridade e não há UI para alternar; fica coerente para o caso de alguém ativar a classe, e `tests/tokens-contrast.test.ts` cobre os pares do acento nos dois modos.
 
 ### 3.2 Bloco CSS a acrescentar em `src/app/globals.css`
 
@@ -122,7 +124,7 @@ Modo escuro (`.dark`): acrescentar `--canvas: #121A20`, `--surface-2: #16202A`, 
   --divider: #ece9e2;
   --placeholder: #6b7680;
   --primary-soft: #e6eef5;
-  --brand-soft: #f7e6e8;
+  --brand-soft: #f7e6e8; /* --brand, --ring e --brand-vivid ficam no bloco do site, acima */
   --success-soft: #e4f1e6;
   --warning: #7a4a00;
   --warning-soft: #fbf0da;
@@ -137,7 +139,7 @@ Modo escuro (`.dark`): acrescentar `--canvas: #121A20`, `--surface-2: #16202A`, 
   --divider: #28333c;
   --placeholder: #8e98a1;
   --primary-soft: #1d3147;
-  --brand-soft: #3a1f25;
+  --brand-soft: #3d1f21;
   --success-soft: #1c3322;
   --warning: #e6b566;
   --warning-soft: #332a14;
@@ -251,13 +253,17 @@ Nada abaixo de 11 px, e 11 px só em caixa alta com espaçamento (eyebrow e barr
 | Estados de linha | hover `bg-surface-2`; `focus-within` `bg-primary-soft`; vencida: célula de data em `text-destructive` com `CircleAlert` 14 px. |
 | Movimento | 120 ms em hover e fundo; `prefers-reduced-motion` já zera animações; skeleton `animate-pulse` respeita o mesmo. |
 
+### 3.5 Marca
+
+O logo oficial (assinatura `assinatura_PROSPEKTO_com_CNPJ.psd`, 14/10/2026) está em `src/components/brand/logo.tsx` como SVG inline, com três variantes: `horizontal` (texto, tagline e marca), `compacto` (texto e marca) e `marca` (só os dois blocos isométricos vermelhos). O texto usa `currentColor` e herda a cor do contexto; a marca é sempre `#EB3236` (faces de cima) e `#C52E32` (laterais) e nunca é recolorida. Sem `title` o SVG é decorativo (`aria-hidden`), e o link que o envolve é quem recebe o nome acessível. Alturas no CRM: 28 px na sidebar (compacto e marca), 48 px no login (horizontal); mínimo de 24 px para a marca isolada e de 20 px para o compacto; respiro de pelo menos metade da altura da marca ao redor. Arquivos públicos, cores, contrastes, regras de uso e o processo de regeneração estão em **docs/design/marca.md**.
+
 ## 4. Shell da aplicação
 
 ### 4.1 Desktop (≥ 960 px, breakpoint `md` do projeto)
 
 ```
 ┌──────────────┬──────────────────────────────────────────────────────────────────────┐
-│ Prospekto    │ Pipeline › Rodrigo Pasqualotto  [🔍 Buscar leads, organizações… /]  │
+│ PROSPEKTO ◢  │ Pipeline › Rodrigo Pasqualotto  [🔍 Buscar leads, organizações… /]  │
 │ CRM          │                                                      [+ Novo ▾]      │  ← header 56px, sticky, branco, sem avatar
 │ [🔍 Buscar…  ├──────────────────────────────────────────────────────────────────────┤
 │       Ctrl K]│                                                                      │
@@ -278,7 +284,7 @@ Nada abaixo de 11 px, e 11 px só em caixa alta com espaçamento (eyebrow e barr
   colapsa p/ 64px (trilho)
 ```
 
-- **Wordmark** (lockup do site): "Prospekto" em Source Serif 4 600 20 px cor `--foreground` e, abaixo, "CRM" em Inter 11 px caixa alta `tracking-[0.08em]` cor `--brand`. Link para `/app`.
+- **Marca** (docs/design/marca.md): no topo da sidebar, `<Logo variant="compacto">` ("PROSPEKTO" + marca, sem a tagline) com 28 px de altura (`h-7 w-auto text-foreground`: o texto do logo é `currentColor` e herda `--foreground`, cinza-grafite no claro e `#ECE9E2` no escuro; a marca vermelha é fixa) e, abaixo, "CRM" em `.crm-eyebrow` cor `--brand`. No trilho, só `<Logo variant="marca">` com 28 px (o mínimo da marca isolada é 24 px). O `Link` para `/app` leva `aria-label="Prospekto CRM, ir para o Painel"` e o SVG é decorativo (`aria-hidden`), para o nome não ser lido duas vezes. Nada de "Prospekto" em texto solto: `tests/shell-nav.test.ts` confere. A barra inferior e o header do celular não mostram a marca (o espaço é do caminho e das ações).
 - **Sidebar** (`src/components/crm/shell/sidebar.tsx`, Client Component mínimo só para `usePathname` e o toggle; a lista de itens é o componente puro `nav-items.tsx`, testável com `renderToString`): fundo `bg-sidebar` (areia), `border-r border-sidebar-border`. Acima dos itens, o botão **"Buscar…"** (`sidebar-search.tsx`): 40 px, `border-border bg-background`, lupa 18 px à esquerda e `<kbd>Ctrl K</kbd>` à direita (`bg-surface-2`, 11 px), `aria-keyshortcuts="Control+K Meta+K"`; abre a paleta (seção 5.2, `CommandPalette`); no trilho, só a lupa com `Tooltip` "Buscar Ctrl K". Item: 40 px de altura, ícone lucide 18 px + rótulo 14 px/500, `rounded-lg mx-2`; ativo ("moldura", padrão estrutural do Trilis já expresso nos tokens): fundo branco, `ring-1 ring-border` e barra de 3 px à esquerda em `--primary` (`before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-r before:bg-primary`), `aria-current="page"`; hover: `bg-white/60`. Módulos e ícones, na ordem do ADR-004, seção 6.1: `LayoutDashboard` (Painel), `SquareKanban` (Pipeline; o ADR escreve `KanbanSquare`, nome antigo do mesmo glifo no lucide-react), `PhoneOutgoing` (Prospecção), `Building2` (Organizações), `Clapperboard` (Projetos), `HandCoins` (Aportes), `SquareCheck` (Tarefas), separador, `Download` (Exportar). O contador em "Painel" é `overdueCount` (próximas ações vencidas + tarefas vencidas, consultas já usadas pelo Painel com `limit: 20`, somadas no layout) e leva `<span class="sr-only">N itens vencidos</span>`; some quando zero. No rodapé, o **bloco do usuário** (`sidebar-user.tsx`): botão de 48 px com `Avatar` 32 px, nome 14 px/500 e e-mail 12 px em `muted`, truncados com o texto completo em `title`, `ChevronsUpDown` 16 px; `DropdownMenu` abrindo para cima (`side="top" align="start"`) com o rótulo (nome e e-mail), Minha conta, separador, Sair (`useSignOut`, em `use-sign-out.ts`). No trilho, só o avatar com `Tooltip` do nome e o mesmo menu. O e-mail é o do próprio usuário da sessão e nunca vai ao log. Ordem do Tab: skip link, caminho, campo de busca, "Novo", "Buscar…", oito itens, usuário, "Recolher", conteúdo.
 - **Recolher**: cookie `crm-sidebar=rail` (path `/app`, 1 ano) lido com `cookies()` no `(app)/layout.tsx` e passado como `collapsed`; o toggle grava `document.cookie` e chama `router.refresh()`. No trilho (64 px), rótulos ficam `sr-only` e cada ícone ganha `Tooltip side="right"`.
 - **Header** (56 px, `sticky top-0 z-30 bg-background border-b`): `Breadcrumb` à esquerda (módulo › registro; só o módulo nas listas; na empresa de prospecção, módulo › Lista › registro, porque `describePath` devolve a página pai); `SearchForm` ao centro-direita; botão "Novo" (`DropdownMenu`, `min-w-56`: Novo lead, Nova organização, Novo projeto, Novo aporte, Nova tarefa, Nova lista de prospecção) à direita. **Sem avatar**: o menu do usuário vive no rodapé da sidebar (dois menus iguais na mesma tela foram rejeitados pelo ADR-004, seção 11). "Sair" deixa de ser o botão mais visível do sistema.
@@ -541,8 +547,9 @@ Convenções de leitura dos wireframes: `[ ]` botão, `▾` abre menu ou diálog
 ```
 ┌──────────────── canvas areia, min-h-dvh, centrado ────────────────┐
 │                                                                   │
-│                      Prospekto            (serif 600 24)          │
-│                      CRM                  (eyebrow vinho)         │
+│                   PROSPEKTO ◢             (logo horizontal 48 px) │
+│              CONSULTORIA & PROJETOS                               │
+│                      CRM                  (eyebrow --brand)       │
 │          ┌──────────────────────────────────────────┐             │
 │          │ Entrar                      (serif 24)   │             │
 │          │ Acesso restrito à equipe da Prospekto.   │             │
@@ -557,13 +564,13 @@ Convenções de leitura dos wireframes: `[ ]` botão, `▾` abre menu ou diálog
 └───────────────────────────────────────────────────────────────────┘
 ```
 
-- `src/app/(auth)/layout.tsx`: `<div data-crm className="flex min-h-dvh flex-col items-center justify-center bg-canvas px-4 py-10">`, wordmark, `<main className="w-full max-w-sm">`, card branco `rounded-xl border border-border bg-card p-6 sm:p-8`, link "Voltar ao site" em `text-sm text-muted-foreground`. Sem `SiteHeader`, sem `SiteFooter`.
+- `src/app/(auth)/layout.tsx`: `<div data-crm className="flex min-h-dvh flex-col items-center justify-center bg-canvas px-4 py-10">`, logo (`<Logo variant="horizontal" className="h-12 w-auto text-foreground">` com a tagline, 48 px de altura, e o eyebrow "CRM" em `--brand`, dentro do `Link` para `/` com `aria-label="Prospekto CRM, voltar ao site"`; docs/design/marca.md), `<main className="w-full max-w-sm">`, card branco `rounded-xl border border-border bg-card p-6 sm:p-8`, link "Voltar ao site" em `text-sm text-muted-foreground`. Sem `SiteHeader`, sem `SiteFooter`.
 - `login-form.tsx`: campos `h-11` no celular; botão mostrar/ocultar senha (`Eye`/`EyeOff`, `aria-pressed`, `aria-label="Mostrar senha"`); erro em `Callout danger role="alert"` acima do botão com `tabIndex={-1}` e foco programático; `autoComplete="email"`/`"current-password"` (já é); botão "Entrar" largura total `h-11`; estado "Entrando…".
 - `reset=1` → `Callout success` "Senha redefinida. Entre com a nova senha." Banner de sessão expirada quando `next` está presente: `Callout info` "Sua sessão expirou. Entre de novo para continuar em {módulo}" (módulo derivado de `next`: `/app/leads/…` → "Leads").
 - Redefinir: mesmo cartão; sem token, após enviar, o estado de sucesso substitui o formulário: "Se esse e-mail tiver acesso, o link chega em até um minuto e vale por uma hora."; `error=INVALID_TOKEN` → `Callout danger`.
 - Celular: card com `px-4`, sem rodapé.
 
-Melhorias: sem rodapé institucional (1.800 px a menos no celular); serifa e wordmark; mostrar senha; foco no erro; rótulo "Esqueci a senha" ao lado do campo.
+Melhorias: sem rodapé institucional (1.800 px a menos no celular); serifa e logo oficial; mostrar senha; foco no erro; rótulo "Esqueci a senha" ao lado do campo.
 
 ### 7.2 Painel (`src/app/(app)/app/page.tsx`, `src/components/crm/today.tsx`, `src/components/crm/dashboard/`)
 
@@ -1011,7 +1018,7 @@ Acessibilidade:
 
 - [ ] Contraste ≥ 4,5 : 1 em todo texto e ≥ 3 : 1 em ícones informativos e bordas de campo, conforme a tabela 3.1; `tests/tokens-contrast.test.ts` verde.
 - [ ] Nenhuma informação só por cor: todo badge tem texto; todo vencido tem ícone + texto; todo bloco urgente tem rótulo e ícone; `Meter` tem percentual em texto.
-- [ ] Foco visível em tudo que é interativo (anel vinho; branco sobre fundos escuros); linhas de tabela com `focus-within`; ordem de tabulação: skip link → header → sidebar → conteúdo; `scroll-padding-bottom` para a barra fixa não cobrir o foco (2.4.11).
+- [ ] Foco visível em tudo que é interativo (anel no vermelho da marca, `--brand`; branco sobre fundos escuros); linhas de tabela com `focus-within`; ordem de tabulação: skip link → header → sidebar → conteúdo; `scroll-padding-bottom` para a barra fixa não cobrir o foco (2.4.11).
 - [ ] Teclado: diálogos, sheets e menus prendem o foco e devolvem ao gatilho (base-ui); `Esc` fecha; `/` nunca intercepta campos de texto; `SegmentedControl` navega com setas.
 - [ ] Rótulos: todo input com `<label>` ou `aria-label`; selects da `Toolbar` com rótulo `sr-only`; botões só com ícone com `aria-label` (+ `Tooltip`); tabelas com `caption sr-only`, `th scope="col"` e `aria-sort`; `StatCard` com `aria-label` completo.
 - [ ] Mensagens: `role="alert"` para erros e bloqueios, `role="status"` para sucesso e carregando; toasts do sonner já são `aria-live`.

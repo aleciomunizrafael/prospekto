@@ -4,6 +4,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
+import { Logo } from "@/components/brand/logo";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { SIDEBAR_COOKIE } from "./modules";
@@ -12,8 +13,9 @@ import { SidebarSearch } from "./sidebar-search";
 import { SidebarUser } from "./sidebar-user";
 
 // Sidebar do desktop (crm-design-system.md, seção 4.1; decisão D12; ADR-004, seção 6.1): 240 px,
-// ou trilho de 64 px quando o cookie `crm-sidebar=rail` está gravado. De cima para baixo: wordmark,
-// botão "Buscar…" (Ctrl K), os módulos, e no rodapé o bloco do usuário e "Recolher". Client
+// ou trilho de 64 px quando o cookie `crm-sidebar=rail` está gravado. De cima para baixo: o logo
+// oficial (docs/design/marca.md: variante compacta de 28 px com o eyebrow "CRM"; no trilho só a
+// marca vermelha), botão "Buscar…" (Ctrl K), os módulos, e no rodapé o bloco do usuário e "Recolher". Client
 // Component mínimo: só `usePathname` e o toggle, que grava o cookie (path /app, 1 ano) e chama
 // `router.refresh()` para o layout reler. O estado local acompanha o clique na hora; sem
 // localStorage, sem flash na hidratação.
@@ -80,13 +82,12 @@ export function Sidebar({
         )}
       >
         {collapsed ? (
-          <span className="font-heading text-xl font-semibold text-foreground" aria-hidden="true">
-            P
-          </span>
+          <Logo variant="marca" className="h-7 w-auto" />
         ) : (
           <>
-            <span className="font-heading text-xl font-semibold text-foreground">Prospekto</span>
-            <span className="crm-eyebrow mt-0.5 text-brand">CRM</span>
+            {/* O texto do logo herda `text-foreground` (currentColor): cinza no claro, claro no escuro. */}
+            <Logo variant="compacto" className="h-7 w-auto text-foreground" />
+            <span className="crm-eyebrow mt-1 text-brand">CRM</span>
           </>
         )}
       </Link>

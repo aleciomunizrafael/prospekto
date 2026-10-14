@@ -1,6 +1,9 @@
 // Decisão D13 (crm-design-system.md, seção 3.1): os tokens do CRM em src/app/globals.css têm o
 // contraste que a tabela promete, calculado pela luminância relativa do WCAG 2.x. Texto ≥ 4,5:1;
 // borda de campo (`--input` dentro de [data-crm]) ≥ 3:1 sobre branco e sobre o canvas areia.
+// Desde o logo oficial (docs/design/marca.md): `--brand` é o vermelho da marca em versão segura
+// para texto nos dois modos; `--brand-vivid` é o vermelho vivo, igual nos dois modos, só para a
+// marca e acentos grandes (≥ 3:1).
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -21,6 +24,7 @@ function tokensOf(selector: string): Record<string, string> {
 }
 
 const light = tokensOf(":root");
+const dark = tokensOf(".dark");
 const crm = tokensOf("[data-crm]");
 
 function luminance(hex: string): number {
@@ -51,9 +55,11 @@ const TEXT_PAIRS: [string, string, number][] = [
   ["primary", "background", 11.58],
   ["primary-foreground", "primary", 11.58],
   ["primary", "primary-soft", 9.87],
-  ["brand", "background", 10.0],
-  ["brand", "canvas", 8.87],
-  ["brand", "brand-soft", 8.31],
+  ["brand", "background", 5.51],
+  ["brand", "canvas", 4.89],
+  ["brand", "surface-2", 5.11],
+  ["brand", "brand-soft", 4.58],
+  ["brand-foreground", "brand", 5.51],
   ["success", "background", 6.39],
   ["success", "canvas", 5.67],
   ["success", "success-soft", 5.49],
@@ -63,6 +69,15 @@ const TEXT_PAIRS: [string, string, number][] = [
   ["destructive", "background", 7.07],
   ["destructive", "canvas", 6.27],
   ["error", "error-soft", 5.95],
+];
+
+// Pares de texto do modo escuro (seção 3.1, nota do modo escuro): só os do acento, que mudou.
+const DARK_TEXT_PAIRS: [string, string, number][] = [
+  ["brand", "background", 6.47],
+  ["brand", "card", 5.88],
+  ["brand", "sand", 5.38],
+  ["brand", "brand-soft", 5.46],
+  ["brand-foreground", "brand", 6.47],
 ];
 
 describe("tokens do CRM: contraste (WCAG 2.x)", () => {
@@ -88,7 +103,6 @@ describe("tokens do CRM: contraste (WCAG 2.x)", () => {
   it("valores do site não mudaram", () => {
     expect(light.foreground).toBe("#1e2a32");
     expect(light.primary).toBe("#163b5c");
-    expect(light.brand).toBe("#7a2230");
     expect(light.success).toBe("#2f6b3a");
     expect(light.destructive).toBe("#a32d2d");
     expect(light["muted-foreground"]).toBe("#5b6670");
@@ -97,6 +111,46 @@ describe("tokens do CRM: contraste (WCAG 2.x)", () => {
 
   it("cobre pelo menos 18 pares de texto", () => {
     expect(TEXT_PAIRS.length).toBeGreaterThanOrEqual(18);
+  });
+
+  it("--brand é o vermelho da marca em versão segura para texto (docs/design/marca.md)", () => {
+    expect(light.brand).toBe("#c52e32");
+    expect(light.ring).toBe(light.brand);
+    expect(light["sidebar-ring"]).toBe(light.brand);
+    expect(dark.brand).toBe("#f0797c");
+    expect(dark.ring).toBe(dark.brand);
+    expect(dark["sidebar-ring"]).toBe(dark.brand);
+    // Anel de foco e bordas (WCAG 1.4.11): ≥ 3:1 sobre os fundos claros e escuros.
+    for (const bg of ["background", "canvas", "card", "sand"]) {
+      expect(
+        contrastRatio(light.brand, light[bg]),
+        `claro: --brand sobre --${bg}`,
+      ).toBeGreaterThanOrEqual(3);
+      expect(
+        contrastRatio(dark.brand, dark[bg]),
+        `escuro: --brand sobre --${bg}`,
+      ).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("--brand-vivid é o vermelho vivo da marca, igual nos dois modos, e só para acentos grandes", () => {
+    expect(light["brand-vivid"]).toBe("#eb3236");
+    expect(dark["brand-vivid"]).toBe("#eb3236");
+    expect(css).toContain("--color-brand-vivid: var(--brand-vivid);");
+    // Não serve a texto pequeno (4,17:1 sobre branco), mas passa de 3:1 como elemento gráfico.
+    expect(contrastRatio(light["brand-vivid"], light.background)).toBeLessThan(4.5);
+    expect(contrastRatio(light["brand-vivid"], light.background)).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(light["brand-vivid"], light.canvas)).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(dark["brand-vivid"], dark.background)).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(dark["brand-vivid"], dark.sidebar)).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(DARK_TEXT_PAIRS)("escuro: %s sobre %s ≥ 4,5:1 (tabela: %s)", (fg, bg, expected) => {
+    expect(dark[fg], `--${fg}`).toBeDefined();
+    expect(dark[bg], `--${bg}`).toBeDefined();
+    const ratio = contrastRatio(dark[fg], dark[bg]);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(ratio).toBeCloseTo(expected, 1);
   });
 
   it.each(TEXT_PAIRS)("%s sobre %s ≥ 4,5:1 (tabela: %s)", (fg, bg, expected) => {
