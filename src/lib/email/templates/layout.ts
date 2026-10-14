@@ -37,13 +37,16 @@ export function formatDateTimeBr(date: Date): string {
   return formatDateTime(date);
 }
 
-// Logo no topo dos e-mails HTML. O PNG é 2x (604x160) e aparece em 151x40 para ficar nítido em
-// tela de alta densidade; a URL sai de NEXT_PUBLIC_APP_URL (nunca fixa) porque o cliente de
-// e-mail busca a imagem no domínio público. Tabela com fundo branco e atributos de largura e
-// altura por causa dos clientes de e-mail (Outlook ignora boa parte do CSS). Única imagem do
-// e-mail: não há pixel de rastreamento.
-export const EMAIL_LOGO_WIDTH = 151;
-export const EMAIL_LOGO_HEIGHT = 40;
+// Logo no topo dos e-mails HTML. O PNG é 2x (604x160) e aparece em 302x80 (altura fixada em
+// docs/design/marca.md, seção 4) para ficar nítido em tela de alta densidade e manter a tagline
+// legível em 1x; a URL sai de NEXT_PUBLIC_APP_URL (nunca fixa) porque o cliente de e-mail busca a
+// imagem no domínio público. Tabela com fundo branco e atributos de largura e altura por causa dos
+// clientes de e-mail (Outlook ignora boa parte do CSS); no style, max-width:100% e height:auto
+// encolhem o logo no celular (a 390 px o cartão tem 294 px úteis) sem deformar. Única imagem do
+// e-mail: não há pixel de rastreamento. tests/lib/email-assinatura.test.ts confere que o PNG tem o
+// dobro destas medidas.
+export const EMAIL_LOGO_WIDTH = 302;
+export const EMAIL_LOGO_HEIGHT = 80;
 
 export function emailLogoUrl(base: string = appUrl()): string {
   return `${base.replace(/\/$/, "")}/brand/logo-email.png`;
@@ -51,7 +54,7 @@ export function emailLogoUrl(base: string = appUrl()): string {
 
 export function emailHeaderHtml(base?: string): string {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;background:#ffffff">
-<tr><td style="padding:0 0 20px;border-bottom:1px solid #E6E1D8;background:#ffffff"><img src="${escapeHtml(emailLogoUrl(base))}" width="${EMAIL_LOGO_WIDTH}" height="${EMAIL_LOGO_HEIGHT}" alt="${escapeHtml(site.name)}" style="display:block;border:0;outline:none;text-decoration:none;width:${EMAIL_LOGO_WIDTH}px;height:${EMAIL_LOGO_HEIGHT}px"></td></tr>
+<tr><td style="padding:0 0 20px;border-bottom:1px solid #E6E1D8;background:#ffffff"><img src="${escapeHtml(emailLogoUrl(base))}" width="${EMAIL_LOGO_WIDTH}" height="${EMAIL_LOGO_HEIGHT}" alt="${escapeHtml(site.name)}" style="display:block;border:0;outline:none;text-decoration:none;width:${EMAIL_LOGO_WIDTH}px;max-width:100%;height:auto"></td></tr>
 </table>`;
 }
 

@@ -1,6 +1,7 @@
 // Cabeçalho com o logo e assinatura comercial dos e-mails (layout.ts, lead-reply.ts, digest.ts).
 // Os dados da assinatura vêm de src/config/site.ts; aqui o módulo é substituído por vi.doMock
 // para conferir os dois casos (legal preenchido e vazio) sem depender do valor atual do site.ts.
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const base = {
@@ -35,20 +36,30 @@ afterEach(() => {
 });
 
 const LOGO =
-  '<img src="http://localhost:3000/brand/logo-email.png" width="151" height="40" alt="Prospekto Consultoria &amp; Projetos"';
+  '<img src="http://localhost:3000/brand/logo-email.png" width="302" height="80" alt="Prospekto Consultoria &amp; Projetos"';
 
 describe("cabeçalho dos e-mails", () => {
-  it("logo servido do domínio do app (appUrl), 151x40, alt com o nome da empresa, em tabela branca", async () => {
-    const { emailHeaderHtml, renderEmail } = await loadWithSite({
-      ...base,
-      city: "Bento Gonçalves, RS",
-      legal: { cnpj: null, address: null },
-    });
+  it("logo servido do domínio do app (appUrl), 302x80 (metade do PNG 2x), encolhe no celular, alt com o nome da empresa, em tabela branca", async () => {
+    const { emailHeaderHtml, renderEmail, EMAIL_LOGO_WIDTH, EMAIL_LOGO_HEIGHT } =
+      await loadWithSite({
+        ...base,
+        city: "Bento Gonçalves, RS",
+        legal: { cnpj: null, address: null },
+      });
     const header = emailHeaderHtml();
     expect(header).toContain('<table role="presentation"');
     expect(header).toContain("background:#ffffff");
     expect(header).toContain(LOGO);
-    expect(header).toContain("width:151px;height:40px");
+    // Largura fixa no desktop e encolhe sem deformar onde o cartão tem menos de 302 px (390 px de
+    // viewport: 294 px úteis); os atributos width/height ficam para o Outlook.
+    expect(header).toContain("width:302px;max-width:100%;height:auto");
+    expect(header).not.toContain("height:80px");
+    // O tamanho declarado é metade do PNG (2x), como docs/design/marca.md descreve: lê a largura
+    // e a altura do IHDR (bytes 16 a 23) para a doc, o código e o arquivo não divergirem de novo.
+    const png = readFileSync("public/brand/logo-email.png");
+    expect(png.readUInt32BE(16)).toBe(EMAIL_LOGO_WIDTH * 2);
+    expect(png.readUInt32BE(20)).toBe(EMAIL_LOGO_HEIGHT * 2);
+    expect(EMAIL_LOGO_HEIGHT).toBe(80);
     // A base pode ser injetada (o digest recebe appUrl por parâmetro) e perde a barra final.
     expect(emailHeaderHtml("https://prospekto.com.br/")).toContain(
       'src="https://prospekto.com.br/brand/logo-email.png"',

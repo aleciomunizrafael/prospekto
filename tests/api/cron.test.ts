@@ -212,7 +212,7 @@ describe("/api/cron/daily", () => {
     // Cabeçalho com o logo (URL base do cron) no lugar do rótulo "Prospekto CRM"; só o logo,
     // sem assinatura comercial, e nenhuma outra imagem.
     expect(daniela.html).toContain(
-      `<img src="${base}/brand/logo-email.png" width="151" height="40" alt="Prospekto Consultoria &amp; Projetos"`,
+      `<img src="${base}/brand/logo-email.png" width="302" height="80" alt="Prospekto Consultoria &amp; Projetos"`,
     );
     expect(daniela.html).toContain("CRM · Resumo diário");
     expect(daniela.html).not.toContain(">Prospekto CRM</p>");

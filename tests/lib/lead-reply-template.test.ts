@@ -41,7 +41,7 @@ describe("renderLeadReply", () => {
     expect(rendered.html).toContain("O cálculo final do limite");
     // Cabeçalho com o logo servido do domínio do app (NEXT_PUBLIC_APP_URL do vitest.config.ts).
     expect(rendered.html).toContain(
-      'src="http://localhost:3000/brand/logo-email.png" width="151" height="40" alt="Prospekto Consultoria &amp; Projetos"',
+      'src="http://localhost:3000/brand/logo-email.png" width="302" height="80" alt="Prospekto Consultoria &amp; Projetos"',
     );
     expect(rendered.html.match(/<img /g)).toHaveLength(1);
     expect(rendered.html).not.toContain("Cancelar o recebimento");
