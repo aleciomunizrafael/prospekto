@@ -31,6 +31,7 @@ describe("matcher do proxy", () => {
     "/logo.png",
     "/fonts/inter.woff2",
     "/robots.txt",
+    "/manifest.webmanifest",
   ])("exclui o estático %s", (pathname) => {
     expect(matcherRegex.test(pathname)).toBe(false);
   });
