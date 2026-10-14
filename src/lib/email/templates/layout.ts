@@ -1,7 +1,11 @@
 // Moldura comum das respostas automáticas (estrutura-e-copy.md, seção 5.6): motivo do envio
 // ("você recebe este e-mail porque [ação] em [data]"), cidade no rodapé, link de descadastro
 // quando houver consent_marketing e ressalva legal. Texto simples com versão HTML leve (seção 10.2).
+// Cabeçalho com o logo oficial (public/brand/logo-email.png, servido do próprio domínio) e
+// assinatura comercial com os dados da assinatura oficial (src/config/site.ts), compartilhados
+// com lead-reply.ts e com o digest interno.
 import { site } from "@/config/site";
+import { appUrl } from "@/lib/app-url";
 import { formatDateTime } from "@/lib/crm/format";
 
 export type RenderedEmail = { subject: string; text: string; html: string };
@@ -31,6 +35,57 @@ export function escapeHtml(value: string): string {
 
 export function formatDateTimeBr(date: Date): string {
   return formatDateTime(date);
+}
+
+// Logo no topo dos e-mails HTML. O PNG é 2x (604x160) e aparece em 151x40 para ficar nítido em
+// tela de alta densidade; a URL sai de NEXT_PUBLIC_APP_URL (nunca fixa) porque o cliente de
+// e-mail busca a imagem no domínio público. Tabela com fundo branco e atributos de largura e
+// altura por causa dos clientes de e-mail (Outlook ignora boa parte do CSS). Única imagem do
+// e-mail: não há pixel de rastreamento.
+export const EMAIL_LOGO_WIDTH = 151;
+export const EMAIL_LOGO_HEIGHT = 40;
+
+export function emailLogoUrl(base: string = appUrl()): string {
+  return `${base.replace(/\/$/, "")}/brand/logo-email.png`;
+}
+
+export function emailHeaderHtml(base?: string): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;background:#ffffff">
+<tr><td style="padding:0 0 20px;border-bottom:1px solid #E6E1D8;background:#ffffff"><img src="${escapeHtml(emailLogoUrl(base))}" width="${EMAIL_LOGO_WIDTH}" height="${EMAIL_LOGO_HEIGHT}" alt="${escapeHtml(site.name)}" style="display:block;border:0;outline:none;text-decoration:none;width:${EMAIL_LOGO_WIDTH}px;height:${EMAIL_LOGO_HEIGHT}px"></td></tr>
+</table>`;
+}
+
+// Assinatura comercial, uma informação por linha: nome, empresa, e-mail, WhatsApp, endereço e
+// cidade, CNPJ. Endereço e CNPJ ficam de fora enquanto site.legal não estiver preenchido.
+export function signatureLines(): string[] {
+  const place = [site.legal.address, site.city].filter((v) => v && v.trim()).join(" · ");
+  const cnpj = site.legal.cnpj?.trim();
+  return [
+    site.owner,
+    site.name,
+    site.email,
+    `WhatsApp ${site.whatsappDisplay}`,
+    ...(place ? [place] : []),
+    ...(cnpj ? [`CNPJ ${cnpj}`] : []),
+  ];
+}
+
+export function signatureText(): string {
+  return signatureLines().join("\n");
+}
+
+export function signatureHtml(): string {
+  const place = [site.legal.address, site.city].filter((v) => v && v.trim()).join(" · ");
+  const cnpj = site.legal.cnpj?.trim();
+  const legal = [place, cnpj ? `CNPJ ${cnpj}` : ""]
+    .filter(Boolean)
+    .map((line) => escapeHtml(line))
+    .join("<br>");
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin-top:28px">
+<tr><td style="padding:16px 0 0;border-top:1px solid #E6E1D8;font-size:15px;line-height:1.5;color:#1E2A32">
+<strong style="color:#363435">${escapeHtml(site.owner)}</strong><br>${escapeHtml(site.name)}<br><a href="mailto:${escapeHtml(site.email)}" style="color:#163B5C">${escapeHtml(site.email)}</a><br>WhatsApp ${escapeHtml(site.whatsappDisplay)}${legal ? `<br><span style="color:#5B6670">${legal}</span>` : ""}
+</td></tr>
+</table>`;
 }
 
 function blockToText(block: EmailBlock): string {
@@ -64,7 +119,6 @@ export function renderEmail(
 ): RenderedEmail {
   const greeting = `Olá, ${ctx.name}.`;
   const reason = `Você recebe este e-mail porque ${ctx.actionLabel} em ${formatDateTimeBr(ctx.sentAt)}.`;
-  const signature = `${site.owner}\n${site.name}\n${site.email} · WhatsApp ${site.whatsappDisplay}\n${site.city}`;
   const unsubscribe =
     ctx.marketing && ctx.unsubscribeUrl
       ? `Para não receber mais materiais da Prospekto, cancele aqui: ${ctx.unsubscribeUrl}`
@@ -74,7 +128,7 @@ export function renderEmail(
     "",
     ...blocks.map(blockToText),
     "",
-    signature,
+    signatureText(),
     "",
     reason,
     unsubscribe,
@@ -89,11 +143,11 @@ export function renderEmail(
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(subject)}</title></head>
 <body style="margin:0;padding:0;background:#F4F1EB;font-family:Inter,Helvetica,Arial,sans-serif;color:#1E2A32;font-size:16px;line-height:1.6">
 <div style="max-width:600px;margin:0 auto;padding:24px">
-<div style="background:#ffffff;border-radius:8px;padding:28px 24px">
-<p style="margin:0 0 20px;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:#7A2230;font-weight:600">${escapeHtml(site.name)}</p>
-<p style="margin:0 0 16px">${escapeHtml(greeting)}</p>
+<div style="background:#ffffff;border-radius:8px;padding:24px">
+${emailHeaderHtml()}
+<p style="margin:24px 0 16px">${escapeHtml(greeting)}</p>
 ${blocks.map(blockToHtml).join("\n")}
-<p style="margin:24px 0 0">${escapeHtml(site.owner)}<br>${escapeHtml(site.name)}<br><a href="mailto:${site.email}" style="color:#163B5C">${site.email}</a> · WhatsApp ${escapeHtml(site.whatsappDisplay)}<br>${escapeHtml(site.city)}</p>
+${signatureHtml()}
 </div>
 <p style="margin:16px 0 0;font-size:13px;color:#5B6670">${escapeHtml(reason)}</p>
 ${unsubscribe ? `<p style="margin:8px 0 0;font-size:13px;color:#5B6670"><a href="${escapeHtml(ctx.unsubscribeUrl ?? "")}" style="color:#5B6670">Cancelar o recebimento de materiais da Prospekto</a></p>` : ""}

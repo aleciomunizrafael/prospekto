@@ -11,12 +11,14 @@ describe("renderLeadReply", () => {
     expect(rendered.subject).toBe("Sobre o seu contato & a Prospekto");
     expect(rendered.text.startsWith("Olá, Maria.")).toBe(true);
     expect(rendered.text).toContain("Posso explicar em 5 linhas <como> funciona?");
-    expect(rendered.text).toContain(`${site.owner}\n${site.name}\n${site.email} · WhatsApp`);
+    expect(rendered.text).toContain(
+      `${site.owner}\n${site.name}\n${site.email}\nWhatsApp ${site.whatsappDisplay}\n`,
+    );
     // O corpo assina só "Daniela"; nome completo e empresa aparecem uma vez, no bloco do CRM.
     expect(rendered.text).toContain("Qual prefere?\n\nDaniela\n\nDaniela Sandrin Copat\n");
     expect(rendered.text.split("Daniela Sandrin Copat")).toHaveLength(2);
     expect(rendered.text.split(site.name)).toHaveLength(2);
-    expect(rendered.text).toContain("Serra Gaúcha, RS");
+    expect(rendered.text).toContain(site.city);
     expect(rendered.text).toContain("O cálculo final do limite é feito pelo contador");
     expect(rendered.text).not.toContain("você recebe este e-mail");
     expect(rendered.text).not.toContain("Você recebe este e-mail");
@@ -35,8 +37,13 @@ describe("renderLeadReply", () => {
     expect(rendered.html).toContain(`mailto:${site.email}`);
     expect(rendered.html).toContain('<p style="margin:0 0 16px">Daniela</p>');
     expect(rendered.html.split("Daniela Sandrin Copat")).toHaveLength(2);
-    expect(rendered.html).toContain("Serra Gaúcha, RS");
+    expect(rendered.html).toContain(site.city);
     expect(rendered.html).toContain("O cálculo final do limite");
+    // Cabeçalho com o logo servido do domínio do app (NEXT_PUBLIC_APP_URL do vitest.config.ts).
+    expect(rendered.html).toContain(
+      'src="http://localhost:3000/brand/logo-email.png" width="151" height="40" alt="Prospekto Consultoria &amp; Projetos"',
+    );
+    expect(rendered.html.match(/<img /g)).toHaveLength(1);
     expect(rendered.html).not.toContain("Cancelar o recebimento");
     expect(rendered.html).not.toContain("recebe este e-mail");
   });

@@ -201,13 +201,23 @@ describe("/api/cron/daily", () => {
     );
     expect(daniela.counts.assignedTasks).toBe(2);
     expect(daniela.text).toContain("TAREFAS ATRIBUÍDAS A VOCÊ (2)");
+    // \p{L}: "sáb." e "ter." têm acento e \w não os cobre.
     expect(daniela.text).toMatch(
-      /Enviar proposta, Lead Vencido, vence \w{3}\., \d{2}\/\d{2} \(nova\)/,
+      /Enviar proposta, Lead Vencido, vence \p{L}{3}\., \d{2}\/\d{2} \(nova\)/u,
     );
     expect(daniela.text).toContain("Sem prazo mesmo, sem prazo (nova)");
     expect(daniela.text).not.toContain("Daqui a um mês");
     expect(daniela.html).toContain(`${base}/app/tarefas?task=${mine[0].id}`);
     expect(daniela.html).toContain(`${base}/app/tarefas?dono=eu`);
+    // Cabeçalho com o logo (URL base do cron) no lugar do rótulo "Prospekto CRM"; só o logo,
+    // sem assinatura comercial, e nenhuma outra imagem.
+    expect(daniela.html).toContain(
+      `<img src="${base}/brand/logo-email.png" width="151" height="40" alt="Prospekto Consultoria &amp; Projetos"`,
+    );
+    expect(daniela.html).toContain("CRM · Resumo diário");
+    expect(daniela.html).not.toContain(">Prospekto CRM</p>");
+    expect(daniela.html).not.toContain("WhatsApp");
+    expect(daniela.html.match(/<img /g)).toHaveLength(1);
     // A tarefa solta e vencida vai para "Follow-ups vencidos" com o link do quadro.
     const loose = data.tasks.find((t) => t.subject === "Solta e vencida");
     expect(loose).toBeDefined();
