@@ -87,7 +87,7 @@ Na copy: "simulação" é sempre a reunião curta sem contador; "diagnóstico" �
 
 ### 4.1 Home (`/`)
 
-**Rótulo:** PROSPEKTO CONSULTORIA & PROJETOS · SERRA GAÚCHA
+**Rótulo:** INCENTIVO FISCAL À CULTURA · SERRA GAÚCHA (o nome da empresa já está no logo do cabeçalho, logo acima; marca.md, seção 4)
 
 **Título:** Transforme o imposto da sua empresa em cultura na Serra Gaúcha, sem burocracia.
 

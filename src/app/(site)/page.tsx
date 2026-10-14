@@ -90,17 +90,18 @@ const organizationJsonLd = {
   "@type": ["Organization", "LocalBusiness"],
   name: site.name,
   email: site.email,
-  telephone: "+55 54 98403-2180",
+  // E.164, como o schema.org recomenda; o mesmo número do WhatsApp (site.whatsappNumber).
+  telephone: `+${site.whatsappNumber}`,
   areaServed: ["Serra Gaúcha", "Rio Grande do Sul"],
   founder: { "@type": "Person", name: site.owner },
-  // Endereço e CNPJ da assinatura oficial (site.legal; estrutura-e-copy.md, seção 6.3). Quando um
-  // deles for null, a chave sai do JSON (JSON.stringify omite undefined).
+  // Endereço, cidade-sede e CNPJ da assinatura oficial (site.legal; estrutura-e-copy.md, seção
+  // 6.3). Quando endereço ou CNPJ for null, a chave sai do JSON (JSON.stringify omite undefined).
   address: site.legal.address
     ? {
         "@type": "PostalAddress",
         streetAddress: site.legal.address,
-        addressLocality: "Bento Gonçalves",
-        addressRegion: "RS",
+        addressLocality: site.legal.locality,
+        addressRegion: site.legal.uf,
         addressCountry: "BR",
       }
     : undefined,
@@ -125,7 +126,7 @@ export default async function HomePage() {
       <section className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 pt-16 pb-12 md:pt-24">
         <SectionHeader
           as="h1"
-          label="Prospekto Consultoria & Projetos · Serra Gaúcha"
+          label="Incentivo fiscal à cultura · Serra Gaúcha"
           title="Transforme o imposto da sua empresa em cultura na Serra Gaúcha, sem burocracia."
           subtitle="Empresas tributadas pelo lucro real podem destinar até 4% do imposto de renda devido (3,6% com a LC 224/2025, na leitura da Receita; o simulador mostra os dois cenários) a projetos culturais aprovados pelo Ministério da Cultura. O valor sai do imposto que já seria pago; a diferença é que ele vira um projeto com a sua marca, aqui na região. A Prospekto cuida do processo. O seu contador só lança a dedução."
         />

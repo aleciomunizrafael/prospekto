@@ -9,8 +9,7 @@ import { site } from "@/config/site";
 // o assunto define o pipeline do lead.
 export const metadata: Metadata = {
   title: { absolute: "Contato · Prospekto Consultoria & Projetos" },
-  description:
-    "Fale com a Prospekto por WhatsApp, e-mail ou formulário. Bento Gonçalves, Serra Gaúcha, RS.",
+  description: `Fale com a Prospekto por WhatsApp, e-mail ou formulário. ${site.legal.locality}, Serra Gaúcha, ${site.legal.uf}.`,
   alternates: { canonical: "/contato" },
 };
 

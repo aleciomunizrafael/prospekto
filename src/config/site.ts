@@ -19,6 +19,10 @@ export const site = {
   legal: {
     cnpj: "30.665.797/0001-07" as string | null,
     address: "Avenida Osvaldo Aranha, 945/401" as string | null,
+    // Cidade-sede em campos separados, para o PostalAddress do JSON-LD e os metadados; `city`
+    // (acima) é a forma de exibição dos mesmos dados. Não anuláveis: a sede existe.
+    locality: "Bento Gonçalves",
+    uf: "RS",
   },
   social: {
     linkedin: null as string | null,
