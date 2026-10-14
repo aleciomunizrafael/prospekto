@@ -78,7 +78,7 @@ export function Sidebar({
         aria-label="Prospekto CRM, ir para o Painel"
         className={cn(
           "flex h-14 shrink-0 flex-col justify-center rounded-lg leading-none outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-          collapsed ? "mx-2 items-center" : "mx-4",
+          collapsed ? "mx-2 items-center" : "mx-4 items-start",
         )}
       >
         {collapsed ? (

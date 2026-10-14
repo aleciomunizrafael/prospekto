@@ -194,6 +194,14 @@ describe("marca no shell (docs/design/marca.md)", () => {
     expect(source).not.toMatch(/>\s*P\s*</);
   });
 
+  it("sidebar: aberta, o Link do logo alinha à esquerda; no trilho, centraliza", async () => {
+    const source = await readFile(path.join(root, "src/components/crm/shell/sidebar.tsx"), "utf8");
+    // O Link é uma coluna flex: sem `items-start`, o <svg class="h-7 w-auto"> estica para a largura
+    // toda (align-items: stretch) e o preserveAspectRatio centraliza o desenho, enquanto o eyebrow
+    // "CRM" fica na margem esquerda. No trilho a marca continua centralizada.
+    expect(source).toContain('collapsed ? "mx-2 items-center" : "mx-4 items-start"');
+  });
+
   it("login: logo horizontal de 48 px com o eyebrow CRM e link nomeado", async () => {
     const source = await readFile(path.join(root, "src/app/(auth)/layout.tsx"), "utf8");
     expect(source).toMatch(
