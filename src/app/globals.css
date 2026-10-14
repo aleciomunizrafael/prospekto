@@ -6,9 +6,16 @@
 
 /*
  * Tokens do site (docs/site/estrutura-e-copy.md, seções 7.2 e 7.3), integrados ao tema do shadcn.
- * Paleta: grafite (texto), azul-profundo (primária), vinho da Serra (acento), areia (fundo alternado),
+ * Paleta: grafite (texto), azul-profundo (primária), vermelho da marca (acento), areia (fundo alternado),
  * cinza-claro (bordas), cinza-médio (texto secundário), verde-escuro (sucesso), vermelho-escuro (erro).
  * Modo escuro não é prioridade na Fase 1; os valores abaixo seguem a nota da seção 7.2.
+ *
+ * Acento (docs/design/marca.md; crm-design-system.md, seção 3.1): desde o logo oficial de 14/10/2026
+ * `--brand` é o vermelho escuro da marca (#C52E32, as faces laterais), que passa de 4,5:1 sobre branco
+ * e sobre a areia e serve a texto, anel de foco e bordas; `--brand-vivid` é o vermelho vivo (#EB3236,
+ * as faces de cima), que fica em 4,17:1 sobre branco e por isso vale só para a marca e para acentos
+ * grandes (nunca texto pequeno). No escuro, `--brand` sobe para um vermelho claro (#F0797C) e
+ * `--brand-vivid` não muda, porque a marca nunca é recolorida.
  */
 @theme inline {
   --color-background: var(--background);
@@ -47,6 +54,7 @@
   --color-card: var(--card);
   /* Tokens próprios do site */
   --color-brand: var(--brand);
+  --color-brand-vivid: var(--brand-vivid);
   --color-brand-foreground: var(--brand-foreground);
   --color-sand: var(--sand);
   --color-success: var(--success);
@@ -89,14 +97,15 @@
   --destructive: #a32d2d;
   --border: #d9d6cf;
   --input: #d9d6cf;
-  --ring: #7a2230;
-  --brand: #7a2230;
+  --ring: #c52e32;
+  --brand: #c52e32;
+  --brand-vivid: #eb3236;
   --brand-foreground: #ffffff;
   --sand: #f4f1eb;
   --success: #2f6b3a;
   --error: #a32d2d;
   --chart-1: #163b5c;
-  --chart-2: #7a2230;
+  --chart-2: #c52e32;
   --chart-3: #5b6670;
   --chart-4: #2f6b3a;
   --chart-5: #d9d6cf;
@@ -108,7 +117,7 @@
   --sidebar-accent: #ffffff;
   --sidebar-accent-foreground: #1e2a32;
   --sidebar-border: #d9d6cf;
-  --sidebar-ring: #7a2230;
+  --sidebar-ring: #c52e32;
 }
 
 .dark {
@@ -129,14 +138,15 @@
   --destructive: #e07a7a;
   --border: #33404a;
   --input: #33404a;
-  --ring: #d08a95;
-  --brand: #d08a95;
+  --ring: #f0797c;
+  --brand: #f0797c;
+  --brand-vivid: #eb3236;
   --brand-foreground: #121a20;
   --sand: #1f2a33;
   --success: #7fc48c;
   --error: #e07a7a;
   --chart-1: #8fb4d6;
-  --chart-2: #d08a95;
+  --chart-2: #f0797c;
   --chart-3: #b3bcc4;
   --chart-4: #7fc48c;
   --chart-5: #33404a;
@@ -147,7 +157,7 @@
   --sidebar-accent: #1f2a33;
   --sidebar-accent-foreground: #ece9e2;
   --sidebar-border: #33404a;
-  --sidebar-ring: #d08a95;
+  --sidebar-ring: #f0797c;
 }
 
 @layer base {
@@ -160,7 +170,7 @@
   html {
     @apply font-sans;
   }
-  /* Foco visível: contorno de 2px em acento (seção 7.6). */
+  /* Foco visível: contorno de 2px em acento (seção 7.6): --brand tem ≥ 3:1 sobre branco e areia. */
   :focus-visible {
     outline: 2px solid var(--brand);
     outline-offset: 2px;
@@ -297,7 +307,7 @@
   --divider: #28333c;
   --placeholder: #8e98a1;
   --primary-soft: #1d3147;
-  --brand-soft: #3a1f25;
+  --brand-soft: #3d1f21;
   --success-soft: #1c3322;
   --warning: #e6b566;
   --warning-soft: #332a14;

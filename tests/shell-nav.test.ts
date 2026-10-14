@@ -1,12 +1,15 @@
 // Decisão D13 (crm-design-system.md): a lista de itens da sidebar é um componente puro, renderizado
 // com renderToString, sem biblioteca de teste de interface. Checa aria-current só no item ativo,
 // os oito rótulos na ordem do ADR-004 (6.1), a moldura do item ativo e o contador do "Painel" com
-// texto para leitores de tela.
+// texto para leitores de tela. No fim, a marca no shell (docs/design/marca.md): o logo oficial no
+// topo da sidebar e do login, com o link nomeado por aria-label, sem o texto "Prospekto" solto.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { Logo } from "@/components/brand/logo";
+import { BRAND_RED, BRAND_RED_DARK } from "@/components/brand/logo-paths";
 import { MODULES, describePath, isActivePath } from "@/components/crm/shell/modules";
 import { NAV_ITEMS, NavItems } from "@/components/crm/shell/nav-items";
 import { NEW_ITEMS } from "@/components/crm/shell/new-menu";
@@ -157,5 +160,47 @@ describe("mapa de módulos do shell", () => {
     expect(describePath("/app/tarefas")).toMatchObject({ module: { label: "Tarefas" }, sub: null });
     expect(describePath("/app/conta")).toMatchObject({ module: { label: "Minha conta" } });
     expect(describePath("/app/busca")).toMatchObject({ module: { label: "Busca" } });
+  });
+});
+
+describe("marca no shell (docs/design/marca.md)", () => {
+  const root = process.cwd();
+
+  it("Logo: decorativo sem title, texto em currentColor e marca vermelha fixa", () => {
+    const compacto = renderToString(createElement(Logo, { variant: "compacto" }));
+    expect(compacto).toContain('aria-hidden="true"');
+    expect(compacto).not.toContain('role="img"');
+    expect(compacto).toContain('viewBox="36 0 302 61"');
+    expect(compacto).toContain('fill="currentColor"');
+    expect(compacto).toContain(`fill="${BRAND_RED}"`);
+    expect(compacto).toContain(`fill="${BRAND_RED_DARK}"`);
+    expect(compacto.match(/<polygon /g)).toHaveLength(4);
+    // A marca sozinha não tem texto; com title vira imagem nomeada.
+    const marca = renderToString(createElement(Logo, { variant: "marca", title: "Prospekto" }));
+    expect(marca).not.toContain("currentColor");
+    expect(marca).toContain('role="img"');
+    expect(marca).toContain('aria-label="Prospekto"');
+    expect(marca).not.toContain("aria-hidden");
+  });
+
+  it("sidebar: logo compacto de 28 px aberta, só a marca no trilho, link nomeado", async () => {
+    const source = await readFile(path.join(root, "src/components/crm/shell/sidebar.tsx"), "utf8");
+    expect(source).toMatch(/<Logo variant="compacto" className="h-7 w-auto text-foreground" \/>/);
+    expect(source).toMatch(/<Logo variant="marca" className="h-7 w-auto" \/>/);
+    expect(source).toContain('aria-label="Prospekto CRM, ir para o Painel"');
+    expect(source).toContain(">CRM</span>");
+    // O nome não aparece mais como texto solto nem como "P" no trilho.
+    expect(source).not.toMatch(/>\s*Prospekto\s*</);
+    expect(source).not.toMatch(/>\s*P\s*</);
+  });
+
+  it("login: logo horizontal de 48 px com o eyebrow CRM e link nomeado", async () => {
+    const source = await readFile(path.join(root, "src/app/(auth)/layout.tsx"), "utf8");
+    expect(source).toMatch(
+      /<Logo variant="horizontal" className="h-12 w-auto text-foreground" \/>/,
+    );
+    expect(source).toContain('aria-label="Prospekto CRM, voltar ao site"');
+    expect(source).toContain(">CRM</span>");
+    expect(source).not.toMatch(/>\s*Prospekto\s*</);
   });
 });

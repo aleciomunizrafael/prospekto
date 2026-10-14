@@ -8,7 +8,13 @@ import {
   DIAGNOSTIC_NEXT_STEP,
   diagnosticNextStepVariant,
 } from "@/lib/validation/forms/diagnostico-options";
-import { renderEmail, type EmailBlock, type EmailContext, type RenderedEmail } from "./layout";
+import {
+  emailHeaderHtml,
+  renderEmail,
+  type EmailBlock,
+  type EmailContext,
+  type RenderedEmail,
+} from "./layout";
 
 export type { EmailContext, RenderedEmail } from "./layout";
 
@@ -255,6 +261,7 @@ export function renderTemplate<K extends EmailTemplateId>(
 
 // Aviso interno para LEAD_NOTIFY_EMAIL (estrutura-e-copy.md, seção 10.2: "cópia interna" com
 // link para o lead no CRM). Vai por e-mail, não por log; por isso pode conter os dados do lead.
+// Só o cabeçalho com o logo, sem assinatura comercial: é interno.
 export function renderLeadNotification(input: {
   formId: string;
   segment: string;
@@ -279,8 +286,9 @@ export function renderLeadNotification(input: {
   const esc = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(subject)}</title></head>
-<body style="font-family:Inter,Helvetica,Arial,sans-serif;color:#1E2A32;font-size:15px;line-height:1.6;padding:16px">
-<p style="margin:0 0 12px;font-weight:600">${esc(subject)}</p>
+<body style="margin:0;padding:16px;background:#ffffff;font-family:Inter,Helvetica,Arial,sans-serif;color:#1E2A32;font-size:15px;line-height:1.6">
+${emailHeaderHtml()}
+<p style="margin:20px 0 12px;font-weight:600">${esc(subject)}</p>
 <p style="margin:0 0 12px">Pipeline: ${esc(input.pipeline)} · Estágio: ${esc(input.stage)}</p>
 <ul style="margin:0 0 16px;padding-left:20px">${lines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
 <p><a href="${esc(crmUrl)}" style="color:#163B5C">Abrir no CRM</a></p>

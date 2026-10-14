@@ -61,11 +61,16 @@ describe("templates de resposta automática (seção 5.6)", () => {
       expect(rendered.text).toContain("Olá, Maria.");
       expect(rendered.text).toContain("Você recebe este e-mail porque pediu o guia");
       expect(rendered.text).toContain(site.city);
+      expect(rendered.text).toContain(`${site.email}\nWhatsApp ${site.whatsappDisplay}`);
       expect(rendered.text).toContain("O cálculo final do limite é feito pelo contador");
       expect(rendered.text).not.toContain("cancele aqui");
       expect(rendered.html).toContain("<!doctype html>");
       expect(rendered.html).toContain('lang="pt-BR"');
       expect(rendered.html).toContain(rendered.subject.replace(/&/g, "&amp;"));
+      // Logo no cabeçalho, servido do domínio do app; única imagem (sem pixel de rastreamento).
+      expect(rendered.html).toContain('src="http://localhost:3000/brand/logo-email.png"');
+      expect(rendered.html).toContain('alt="Prospekto Consultoria &amp; Projetos"');
+      expect(rendered.html.match(/<img /g)).toHaveLength(1);
     },
   );
 
@@ -130,6 +135,10 @@ describe("aviso interno de lead", () => {
     expect(rendered.text).toContain("Abrir no CRM: http://localhost:3000/app/leads/lead-1");
     expect(rendered.text).toContain("nome: Maria");
     expect(rendered.html).toContain("&lt;b&gt;oi&lt;/b&gt;");
+    // Interno: cabeçalho com o logo, sem assinatura comercial nem descadastro.
+    expect(rendered.html).toContain('src="http://localhost:3000/brand/logo-email.png"');
+    expect(rendered.html).not.toContain("WhatsApp");
+    expect(rendered.html).not.toContain("Cancelar o recebimento");
     expect(
       renderLeadNotification({
         formId: "guide",
