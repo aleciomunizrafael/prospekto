@@ -18,7 +18,9 @@ import { SidebarUser } from "./sidebar-user";
 // marca vermelha), botão "Buscar…" (Ctrl K), os módulos, e no rodapé o bloco do usuário e "Recolher". Client
 // Component mínimo: só `usePathname` e o toggle, que grava o cookie (path /app, 1 ano) e chama
 // `router.refresh()` para o layout reler. O estado local acompanha o clique na hora; sem
-// localStorage, sem flash na hidratação.
+// localStorage, sem flash na hidratação. O link do logo não tem borda própria, então fica com o
+// foco global de globals.css (contorno sólido de 2 px em --brand, ≥ 4,5:1 sobre a sidebar nos dois
+// temas): o anel de --ring a 50 % dos inputs compõe ~2,2:1 aqui.
 export function Sidebar({
   collapsed: initialCollapsed,
   overdueCount,
@@ -77,7 +79,7 @@ export function Sidebar({
         href="/app"
         aria-label="Prospekto CRM, ir para o Painel"
         className={cn(
-          "flex h-14 shrink-0 flex-col justify-center rounded-lg leading-none outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          "flex h-14 shrink-0 flex-col justify-center rounded-lg leading-none",
           collapsed ? "mx-2 items-center" : "mx-4 items-start",
         )}
       >

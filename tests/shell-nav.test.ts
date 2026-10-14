@@ -194,6 +194,17 @@ describe("marca no shell (docs/design/marca.md)", () => {
     expect(source).not.toMatch(/>\s*P\s*</);
   });
 
+  it("sidebar: o link do logo fica com o foco global (contorno sólido), sem anel a 50 %", async () => {
+    const source = await readFile(path.join(root, "src/components/crm/shell/sidebar.tsx"), "utf8");
+    // `--ring` a 50 % sobre a sidebar compõe ~2,2:1 (2,4:1 no escuro), abaixo dos 3:1 da WCAG 1.4.11;
+    // sem `outline-none`, vale o `:focus-visible { outline: 2px solid var(--brand) }` de globals.css.
+    expect(source).toContain(
+      '"flex h-14 shrink-0 flex-col justify-center rounded-lg leading-none",',
+    );
+    expect(source).not.toContain("ring-ring/50");
+    expect(source).not.toMatch(/\boutline-none\b/);
+  });
+
   it("sidebar: aberta, o Link do logo alinha à esquerda; no trilho, centraliza", async () => {
     const source = await readFile(path.join(root, "src/components/crm/shell/sidebar.tsx"), "utf8");
     // O Link é uma coluna flex: sem `items-start`, o <svg class="h-7 w-auto"> estica para a largura
@@ -210,5 +221,18 @@ describe("marca no shell (docs/design/marca.md)", () => {
     expect(source).toContain('aria-label="Prospekto CRM, voltar ao site"');
     expect(source).toContain(">CRM</span>");
     expect(source).not.toMatch(/>\s*Prospekto\s*</);
+  });
+
+  it("login: o link do logo fica com o foco global (contorno sólido), sem anel a 50 %", async () => {
+    const source = await readFile(path.join(root, "src/app/(auth)/layout.tsx"), "utf8");
+    // `--ring` a 50 % sobre a areia compõe ~2,2:1, abaixo dos 3:1 da WCAG 1.4.11; o link não tem
+    // borda que compense, então vale o contorno sólido de 2 px em `--brand` de globals.css.
+    expect(source).toContain('className="mb-6 flex flex-col items-center rounded-lg leading-none"');
+    expect(source).not.toContain("ring-ring/50");
+    // O único `outline-none` que sobra é o do <main tabIndex={-1}>, alvo do "Pular para o conteúdo".
+    expect(source.match(/\boutline-none\b/g)).toHaveLength(1);
+    expect(source).toMatch(
+      /<main id="conteudo" tabIndex=\{-1\} className="[^"]*outline-none[^"]*"/,
+    );
   });
 });
