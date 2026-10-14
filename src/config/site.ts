@@ -9,10 +9,9 @@ export const site = {
   email: "projetos@prospekto.com.br",
   whatsappNumber: "5554984032180",
   whatsappDisplay: "(54) 98403-2180",
-  // Cidade-sede (assinatura oficial de 14/10/2026): vai na assinatura dos e-mails, no rodapé e em
-  // /contato. `region` é a área de atuação, usada na copy ("consultoria da Serra Gaúcha").
+  // Cidade-sede (assinatura oficial de 14/10/2026): vai na assinatura dos e-mails, no rodapé, em
+  // /contato e na política de privacidade. A área de atuação ("Serra Gaúcha") está escrita na copy.
   city: "Bento Gonçalves, RS",
-  region: "Serra Gaúcha, Rio Grande do Sul",
   // CNPJ e endereço vêm da assinatura oficial (estrutura-e-copy.md, seção 11, pergunta 5). As redes
   // sociais (pergunta 9) ficam null até a confirmação e as páginas omitem o item, em vez de mostrar
   // o marcador [verificar] ao visitante.

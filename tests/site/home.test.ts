@@ -32,6 +32,10 @@ describe("site.legal: cidade-sede estruturada", () => {
       `${site.legal.locality}, Serra Gaúcha, ${site.legal.uf}`,
     );
   });
+
+  it("não há chave `region` em site: a área de atuação está escrita na copy, não na config", () => {
+    expect(site).not.toHaveProperty("region");
+  });
 });
 
 describe("home: JSON-LD da organização", () => {
