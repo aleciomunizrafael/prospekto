@@ -80,6 +80,7 @@ Tudo entra em `src/app/globals.css`. Os valores abaixo são finais; os contraste
 | `--brand` / `--ring` | `#C52E32` (vermelho escuro da marca; era o vinho provisório `#7A2230`) | anel de foco, barra do `NextStepCard`, rótulo "CRM" sob o logo, badge "fechamento", ícone "decisor", pontos das colunas de fechamento do quadro; no site, rótulos de seção e números grandes | 5,51 : 1 branco; 4,89 : 1 areia; 5,11 : 1 `--surface-2`; branco sobre ele 5,51 : 1 |
 | `--brand-vivid` (novo) | `#EB3236` (vermelho vivo da marca) | **só a marca do logo e acentos grandes** (≥ 24 px, sem texto); nunca texto pequeno nem borda de campo | 4,17 : 1 branco; 3,69 : 1 areia (passa de 3 : 1 como elemento gráfico, não como texto) |
 | `--brand-soft` (novo) | `#F7E6E8` | badge "fechamento" | `--brand` sobre ele 4,58 : 1 |
+| `--brand-ink` (novo) | `#363435` (cinza do texto do logo; `#ECE9E2` no escuro) | só o `currentColor` do `<Logo>` no cabeçalho e no rodapé do site; no CRM o logo herda `--foreground` | 12,36 : 1 branco; 10,96 : 1 areia |
 | `--success` | `#2F6B3A` (mantido) | depositado, recibo, consentimento válido, concluído | 6,39 : 1 branco; 5,67 : 1 areia |
 | `--success-soft` (novo) | `#E4F1E6` | badge e `Callout` de sucesso | `--success` sobre ele 5,49 : 1 |
 | `--warning` (novo) | `#7A4A00` | prazo < 6 meses, SLA perto do fim, avisos | 7,48 : 1 branco; 6,64 : 1 areia |

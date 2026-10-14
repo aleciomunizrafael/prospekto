@@ -30,12 +30,12 @@ function page(status: number, title: string, body: string, form?: { token: strin
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="robots" content="noindex"><title>${escapeHtml(title)} · ${escapeHtml(site.name)}</title></head>
 <body style="margin:0;padding:24px;background:#F4F1EB;font-family:Inter,Helvetica,Arial,sans-serif;color:#1E2A32;font-size:16px;line-height:1.6">
 <main style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:8px;padding:28px 24px">
-<p style="margin:0 0 20px;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:#7A2230;font-weight:600">${escapeHtml(site.name)}</p>
+<p style="margin:0 0 20px;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:#C52E32;font-weight:600">${escapeHtml(site.name)}</p>
 <h1 style="font-size:22px;margin:0 0 16px">${escapeHtml(title)}</h1>
 <p style="margin:0 0 16px">${escapeHtml(body)}</p>
 ${
   form
-    ? `<form method="post" action="/api/descadastro?t=${encodeURIComponent(form.token)}"><input type="hidden" name="List-Unsubscribe" value="One-Click"><button type="submit" style="min-height:44px;padding:10px 20px;border:0;border-radius:8px;background:#7A2230;color:#ffffff;font-size:16px;cursor:pointer">Cancelar o recebimento</button></form>`
+    ? `<form method="post" action="/api/descadastro?t=${encodeURIComponent(form.token)}"><input type="hidden" name="List-Unsubscribe" value="One-Click"><button type="submit" style="min-height:44px;padding:10px 20px;border:0;border-radius:8px;background:#163B5C;color:#ffffff;font-size:16px;cursor:pointer">Cancelar o recebimento</button></form>`
     : ""
 }
 <p style="margin:24px 0 0;font-size:13px;color:#5B6670">Dúvidas: <a href="mailto:${site.email}" style="color:#163B5C">${site.email}</a>.</p>

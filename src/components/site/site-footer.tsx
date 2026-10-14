@@ -12,11 +12,7 @@ export function SiteFooter() {
     <footer className="bg-sand border-border mt-auto border-t">
       <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex flex-col gap-3">
-          <Logo
-            variant="horizontal"
-            title={site.name}
-            className="w-[180px] text-[#363435] dark:text-foreground"
-          />
+          <Logo variant="horizontal" title={site.name} className="text-brand-ink w-[180px]" />
           <p className="text-muted-foreground text-[15px]">Responsável: {site.owner}</p>
           <ul className="flex flex-col gap-2 text-[15px]">
             <li>

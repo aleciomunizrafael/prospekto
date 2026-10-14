@@ -361,7 +361,7 @@ Linha: "O limite de 6% é compartilhado entre cultura, audiovisual, fundo da cri
 | `/diagnostico` | Faça a conta com a Daniela e com o seu contador. | Rótulo DIAGNÓSTICO GRATUITO; o que é (PJ: 30 minutos com o contador presente, IRPJ projetado, dois ou três projetos da carteira, checklist para o contador; PF: ligação de 15 minutos); opção "Ainda não quero envolver o contador? Comece pela simulação de 20 minutos" (mesmo formulário, campo `formato`, seção 5.4); o que você sai sabendo (valor possível, projetos aderentes, prazo, próximos passos); formulário (seção 5.4); "Prefere falar agora?" com WhatsApp; ressalva. |
 | `/mentoria` | Aprenda a escrever, inscrever e captar projetos culturais com quem faz isso todo dia. | Rótulo MENTORIA DA DANIELA · LISTA DE ESPERA; subtítulo (`docs/produto/mentoria-e-curso.md`, seção 1: coorte de 8 semanas, projeto real do aluno como entregável); para quem (três públicos da coorte); o que você sai com (projeto inscrito, orçamento, deck, plano de captação); formato e período previsto [verificar datas]; "sem preço ainda: a lista de espera define o formato"; formulário da lista de espera; FAQ (quando abre, preço, carga horária, certificado). |
 | `/conteudo` | Guias e artigos sobre incentivo fiscal à cultura. | Lista de artigos com data e tempo de leitura; categorias (empresas, contadores, pessoa física, municípios, proponentes); bloco do guia; artigos iniciais sugeridos na seção 6.3. |
-| `/contato` | Conte o que você quer realizar. | Três caminhos (WhatsApp, e-mail, formulário); formulário curto; endereço e horário [verificar]; nota de que respostas em até 1 dia útil [verificar com a Daniela]. |
+| `/contato` | Conte o que você quer realizar. | Três caminhos (WhatsApp, e-mail, formulário); formulário curto; endereço (`site.legal`) e horário [verificar horário]; nota de que respostas em até 1 dia útil [verificar com a Daniela]. |
 | `/privacidade` | Política de privacidade | Estrutura na seção 5.7. |
 | `/obrigado/[tipo]` | Recebemos. Próximo passo: | Mensagem por tipo (guia: link de download; simulador: resultado; diagnóstico: "a Daniela entra em contato em até 1 dia útil"; mentoria: "você está na lista; responda à pesquisa"); botão WhatsApp com mensagem pré-preenchida do contexto. |
 
@@ -540,7 +540,7 @@ Títulos até 60 caracteres; descrições até 155. Sufixo " · Prospekto" nos t
 
 - Uma H1 por página, igual ou próximo do título da página; hierarquia H2 e H3 sem pulos.
 - URLs estáveis e curtas; `canonical` em todas; `sitemap.xml` e `robots.txt` gerados pelo Next; `lang="pt-BR"`.
-- Dados estruturados (JSON-LD): `Organization` e `LocalBusiness` na Home (nome, e-mail, telefone, área atendida; endereço só quando confirmado [verificar]); `Person` em `/sobre`; `FAQPage` nos blocos de objeções; `Article` nos artigos; `BreadcrumbList` nas páginas internas.
+- Dados estruturados (JSON-LD): `Organization` e `LocalBusiness` na Home (nome, e-mail, telefone, área atendida, endereço `PostalAddress` e `taxID` com o CNPJ, lidos de `site.legal`; a chave sai do JSON quando o dado for null); `Person` em `/sobre`; `FAQPage` nos blocos de objeções; `Article` nos artigos; `BreadcrumbList` nas páginas internas.
 - Open Graph e Twitter Card com imagem padrão sóbria (marca e frase) e imagem própria por projeto.
 - Desempenho: Core Web Vitals verdes no celular; imagens em `next/image` com tamanhos definidos; fontes com `next/font`; sem scripts de terceiros além de analytics.
 - Artigos iniciais (um por mês, a partir do lançamento): "Lei Rouanet para empresas no lucro real: a conta em 5 minutos"; "O que muda com a IN MinC 29/2026 para quem patrocina"; "LC 224/2025: o limite de cultura ficou em 3,6%?"; "Como destinar parte do seu IR para cultura sem cair na malha"; "LIC-RS: como empresas no lucro presumido patrocinam cultura via ICMS"; "Cultura e esporte no mesmo IRPJ: o que diz a SC Cosit 4/2026"; "Como um contador apresenta a Lei Rouanet ao cliente"; "Lei do Audiovisual art. 1º-A: patrocinar um filme com dedução integral"; "PNAB no município: checklist para não devolver recurso". Cada artigo cita lei e artigo, traz a data de verificação e termina com o bloco do guia.
@@ -551,13 +551,17 @@ Títulos até 60 caracteres; descrições até 155. Sufixo " · Prospekto" nos t
 
 Sóbrio, institucional, confiável: o site precisa passar pelo crivo de um controller e de um contador. Referências: a apresentação da fomento.ai (`docs/fontes/materiais/referencia-fomento-ai-apresentacao.txt`) pela estrutura editorial (rótulo em caixa alta acima do título, títulos curtos em duas linhas, listas numeradas 01 a 05, três perguntas como blocos, paginação discreta, muito espaço em branco, uma só cor de destaque) e o guia e a apresentação "Contabilizando Cultura" pelos blocos de número grande (3,11%, 7,4M), pelos cartões "mito e fato" e pelo passo a passo numerado. O que não copiar: emojis e ícones genéricos dos slides.
 
-### 7.2 Paleta (sugestão; validar com a identidade existente da Prospekto [verificar logotipo e cores atuais])
+### 7.2 Paleta
+
+O logo oficial (assinatura `assinatura_PROSPEKTO_com_CNPJ.psd`, 14/10/2026; `docs/design/marca.md`) fixou a marca em dois vermelhos, o vivo `#EB3236` nas faces de cima e o escuro `#C52E32` nas laterais, e o cinza `#363435` no texto. O acento do site é o vermelho escuro da marca (`--brand`), o único dos dois que passa de 4,5 : 1 sobre branco e sobre a areia; o vivo (`--brand-vivid`) fica restrito à marca e a acentos grandes sem texto. Os tokens estão em `src/app/globals.css` e os contrastes em `tests/tokens-contrast.test.ts`.
 
 | Uso | Nome | Hex | Observação |
 |---|---|---|---|
 | Texto e títulos | Grafite | `#1E2A32` | Contraste 15:1 sobre branco |
 | Primária (botões, links, destaques) | Azul-profundo | `#163B5C` | Contraste 10:1 sobre branco; remete a instituição e a confiança |
-| Acento (números grandes, rótulos de seção, um detalhe por tela) | Vinho da Serra | `#7A2230` | Contraste 9:1 sobre branco; uso parcimonioso |
+| Acento (números grandes, rótulos de seção, um detalhe por tela) | Vermelho da marca (`--brand`) | `#C52E32` | Contraste 5,5:1 sobre branco e 4,9:1 sobre areia; uso parcimonioso: o logo já traz vermelho, e onde ele está não entra outro vermelho de destaque no mesmo bloco |
+| Marca do logo e acentos grandes sem texto (`--brand-vivid`) | Vermelho vivo da marca | `#EB3236` | 4,2:1 sobre branco: nunca em texto pequeno nem em borda de campo |
+| Texto do logo no site (`--brand-ink`) | Cinza da marca | `#363435` | Contraste 12,4:1 sobre branco; só no `<Logo>` do cabeçalho e do rodapé |
 | Fundo | Branco | `#FFFFFF` | |
 | Fundo alternado de seções | Areia | `#F4F1EB` | Separação de blocos sem linhas |
 | Bordas e divisores | Cinza-claro | `#D9D6CF` | |
@@ -716,10 +720,10 @@ Leads por `origin` e `segment` por semana; conversão `page_view` para `form_sub
 ## 11. Perguntas em aberto
 
 1. O domínio `prospekto.com.br` já tem site e e-mail hospedados? Onde está o DNS? (`docs/visao.md`, pergunta 4)
-2. Existe identidade visual (logotipo, cores) que o site deve seguir?
+2. Resolvido (assinatura oficial de 14/10/2026): logo em `src/components/brand/logo.tsx`, cores e regras de uso em `docs/design/marca.md`, paleta do site na seção 7.2.
 3. Quais fotos da Daniela e de projetos podem ser usadas? Há autorização da Ocotea Filmes para publicar "A Tacada Perfeita" com elenco e valores?
 4. Biografia da Daniela: formação, anos de atuação, números de projetos e municípios atendidos, cursos ministrados.
-5. Resolvido (assinatura oficial de 14/10/2026, `src/config/site.ts`): CNPJ 30.665.797/0001-07; Avenida Osvaldo Aranha, 945/401, Bento Gonçalves, RS. Já no rodapé, em `/contato` e na política de privacidade; falta só o endereço nos dados estruturados da Home (seção 6.3).
+5. Resolvido (assinatura oficial de 14/10/2026, `src/config/site.ts`): CNPJ 30.665.797/0001-07; Avenida Osvaldo Aranha, 945/401, Bento Gonçalves, RS. Já no rodapé, em `/contato`, na política de privacidade e nos dados estruturados da Home (seção 6.3).
 6. Quem é o encarregado de dados (LGPD) e qual advogado revisa a política e o texto de consentimento?
 7. Resolvido: a edição revisada do guia tem responsáveis (Daniela revisa; sócio diagrama), prazo (PDF aprovado até 16/10/2026, publicação até 19/10/2026, antes da Mercopar) e lista de alterações na seção 10.3. Pendente só a confirmação da Daniela de que o prazo cabe na agenda [verificar].
 8. A Daniela aceita responder leads por WhatsApp a partir do CRM dentro dos SLAs (1 dia útil para `novo`)?

@@ -274,9 +274,11 @@ function stageLabelContribution(status: string): string {
 }
 
 // Texto simples e HTML mínimo (sem React Email), como pede a seção 9.3.
+// `headerHtml` substitui o rótulo "Prospekto CRM" do topo do HTML (o e-mail passa o cabeçalho com o
+// logo, que precisa da URL pública; esta função não a conhece).
 export function renderDigest(
   digest: Digest,
-  opts: { recipientName: string; now: Date },
+  opts: { recipientName: string; now: Date; headerHtml?: string },
 ): { subject: string; text: string; html: string } {
   const header = `Olá, ${opts.recipientName}. Resumo do CRM em ${formatDateTime(opts.now)}.`;
   const textParts: string[] = [header, ""];
@@ -311,16 +313,19 @@ export function renderDigest(
   const alertsHtml = digest.alerts
     .map(
       (a) =>
-        `<p style="margin:0 0 12px;padding:10px 12px;background:#FDECEA;color:#7A2230;border-radius:6px;font-weight:600">${escapeHtml(a)}</p>`,
+        `<p style="margin:0 0 12px;padding:10px 12px;background:#FBF0DA;color:#7A4A00;border-radius:6px;font-weight:600">${escapeHtml(a)}</p>`,
     )
     .join("");
+  const labelHtml =
+    opts.headerHtml ??
+    `<p style="margin:0 0 16px;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:#C52E32;font-weight:600">Prospekto CRM</p>`;
   const html = `<!doctype html>
 <html lang="pt-BR">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(digest.subject)}</title></head>
 <body style="margin:0;padding:0;background:#F4F1EB;font-family:Inter,Helvetica,Arial,sans-serif;color:#1E2A32;font-size:15px;line-height:1.5">
 <div style="max-width:640px;margin:0 auto;padding:24px">
 <div style="background:#ffffff;border-radius:8px;padding:24px">
-<p style="margin:0 0 16px;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:#7A2230;font-weight:600">Prospekto CRM</p>
+${labelHtml}
 <p style="margin:0 0 12px">${escapeHtml(header)}</p>
 ${alertsHtml}
 ${sectionsHtml}

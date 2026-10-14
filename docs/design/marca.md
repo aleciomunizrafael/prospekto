@@ -33,7 +33,7 @@ import { Logo } from "@/components/brand/logo";
 | `compacto` | "PROSPEKTO" e marca, sem tagline | `36 0 302 61` | 4,95 : 1 | sidebar do CRM aberta, header compacto do site |
 | `marca` | só os dois blocos vermelhos | `296 -1 44 49` | 0,9 : 1 | sidebar recolhida (trilho), favicon, avatares, espaços quadrados |
 
-- **Cor do texto**: o texto e a tagline usam `fill="currentColor"`, então a cor vem do elemento pai. No site claro use `text-foreground` (grafite `#1E2A32`) ou deixe o cinza da marca pelo `logo.svg` (`#363435`, 12,36 : 1 sobre branco); no modo escuro do CRM (`.dark`) `text-foreground` vira `#ECE9E2` (13,18 : 1 sobre a sidebar escura) sem código extra.
+- **Cor do texto**: o texto e a tagline usam `fill="currentColor"`, então a cor vem do elemento pai. No site (cabeçalho e rodapé) use `text-brand-ink`, o cinza do logo (`#363435`, 12,36 : 1 sobre branco, 10,96 : 1 sobre areia); no CRM use `text-foreground` (grafite `#1E2A32`). No modo escuro (`.dark`) os dois viram `#ECE9E2` (13,18 : 1 sobre a sidebar escura) sem código extra.
 - **A marca é fixa**: os quatro polígonos levam `#EB3236` e `#C52E32` fixos e não respondem a `currentColor`. Nunca recolorir a marca (nem em preto, nem na cor do texto, nem em branco sobre vermelho): se o fundo não comportar o vermelho, troque o fundo, não a marca.
 - **Acessibilidade**: sem `title` o SVG é decorativo (`aria-hidden="true"`, sem `role`), e o link ou botão que o envolve recebe o nome (`aria-label="Prospekto CRM, ir para o Painel"`). Com `title`, o SVG vira `role="img"` com `aria-label` e deve ser o único nome do lugar. Nunca os dois ao mesmo tempo, para o leitor de tela não dizer "Prospekto" duas vezes.
 - **Tamanho**: controle pela altura (`h-7`, `h-12`) com `w-auto`; o SVG mantém a proporção. Nada de `width` e `height` fixos em proporção diferente da do viewBox.
@@ -45,7 +45,7 @@ import { Logo } from "@/components/brand/logo";
 | vermelho vivo (faces de cima da marca) | `#EB3236` | `--brand-vivid` (claro e escuro) | 4,17 : 1 sobre branco; 3,69 : 1 sobre areia `#F4F1EB`; 4,22 : 1 sobre o fundo escuro `#121A20`; 3,84 : 1 sobre a sidebar escura `#18232B` |
 | vermelho escuro (faces laterais) | `#C52E32` | `--brand` / `--ring` no claro | 5,51 : 1 sobre branco; 4,89 : 1 sobre areia; 5,11 : 1 sobre `--surface-2`; 4,58 : 1 sobre `--brand-soft #F7E6E8`; branco sobre ele 5,51 : 1 |
 | vermelho claro (modo escuro) | `#F0797C` | `--brand` / `--ring` no `.dark` | 6,47 : 1 sobre `#121A20`; 5,88 : 1 sobre `--card #18232B`; 5,38 : 1 sobre `--sand #1F2A33`; 5,46 : 1 sobre `--brand-soft #3D1F21` |
-| cinza do texto do logo | `#363435` | só em `public/brand/*.svg` | 12,36 : 1 sobre branco; 10,96 : 1 sobre areia |
+| cinza do texto do logo | `#363435` | `--brand-ink` no claro (no `.dark` vira o `--foreground` `#ECE9E2`); também em `public/brand/logo.svg` | 12,36 : 1 sobre branco; 10,96 : 1 sobre areia |
 | grafite do site e do CRM | `#1E2A32` | `--foreground` | 14,66 : 1 sobre branco; é o `currentColor` do logo inline |
 
 Regras derivadas (crm-design-system.md, seção 3.1 e decisões D5 a D8):

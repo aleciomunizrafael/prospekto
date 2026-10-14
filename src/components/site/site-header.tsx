@@ -45,10 +45,7 @@ export function SiteHeader() {
           className="focus-visible:ring-brand inline-flex shrink-0 items-center rounded-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
           aria-label={`${site.name}, página inicial`}
         >
-          <Logo
-            variant="horizontal"
-            className="h-8 w-auto text-[#363435] md:h-10 dark:text-foreground"
-          />
+          <Logo variant="horizontal" className="text-brand-ink h-8 w-auto md:h-10" />
         </Link>
 
         <nav aria-label="Principal" className="hidden md:block">

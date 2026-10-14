@@ -93,7 +93,18 @@ const organizationJsonLd = {
   telephone: "+55 54 98403-2180",
   areaServed: ["Serra Gaúcha", "Rio Grande do Sul"],
   founder: { "@type": "Person", name: site.owner },
-  // Endereço só quando confirmado (seção 6.3) [verificar].
+  // Endereço e CNPJ da assinatura oficial (site.legal; estrutura-e-copy.md, seção 6.3). Quando um
+  // deles for null, a chave sai do JSON (JSON.stringify omite undefined).
+  address: site.legal.address
+    ? {
+        "@type": "PostalAddress",
+        streetAddress: site.legal.address,
+        addressLocality: "Bento Gonçalves",
+        addressRegion: "RS",
+        addressCountry: "BR",
+      }
+    : undefined,
+  taxID: site.legal.cnpj ?? undefined,
 };
 
 // Rede de segurança (ISR) além da tag `projects`; literal porque o Next exige valor estático.

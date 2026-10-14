@@ -15,7 +15,8 @@
  * e sobre a areia e serve a texto, anel de foco e bordas; `--brand-vivid` é o vermelho vivo (#EB3236,
  * as faces de cima), que fica em 4,17:1 sobre branco e por isso vale só para a marca e para acentos
  * grandes (nunca texto pequeno). No escuro, `--brand` sobe para um vermelho claro (#F0797C) e
- * `--brand-vivid` não muda, porque a marca nunca é recolorida.
+ * `--brand-vivid` não muda, porque a marca nunca é recolorida. `--brand-ink` é o cinza do texto do
+ * logo (#363435) para o `currentColor` do `<Logo>` no site; no escuro vira o `--foreground` claro.
  */
 @theme inline {
   --color-background: var(--background);
@@ -56,6 +57,7 @@
   --color-brand: var(--brand);
   --color-brand-vivid: var(--brand-vivid);
   --color-brand-foreground: var(--brand-foreground);
+  --color-brand-ink: var(--brand-ink);
   --color-sand: var(--sand);
   --color-success: var(--success);
   --color-error: var(--error);
@@ -101,6 +103,7 @@
   --brand: #c52e32;
   --brand-vivid: #eb3236;
   --brand-foreground: #ffffff;
+  --brand-ink: #363435;
   --sand: #f4f1eb;
   --success: #2f6b3a;
   --error: #a32d2d;
@@ -142,6 +145,7 @@
   --brand: #f0797c;
   --brand-vivid: #eb3236;
   --brand-foreground: #121a20;
+  --brand-ink: #ece9e2;
   --sand: #1f2a33;
   --success: #7fc48c;
   --error: #e07a7a;

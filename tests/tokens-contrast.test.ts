@@ -60,6 +60,8 @@ const TEXT_PAIRS: [string, string, number][] = [
   ["brand", "surface-2", 5.11],
   ["brand", "brand-soft", 4.58],
   ["brand-foreground", "brand", 5.51],
+  ["brand-ink", "background", 12.36],
+  ["brand-ink", "canvas", 10.96],
   ["success", "background", 6.39],
   ["success", "canvas", 5.67],
   ["success", "success-soft", 5.49],
@@ -143,6 +145,13 @@ describe("tokens do CRM: contraste (WCAG 2.x)", () => {
     expect(contrastRatio(light["brand-vivid"], light.canvas)).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(dark["brand-vivid"], dark.background)).toBeGreaterThanOrEqual(3);
     expect(contrastRatio(dark["brand-vivid"], dark.sidebar)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("--brand-ink é o cinza do texto do logo no claro e o --foreground no escuro", () => {
+    expect(light["brand-ink"]).toBe("#363435");
+    expect(dark["brand-ink"]).toBe(dark.foreground);
+    expect(css).toContain("--color-brand-ink: var(--brand-ink);");
+    expect(contrastRatio(dark["brand-ink"], dark.sidebar)).toBeGreaterThanOrEqual(4.5);
   });
 
   it.each(DARK_TEXT_PAIRS)("escuro: %s sobre %s ≥ 4,5:1 (tabela: %s)", (fg, bg, expected) => {
