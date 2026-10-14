@@ -13,7 +13,7 @@ Fonte: a assinatura oficial `assinatura_PROSPEKTO_com_CNPJ.psd` entregue pelo do
 | `public/brand/logo.png` | logo horizontal a 3x, fundo transparente | documentos, propostas, assinaturas |
 | `public/brand/logo-email.png` | logo 604 × 160 (2x) sobre branco | cabeçalho dos e-mails transacionais (clientes de e-mail não leem SVG) |
 | `public/brand/marca-192.png`, `marca-512.png` | marca sobre fundo transparente | manifest, PWA, avatares |
-| `src/app/icon.svg`, `apple-icon.png`, `favicon.ico`, `opengraph-image.png` | convenções de arquivo do Next | favicon, ícone do iOS e imagem Open Graph (1200 × 630, logo sobre areia com o domínio) saem sem código |
+| `src/app/icon.svg`, `apple-icon.png`, `favicon.ico`, `opengraph-image.png`, `opengraph-image.alt.txt` | convenções de arquivo do Next | favicon, ícone do iOS e imagem Open Graph (1200 × 630, logo sobre areia com o domínio; o `.alt.txt`, lido bruto, vira o `og:image:alt` e, por fallback, o `twitter:image:alt`; o layout raiz declara o cartão `summary_large_image`, o tipo para essa proporção) saem sem código |
 
 Dados da assinatura (só da própria empresa): telefone (54) 98403-2180, Avenida Osvaldo Aranha, 945/401, Bento Gonçalves, RS, CNPJ 30.665.797/0001-07.
 

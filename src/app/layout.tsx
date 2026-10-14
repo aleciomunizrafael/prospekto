@@ -28,7 +28,9 @@ export const metadata: Metadata = {
   title: { default: site.name, template: `%s · ${site.shortName}` },
   description: "Projetos culturais, leis de incentivo e captação de patrocínio na Serra Gaúcha.",
   openGraph: { siteName: site.name, locale: "pt_BR", type: "website" },
-  twitter: { card: "summary" },
+  // A imagem (src/app/opengraph-image.png, 1200 × 630, alt em opengraph-image.alt.txt) vale também
+  // para o X, por fallback; o cartão "summary" recortaria o logo horizontal num quadrado central.
+  twitter: { card: "summary_large_image" },
 };
 
 // viewport-fit=cover libera env(safe-area-inset-*) para a barra inferior do CRM
