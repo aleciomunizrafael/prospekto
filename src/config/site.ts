@@ -9,14 +9,16 @@ export const site = {
   email: "projetos@prospekto.com.br",
   whatsappNumber: "5554984032180",
   whatsappDisplay: "(54) 98403-2180",
-  city: "Serra Gaúcha, RS",
+  // Cidade-sede (assinatura oficial de 14/10/2026): vai na assinatura dos e-mails, no rodapé e em
+  // /contato. `region` é a área de atuação, usada na copy ("consultoria da Serra Gaúcha").
+  city: "Bento Gonçalves, RS",
   region: "Serra Gaúcha, Rio Grande do Sul",
-  // Dados ainda não confirmados (estrutura-e-copy.md, seção 11, perguntas 5 e 9): ficam null até
-  // a confirmação e as páginas omitem o item (rodapé, /contato, /sobre), em vez de mostrar o
-  // marcador [verificar] ao visitante. A política de privacidade mantém o marcador no texto.
+  // CNPJ e endereço vêm da assinatura oficial (estrutura-e-copy.md, seção 11, pergunta 5). As redes
+  // sociais (pergunta 9) ficam null até a confirmação e as páginas omitem o item, em vez de mostrar
+  // o marcador [verificar] ao visitante.
   legal: {
-    cnpj: null as string | null,
-    address: null as string | null,
+    cnpj: "30.665.797/0001-07" as string | null,
+    address: "Avenida Osvaldo Aranha, 945/401" as string | null,
   },
   social: {
     linkedin: null as string | null,

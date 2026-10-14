@@ -4,10 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import { CtaLink } from "@/components/analytics/track-link";
+import { Logo } from "@/components/brand/logo";
 import { site } from "@/config/site";
 import { cn } from "@/lib/utils";
 
-// Cabeçalho do site (estrutura-e-copy.md, seções 3 e 8): logo tipográfico, menu (Empresas,
+// Cabeçalho do site (estrutura-e-copy.md, seções 3 e 8): logo oficial (40px no desktop, 32px no
+// celular; o nome acessível fica no link, e o SVG é decorativo), menu (Empresas,
 // Contadores, Pessoa física, Projetos, Sobre), botão "Simular" visível em qualquer largura e menu
 // em lista de tela cheia abaixo de 960px, com aria-expanded e aria-controls (seção 7.6).
 export function SiteHeader() {
@@ -40,15 +42,13 @@ export function SiteHeader() {
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3">
         <Link
           href="/"
-          className="flex flex-col leading-none"
+          className="focus-visible:ring-brand inline-flex shrink-0 items-center rounded-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
           aria-label={`${site.name}, página inicial`}
         >
-          <span className="font-[family-name:var(--font-heading)] text-2xl font-semibold tracking-tight">
-            Prospekto
-          </span>
-          <span className="text-muted-foreground text-[11px] tracking-[0.08em] uppercase">
-            Consultoria &amp; Projetos
-          </span>
+          <Logo
+            variant="horizontal"
+            className="h-8 w-auto text-[#363435] md:h-10 dark:text-foreground"
+          />
         </Link>
 
         <nav aria-label="Principal" className="hidden md:block">
@@ -88,7 +88,7 @@ export function SiteHeader() {
         aria-label="Principal (celular)"
         hidden={!open}
         className={cn(
-          "bg-background fixed inset-x-0 top-[65px] bottom-0 z-30 overflow-y-auto md:hidden",
+          "bg-background fixed inset-x-0 top-[69px] bottom-0 z-30 overflow-y-auto md:hidden",
           !open && "hidden",
         )}
       >

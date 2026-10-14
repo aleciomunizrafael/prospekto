@@ -1,18 +1,22 @@
 import Link from "next/link";
 import { TrackLink } from "@/components/analytics/track-link";
+import { Logo } from "@/components/brand/logo";
 import { site, waLink } from "@/config/site";
 import { LEGAL_SOURCES } from "./sources";
 
 // Rodapé (estrutura-e-copy.md, seções 4.1 e 7.4): quatro colunas (contato, páginas, legal, fontes),
-// ressalva legal em texto corrido; CNPJ e endereço só aparecem quando confirmados (site.legal).
+// ressalva legal em texto corrido. A primeira coluna é a assinatura oficial: logo (com o nome da
+// empresa como texto acessível), responsável, e-mail, WhatsApp, endereço e CNPJ (site.legal).
 export function SiteFooter() {
   return (
     <footer className="bg-sand border-border mt-auto border-t">
       <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex flex-col gap-3">
-          <p className="font-[family-name:var(--font-heading)] text-xl font-semibold">
-            {site.name}
-          </p>
+          <Logo
+            variant="horizontal"
+            title={site.name}
+            className="w-[180px] text-[#363435] dark:text-foreground"
+          />
           <p className="text-muted-foreground text-[15px]">Responsável: {site.owner}</p>
           <ul className="flex flex-col gap-2 text-[15px]">
             <li>
@@ -37,7 +41,7 @@ export function SiteFooter() {
               </TrackLink>
             </li>
             <li className="text-muted-foreground">
-              {site.legal.address ? `${site.city}, ${site.legal.address}` : site.city}
+              {site.legal.address ? `${site.legal.address}, ${site.city}` : site.city}
             </li>
             {site.legal.cnpj ? (
               <li className="text-muted-foreground">CNPJ {site.legal.cnpj}</li>

@@ -5,8 +5,8 @@ import { site } from "@/config/site";
 // Política de privacidade (docs/site/estrutura-e-copy.md, seção 5.7). Base: Lei 13.709/2018 (LGPD).
 // A seção 6 enumera o que vai ao fornecedor de IA conforme a lista fechada de src/lib/ai/redact.ts
 // (ADR-003, seção 5); tests/site/privacidade.test.ts confere. CNPJ só no ditado (src/lib/ai/notes.ts).
-// Os trechos [verificar] dependem de confirmação da Daniela e de revisão por advogado antes de
-// publicar (seção 11, perguntas 5 e 6).
+// CNPJ e endereço vêm de site.legal (assinatura oficial). Os trechos [verificar] dependem de
+// confirmação da Daniela e de revisão por advogado antes de publicar (seção 11, pergunta 6).
 export const metadata: Metadata = {
   title: "Política de privacidade",
   description:
@@ -28,7 +28,7 @@ const sections: Section[] = [
     id: "quem-somos",
     title: "1. Quem somos",
     paragraphs: [
-      `A controladora dos dados é a ${site.name}, CNPJ ${site.legal.cnpj ?? "[verificar]"}, com endereço em ${site.legal.address ?? "[verificar cidade e endereço]"}, ${site.region}. Contato: ${site.email}.`,
+      `A controladora dos dados é a ${site.name}, CNPJ ${site.legal.cnpj ?? "[verificar]"}, com endereço na ${site.legal.address ?? "[verificar endereço]"}, ${site.city}. Contato: ${site.email}.`,
     ],
   },
   {

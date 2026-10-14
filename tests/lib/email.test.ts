@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { site } from "@/config/site";
 import { sendEmail } from "@/lib/email/send";
 import {
   EMAIL_TEMPLATES,
@@ -59,7 +60,7 @@ describe("templates de resposta automática (seção 5.6)", () => {
       expect(rendered.subject.length).toBeGreaterThan(5);
       expect(rendered.text).toContain("Olá, Maria.");
       expect(rendered.text).toContain("Você recebe este e-mail porque pediu o guia");
-      expect(rendered.text).toContain("Serra Gaúcha, RS");
+      expect(rendered.text).toContain(site.city);
       expect(rendered.text).toContain("O cálculo final do limite é feito pelo contador");
       expect(rendered.text).not.toContain("cancele aqui");
       expect(rendered.html).toContain("<!doctype html>");

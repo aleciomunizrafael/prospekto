@@ -42,7 +42,7 @@
 
 ## 3. Sitemap
 
-Rotas públicas vivem no route group `src/app/(site)` (`docs/arquitetura/next16-convencoes.md`). Rotas em português, curtas, sem acento. Todas as páginas têm o mesmo cabeçalho (logo, menu com Empresas, Contadores, Pessoa física, Projetos, Sobre, botão "Simular") e o mesmo rodapé (contato, política de privacidade, ressalva legal, CNPJ [verificar]).
+Rotas públicas vivem no route group `src/app/(site)` (`docs/arquitetura/next16-convencoes.md`). Rotas em português, curtas, sem acento. Todas as páginas têm o mesmo cabeçalho (logo, menu com Empresas, Contadores, Pessoa física, Projetos, Sobre, botão "Simular") e o mesmo rodapé (logo e assinatura oficial com endereço e CNPJ, páginas, política de privacidade, ressalva legal, fontes).
 
 | Rota | Página | Objetivo | CTA principal | CTA secundário | Lead magnet | Pipeline e estágio do lead | `origem` |
 |---|---|---|---|---|---|---|---|
@@ -139,7 +139,7 @@ Linha abaixo dos passos: "A Prospekto assume a gestão burocrática, a emissão 
 
 **CTA final:** "Quanto do imposto da sua empresa pode virar cultura este ano?" [Simular agora] [Agendar diagnóstico gratuito]
 
-**Rodapé:** Prospekto Consultoria & Projetos · Responsável: Daniela Sandrin Copat · projetos@prospekto.com.br · WhatsApp (54) 98403-2180 · Serra Gaúcha, RS [verificar cidade e endereço] · CNPJ [verificar] · Política de privacidade · Ressalva legal · Fontes dos números.
+**Rodapé:** logo oficial (`<Logo variant="horizontal">`, com o nome da empresa como texto acessível) · Responsável: Daniela Sandrin Copat · projetos@prospekto.com.br · WhatsApp (54) 98403-2180 · Avenida Osvaldo Aranha, 945/401, Bento Gonçalves, RS · CNPJ 30.665.797/0001-07 · Política de privacidade · Ressalva legal · Fontes dos números.
 
 ### 4.2 Para empresas (`/empresas`)
 
@@ -493,7 +493,7 @@ WhatsApp: na Fase 1 não há envio automático por API (custo e aprovação de t
 
 ### 5.7 Política de privacidade (`/privacidade`): estrutura
 
-Base: Lei 13.709/2018 (LGPD). Seções: 1. Quem somos (controladora: Prospekto Consultoria & Projetos, CNPJ [verificar], endereço [verificar]); 2. Encarregada ou encarregado de dados (nome e e-mail: Daniela ou o sócio [verificar]); 3. Dados que coletamos (formulários: nome, e-mail, telefone, empresa ou escritório, cargo, cidade, UF, regime tributário e faixa de imposto declarados, mensagem; navegação: páginas visitadas, origem, dispositivo, de forma agregada); 4. Para que usamos (responder solicitações; marcar reuniões; enviar materiais quando autorizado; calcular estimativas no simulador; operar patrocínios contratados); 5. Bases legais (consentimento, art. 7º, I; execução de contrato, art. 7º, V; legítimo interesse para contato profissional B2B, art. 7º, IX, com opção de saída); 6. Com quem compartilhamos (provedores de hospedagem, e-mail transacional, WhatsApp/Meta, analytics e inteligência artificial para apoio ao atendimento, com revisão humana, sem uso em treinamento, retenção de até 30 dias, reconhecimento de voz do navegador e transferência internacional, conforme `docs/arquitetura/ADR-003-ia-no-crm.md`, seção 6.4; nunca venda de dados; patrocinador e proponente só na etapa de termo); 7. Por quanto tempo (leads sem contrato: 24 meses após o último contato [verificar com advogado]; documentos de patrocínio: 5 anos após a prestação de contas, pela guarda exigida ao projeto); 8. Seus direitos (art. 18: confirmação, acesso, correção, anonimização, portabilidade, eliminação, informação sobre compartilhamento, revogação do consentimento) e como exercê-los (projetos@prospekto.com.br, resposta em até 15 dias [verificar prazo adotado]); 9. Cookies e analytics (seção 9.1: ferramenta sem cookies ou com consentimento prévio); 10. Segurança (acesso restrito ao CRM, criptografia em trânsito e em repouso); 11. Alterações (versão e data; versões anteriores arquivadas); 12. Versão: `2026-10-09` (texto da IA incluído; antes `2026-10-03`) [verificar revisão por advogado antes de publicar].
+Base: Lei 13.709/2018 (LGPD). Seções: 1. Quem somos (controladora: Prospekto Consultoria & Projetos, CNPJ 30.665.797/0001-07, Avenida Osvaldo Aranha, 945/401, Bento Gonçalves, RS); 2. Encarregada ou encarregado de dados (nome e e-mail: Daniela ou o sócio [verificar]); 3. Dados que coletamos (formulários: nome, e-mail, telefone, empresa ou escritório, cargo, cidade, UF, regime tributário e faixa de imposto declarados, mensagem; navegação: páginas visitadas, origem, dispositivo, de forma agregada); 4. Para que usamos (responder solicitações; marcar reuniões; enviar materiais quando autorizado; calcular estimativas no simulador; operar patrocínios contratados); 5. Bases legais (consentimento, art. 7º, I; execução de contrato, art. 7º, V; legítimo interesse para contato profissional B2B, art. 7º, IX, com opção de saída); 6. Com quem compartilhamos (provedores de hospedagem, e-mail transacional, WhatsApp/Meta, analytics e inteligência artificial para apoio ao atendimento, com revisão humana, sem uso em treinamento, retenção de até 30 dias, reconhecimento de voz do navegador e transferência internacional, conforme `docs/arquitetura/ADR-003-ia-no-crm.md`, seção 6.4; nunca venda de dados; patrocinador e proponente só na etapa de termo); 7. Por quanto tempo (leads sem contrato: 24 meses após o último contato [verificar com advogado]; documentos de patrocínio: 5 anos após a prestação de contas, pela guarda exigida ao projeto); 8. Seus direitos (art. 18: confirmação, acesso, correção, anonimização, portabilidade, eliminação, informação sobre compartilhamento, revogação do consentimento) e como exercê-los (projetos@prospekto.com.br, resposta em até 15 dias [verificar prazo adotado]); 9. Cookies e analytics (seção 9.1: ferramenta sem cookies ou com consentimento prévio); 10. Segurança (acesso restrito ao CRM, criptografia em trânsito e em repouso); 11. Alterações (versão e data; versões anteriores arquivadas); 12. Versão: `2026-10-09` (texto da IA incluído; antes `2026-10-03`) [verificar revisão por advogado antes de publicar].
 
 ## 6. SEO
 
@@ -590,7 +590,8 @@ Escala: corpo 18px no desktop e 17px no celular, entrelinha 1,6; H1 44/36px; H2 
 | Acordeão de objeções | Pergunta como botão com `aria-expanded`; resposta com fonte quando houver número |
 | Formulário | Campos empilhados, rótulos acima, erros abaixo, caixa de consentimento com texto completo visível (sem "li e aceito" genérico) |
 | Faixa de prazo | Fundo areia, número de dias úteis restantes em acento, texto do prazo e fonte |
-| Rodapé | Quatro colunas: contato, páginas, legal, fontes; ressalva legal em texto corrido |
+| Cabeçalho | Logo oficial à esquerda (`src/components/brand/logo.tsx`, variante horizontal: 40px de altura no desktop, 32px no celular, texto em cinza da marca `#363435`), dentro do link para a home com `aria-label`; menu; botão "Simular" |
+| Rodapé | Quatro colunas: assinatura oficial (logo com ~180px de largura, responsável, e-mail, WhatsApp, endereço, CNPJ), páginas, legal, fontes; ressalva legal em texto corrido |
 
 ### 7.5 Imagens
 
@@ -718,7 +719,7 @@ Leads por `origin` e `segment` por semana; conversão `page_view` para `form_sub
 2. Existe identidade visual (logotipo, cores) que o site deve seguir?
 3. Quais fotos da Daniela e de projetos podem ser usadas? Há autorização da Ocotea Filmes para publicar "A Tacada Perfeita" com elenco e valores?
 4. Biografia da Daniela: formação, anos de atuação, números de projetos e municípios atendidos, cursos ministrados.
-5. CNPJ, endereço e cidade-sede para o rodapé, a política de privacidade e os dados estruturados.
+5. Resolvido (assinatura oficial de 14/10/2026, `src/config/site.ts`): CNPJ 30.665.797/0001-07; Avenida Osvaldo Aranha, 945/401, Bento Gonçalves, RS. Já no rodapé, em `/contato` e na política de privacidade; falta só o endereço nos dados estruturados da Home (seção 6.3).
 6. Quem é o encarregado de dados (LGPD) e qual advogado revisa a política e o texto de consentimento?
 7. Resolvido: a edição revisada do guia tem responsáveis (Daniela revisa; sócio diagrama), prazo (PDF aprovado até 16/10/2026, publicação até 19/10/2026, antes da Mercopar) e lista de alterações na seção 10.3. Pendente só a confirmação da Daniela de que o prazo cabe na agenda [verificar].
 8. A Daniela aceita responder leads por WhatsApp a partir do CRM dentro dos SLAs (1 dia útil para `novo`)?

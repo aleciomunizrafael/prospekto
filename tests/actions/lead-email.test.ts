@@ -196,7 +196,7 @@ describe("sendLeadReplyAction", () => {
     });
     expect(email.last?.unsubscribeUrl).toBeUndefined();
     expect(email.last?.text).toContain(TEXT);
-    expect(email.last?.text).toContain("Serra Gaúcha, RS");
+    expect(email.last?.text).toContain(site.city);
     // Assinatura curta no corpo, bloco completo do template uma vez só.
     expect(email.last?.text.split(site.owner)).toHaveLength(2);
     expect(email.last?.html).toContain("Sobre o seu pedido de diagnóstico");

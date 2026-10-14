@@ -16,7 +16,7 @@ describe("renderLeadReply", () => {
     expect(rendered.text).toContain("Qual prefere?\n\nDaniela\n\nDaniela Sandrin Copat\n");
     expect(rendered.text.split("Daniela Sandrin Copat")).toHaveLength(2);
     expect(rendered.text.split(site.name)).toHaveLength(2);
-    expect(rendered.text).toContain("Serra Gaúcha, RS");
+    expect(rendered.text).toContain(site.city);
     expect(rendered.text).toContain("O cálculo final do limite é feito pelo contador");
     expect(rendered.text).not.toContain("você recebe este e-mail");
     expect(rendered.text).not.toContain("Você recebe este e-mail");
@@ -35,7 +35,7 @@ describe("renderLeadReply", () => {
     expect(rendered.html).toContain(`mailto:${site.email}`);
     expect(rendered.html).toContain('<p style="margin:0 0 16px">Daniela</p>');
     expect(rendered.html.split("Daniela Sandrin Copat")).toHaveLength(2);
-    expect(rendered.html).toContain("Serra Gaúcha, RS");
+    expect(rendered.html).toContain(site.city);
     expect(rendered.html).toContain("O cálculo final do limite");
     expect(rendered.html).not.toContain("Cancelar o recebimento");
     expect(rendered.html).not.toContain("recebe este e-mail");
